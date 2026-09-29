@@ -146,13 +146,6 @@ D-15: okna na cały ekran, bez przeciągania i zmiany rozmiaru; `wm_move`/`wm_ar
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `layout_list` | Lista układów | A3 | — | W2 |
-| `layout_remove` | Usuń układ | A0 | przywróć układ (10 min) | W2 |
-| `layout_rename` | Zmień nazwę układu | A2 | poprzednia nazwa | W2 |
-| `layout_startup` | Układ startowy | A2 | poprzedni układ startowy | W2 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

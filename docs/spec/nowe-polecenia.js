@@ -25,22 +25,8 @@ const WIN = str({ description: 'id aplikacji, "w:<id>" widgetu, "current" = akty
 
 module.exports = [
   /* ================= NAWIGACJA (03-nawigacja.md) ================= */
-  { id: 'search_all', group: 'Nawigacja', label: 'Szukaj wszędzie', description: 'Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, historii czatu, ustawieniach i poleceniach. Zwraca listę wyników z typem i akcją „otwórz”.', args: S({ query: str({ maxLength: 120 }), types: { type: 'array', items: str({ enum: ['notes', 'tasks', 'widgets', 'shortcuts', 'memory', 'chat', 'settings', 'commands', 'files'] }) }, limit: num({ minimum: 1, maximum: 50 }) }, ['query']), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '03-nawigacja.md',
-    examples: ['szukaj wszędzie bank', 'gdzie mam coś o wakacjach', 'znajdź wszystko o spotkaniu'] },
-  { id: 'recent_list', group: 'Nawigacja', label: 'Ostatnio otwierane', description: 'Lista ostatnio otwieranych okien, notatek i widoków (do szybkiego powrotu).', args: S({ limit: num({ minimum: 1, maximum: 20 }) }), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '03-nawigacja.md',
-    examples: ['co ostatnio otwierałem', 'ostatnie okna', 'pokaż ostatnie'] },
-  { id: 'ui_mode', group: 'Nawigacja', label: 'Tryb przestrzeni', description: 'Przełącza tryb pulpitu: work (okna), clean (pusty pulpit, sam rdzeń), focus (jedno okno + cisza), present (bez prywatnych danych i logu). Tryb idle/thinking ustawia agent sam.', args: S({ mode: str({ enum: ['work', 'clean', 'focus', 'present'] }) }, ['mode']), level: 'A3', risk: 'safe', undo: 'poprzedni tryb', writes: ['ui', 'windows'], phase: 'W2', doc: '03-nawigacja.md',
-    examples: ['tryb prezentacji', 'posprzątaj pulpit', 'tryb pracy'] },
 
   /* ================= OKNA (04-okna.md) ================= */
-  { id: 'layout_list', group: 'Aplikacje i okna', label: 'Lista układów', description: 'Presety i zapisane układy okien z listą aplikacji.', args: S({}), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '04-okna.md',
-    examples: ['jakie mam układy', 'lista układów', 'pokaż zapisane układy'] },
-  { id: 'layout_remove', group: 'Aplikacje i okna', label: 'Usuń układ', description: 'Usuwa zapisany układ okien (presetów nie można usunąć).', args: S({ name: str() }, ['name']), level: 'A0', risk: 'confirm', undo: 'przywróć układ (10 min)', writes: ['layouts'], phase: 'W2', doc: '04-okna.md',
-    examples: ['usuń układ biuro', 'skasuj układ praca2', 'nie potrzebuję układu wieczór'] },
-  { id: 'layout_rename', group: 'Aplikacje i okna', label: 'Zmień nazwę układu', description: 'Zmienia nazwę zapisanego układu.', args: S({ name: str(), to: str({ maxLength: 40 }) }, ['name', 'to']), level: 'A2', risk: 'safe', undo: 'poprzednia nazwa', writes: ['layouts'], phase: 'W2', doc: '04-okna.md',
-    examples: ['zmień nazwę układu biuro na praca', 'nazwij układ wieczór domowy', 'przemianuj układ rynek na giełda'] },
-  { id: 'layout_startup', group: 'Aplikacje i okna', label: 'Układ startowy', description: 'Ustawia układ stosowany przy każdym uruchomieniu (albo wyłącza).', args: S({ name: str({ description: 'nazwa albo "none"' }) }, ['name']), level: 'A2', risk: 'safe', undo: 'poprzedni układ startowy', writes: ['settings'], phase: 'W2', doc: '04-okna.md',
-    examples: ['na starcie włączaj układ praca', 'ustaw układ startowy rynek', 'wyłącz układ startowy'] },
 
   /* ================= WIDGETY (05-widgety.md) ================= */
   { id: 'widget_build', group: 'Pulpit i widgety', label: 'Zbuduj widget z opisu', description: 'Tworzy widget z opisu (spec JSON wg docs/spec/widget.schema.json): bloki z dozwolonej listy, dane tylko z poleceń rejestru poziomu A3, przyciski wywołujące polecenia. Bez dowolnego HTML/JS.', args: S({ spec: { type: 'object' }, prompt: str({ maxLength: 300, description: 'oryginalne zdanie użytkownika (do edycji zdaniem)' }) }, ['spec']), level: 'A2', risk: 'safe', undo: 'usuń widget', writes: ['widgets'], phase: 'W4', doc: '05-widgety.md',
@@ -105,14 +91,6 @@ module.exports = [
     examples: ['dodaj dogecoina do obserwowanych', 'usuń solanę z rynku', 'jakie kryptowaluty obserwuję'] },
   { id: 'market_alerts', group: 'Dane', label: 'Alerty kursów', description: 'Lista i usuwanie alertów market_watch.', args: S({ op: str({ enum: ['list', 'remove', 'clear'] }), alert: str() }, ['op']), level: 'A2', risk: 'safe', undo: 'przywróć alert', writes: ['alerts'], phase: 'W3', doc: '08-aplikacje.md',
     examples: ['jakie mam alerty', 'usuń alert na bitcoina', 'wyczyść alerty kursów'] },
-  { id: 'chat_search', group: 'Czat', label: 'Szukaj w rozmowach', description: 'Szuka w historii czatu (IndexedDB); wynik przewija czat do wiadomości.', args: S({ query: str({ maxLength: 120 }) }, ['query']), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '08-aplikacje.md',
-    examples: ['o czym rozmawialiśmy wczoraj o banku', 'znajdź w czacie przepis', 'szukaj w rozmowach hasło wifi'] },
-  { id: 'chat_export', group: 'Czat', label: 'Eksport rozmowy', description: 'Zapisuje rozmowę jako .md (pobranie).', args: S({ range: str({ enum: ['session', 'all'] }) }), level: 'A1', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '08-aplikacje.md',
-    examples: ['zapisz tę rozmowę do pliku', 'eksportuj czat', 'pobierz historię rozmowy'] },
-  { id: 'chat_clear', group: 'Czat', label: 'Wyczyść rozmowę', description: 'Usuwa historię czatu (i streszczenie). Nieodwracalne.', args: S({}), level: 'A0', risk: 'confirm', undo: null, writes: ['chat'], phase: 'W2', doc: '08-aplikacje.md',
-    examples: ['wyczyść czat', 'usuń historię rozmowy', 'zacznijmy od czystej karty'] },
-  { id: 'chat_thread', group: 'Czat', label: 'Wątki rozmów', description: 'Nowy wątek, przełączenie, lista, zmiana nazwy (każdy wątek ma własną historię i streszczenie).', args: S({ op: str({ enum: ['new', 'switch', 'list', 'rename'] }), name: str({ maxLength: 40 }) }, ['op']), level: 'A2', risk: 'safe', undo: 'poprzedni wątek', writes: ['chat'], phase: 'W2', doc: '08-aplikacje.md',
-    examples: ['nowy wątek o wakacjach', 'przełącz na wątek praca', 'jakie mam wątki'] },
   { id: 'memory_edit', group: 'Pamięć', label: 'Popraw zapamiętany fakt', description: 'Zmienia treść faktu w pamięci.', args: S({ fact: str(), text: str({ maxLength: 300 }) }, ['fact', 'text']), level: 'A2', risk: 'safe', undo: 'poprzednia treść', writes: ['memory'], phase: 'W3', doc: '08-aplikacje.md',
     examples: ['popraw w pamięci: pracuję hybrydowo, nie zdalnie', 'zmień fakt o kawie na herbatę', 'zaktualizuj to co wiesz o moim psie'] },
   { id: 'files_open', group: 'Pliki', label: 'Pokaż plik', description: 'Otwiera podgląd pliku (tekst, Markdown, JSON, obraz) w oknie Pliki.', args: S({ path: str() }, ['path']), level: 'A3', risk: 'safe', undo: null, writes: ['windows'], phase: 'W3', doc: '08-aplikacje.md',
@@ -121,20 +99,12 @@ module.exports = [
     examples: ['przesuń notatnik na początek doku', 'terminal jako ostatni w doku', 'daj pogodę na drugie miejsce'] },
 
   /* ================= WYGLĄD (09-wyglad-stany.md) ================= */
-  { id: 'ui_scale', group: 'Interfejs', label: 'Skala interfejsu', description: 'Powiększa albo zmniejsza cały interfejs (80–130%).', args: S({ percent: num({ minimum: 80, maximum: 130 }), step: str({ enum: ['up', 'down', 'reset'] }) }), level: 'A2', risk: 'safe', undo: 'poprzednia skala', writes: ['settings'], phase: 'W2', doc: '09-wyglad-stany.md',
-    examples: ['powiększ interfejs', 'zmniejsz wszystko', 'skala 110 procent'] },
   { id: 'fx_level', group: 'Interfejs', label: 'Poziom efektów', description: 'Efekty: tool (oszczędnie), standard, cinema (pełne); off = bez animacji.', args: S({ level: str({ enum: ['off', 'tool', 'standard', 'cinema'] }) }, ['level']), level: 'A2', risk: 'safe', undo: 'poprzedni poziom', writes: ['settings'], phase: 'W5', doc: '09-wyglad-stany.md',
     examples: ['wyłącz animacje', 'tryb kinowy', 'mniej efektów'] },
   { id: 'chart_show', group: 'Interfejs', label: 'Pokaż wykres', description: 'Skrót do widget_build: wykres z danych polecenia A3 (kursy, zadania w tygodniu, aktywność, koszt, pewność Jeva).', args: S({ source: str({ enum: ['crypto', 'tasks_week', 'activity', 'cost', 'jev_confidence', 'weather_hours'] }), symbol: str(), range: str({ enum: ['1h', '24h', '7d', '30d'] }), kind: str({ enum: ['line', 'bar', 'area', 'spark'] }) }, ['source']), level: 'A2', risk: 'safe', undo: 'usuń widget', writes: ['widgets'], phase: 'W4', doc: '09-wyglad-stany.md',
     examples: ['pokaż wykres bitcoina z tygodnia', 'wykres zadań w tym tygodniu', 'pokaż na wykresie temperaturę na dziś'] },
 
   /* ================= USTAWIENIA (10-ustawienia.md) ================= */
-  { id: 'keys_set', group: 'Interfejs', label: 'Zmień skrót klawiszowy', description: 'Przypisuje skrót do akcji z mapy skrótów (sprawdza konflikty z przeglądarką i innymi skrótami).', args: S({ action: str(), keys: str({ description: 'np. Alt+K' }) }, ['action', 'keys']), level: 'A2', risk: 'safe', undo: 'poprzedni skrót', writes: ['settings'], phase: 'W2', doc: '10-ustawienia.md',
-    examples: ['paleta pod Alt+P', 'zmień skrót czatu na Alt+C', 'przywróć domyślne skróty'] },
-  { id: 'settings_reset', group: 'Interfejs', label: 'Przywróć ustawienia sekcji', description: 'Przywraca domyślne wartości jednej sekcji (klucze zostają).', args: S({ section: str({ enum: ['wyglad', 'glos', 'agent', 'jev', 'hermes', 'skroty', 'powiadomienia'] }) }, ['section']), level: 'A0', risk: 'confirm', undo: 'poprzednie wartości (10 min)', writes: ['settings'], phase: 'W2', doc: '10-ustawienia.md',
-    examples: ['przywróć domyślny wygląd', 'zresetuj ustawienia głosu', 'domyślne ustawienia Jeva'] },
-  { id: 'notif_channel', group: 'Interfejs', label: 'Kanał powiadomień', description: 'Włącza/wyłącza rodzaj powiadomień (zadania, minutnik, rynek, sieć, agent) albo zmienia dźwięk/limit na godzinę.', args: S({ kind: str({ enum: ['task', 'timer', 'market', 'network', 'agent', 'files', 'hermes'] }), on: bool, sound: bool, per_hour: num({ minimum: 0, maximum: 60 }) }, ['kind']), level: 'A2', risk: 'safe', undo: 'poprzednie ustawienie', writes: ['settings'], phase: 'W2', doc: '10-ustawienia.md',
-    examples: ['wyłącz powiadomienia z rynku', 'bez dźwięku przy zadaniach', 'maksymalnie 3 powiadomienia na godzinę'] },
 
   /* ================= AGENT (11-agent.md) ================= */
   { id: 'routine_create', group: 'Agent', label: 'Utwórz rutynę', description: 'Rutyna = nazwa + wyzwalacz (godzina, dni, zdarzenie, na żądanie) + kroki (polecenia rejestru albo zdanie do Hermesa). Kroki A0 zawsze pytają w chwili wykonania.', args: S({ name: str({ maxLength: 40 }), trigger: { type: 'object' }, steps: { type: 'array', maxItems: 12, items: { type: 'object' } } }, ['name', 'steps']), level: 'A1', risk: 'safe', undo: 'usuń rutynę', writes: ['routines'], phase: 'W4', doc: '11-agent.md',

@@ -124,5 +124,38 @@ C.push(['odkręć to co zrobiłeś', 'undo', 'para']);
 C.push(['historia do cofnięcia', 'undo_list', 'local']);
 C.push(['co ostatnio pozmieniałeś', 'undo_list', 'para']);
 
+/* ---- przeniesione z planu (search_all, recent_list, ui_mode, layout_list, layout_remove, layout_rename, layout_startup, chat_search, chat_export, chat_clear, chat_thread, ui_scale, keys_set, settings_reset, notif_channel) ---- */
+C.push(['przeszukaj wszystko pod kątem faktury', 'search_all', 'para']);
+C.push(['szukaj wszędzie dentysta', 'search_all', 'local']);
+C.push(['do czego ostatnio zaglądałem', 'recent_list', 'para']);
+C.push(['ostatnio otwierane', 'recent_list', 'local']);
+C.push(['włącz tryb prezentacji', 'ui_mode', 'local']);
+C.push(['schowaj wszystko prywatne, będę pokazywał ekran', 'ui_mode', 'para']);
+C.push(['czysty pulpit', 'ui_mode', 'para']);
+C.push(['pokaż moje układy okien', 'layout_list', 'local']);
+C.push(['jakie układy mam zapisane', 'layout_list', 'para']);
+C.push(['usuń zapisany układ wieczór', 'layout_remove', 'local']);
+C.push(['wywal układ test', 'layout_remove', 'para']);
+C.push(['zmień nazwę układu test na nocny', 'layout_rename', 'local']);
+C.push(['układ praca niech się nazywa biuro', 'layout_rename', 'para']);
+C.push(['przy starcie otwieraj układ skupienie', 'layout_startup', 'para']);
+C.push(['układ startowy praca', 'layout_startup', 'local']);
+C.push(['szukaj w czacie urlop', 'chat_search', 'local']);
+C.push(['co mi mówiłeś o inflacji', 'chat_search', 'para']);
+C.push(['eksportuj rozmowę', 'chat_export', 'local']);
+C.push(['zapisz naszą rozmowę', 'chat_export', 'para']);
+C.push(['wyczyść historię czatu', 'chat_clear', 'local']);
+C.push(['zapomnij całą naszą rozmowę', 'chat_clear', 'para']);
+C.push(['nowy wątek', 'chat_thread', 'local']);
+C.push(['zacznijmy osobną rozmowę o pracy', 'chat_thread', 'para']);
+C.push(['powiększ wszystko', 'ui_scale', 'local']);
+C.push(['litery są za małe', 'ui_scale', 'para']);
+C.push(['zmień skrót palety na Alt+P', 'keys_set', 'local']);
+C.push(['chcę otwierać czat klawiszem F2', 'keys_set', 'para']);
+C.push(['przywróć domyślne ustawienia wyglądu', 'settings_reset', 'local']);
+C.push(['cofnij wszystkie moje zmiany w głosie', 'settings_reset', 'para']);
+C.push(['wyłącz powiadomienia o sieci', 'notif_channel', 'local']);
+C.push(['rynek niech mnie nie zaczepia', 'notif_channel', 'para']);
+
 /* powtórzenia (np. z generatora) usuwamy — każde zdanie liczy się raz */
 module.exports = C.filter((x, i) => C.findIndex(y => y[0] === x[0]) === i);

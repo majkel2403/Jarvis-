@@ -127,10 +127,6 @@ Aplikacja:
 | `start_timer` (rozszerzenie) | Minutnik (rozszerzenie: kilka naraz, pomodoro) | A2 | zatrzymaj ten minutnik | W3 |
 | `market_watchlist` | Lista obserwowanych | A2 | odwrotna operacja | W3 |
 | `market_alerts` | Alerty kursów | A2 | przywróć alert | W3 |
-| `chat_search` | Szukaj w rozmowach | A3 | — | W2 |
-| `chat_export` | Eksport rozmowy | A1 | — | W2 |
-| `chat_clear` | Wyczyść rozmowę | A0 | — | W2 |
-| `chat_thread` | Wątki rozmów | A2 | poprzedni wątek | W2 |
 | `memory_edit` | Popraw zapamiętany fakt | A2 | poprzednia treść | W3 |
 | `files_open` | Pokaż plik | A3 | — | W3 |
 | `dock_order` | Kolejność w doku | A2 | poprzednia kolejność | W3 |

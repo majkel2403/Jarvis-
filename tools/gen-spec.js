@@ -74,8 +74,10 @@ for (const g of [...new Set(NEW.map(c => c.group))]) {
 /* ---------- tabela planowanych poleceń wstawiana do dokumentów obszarów (między znacznikami) ---------- */
 const START = '<!-- polecenia:start (generuje tools/gen-spec.js) -->', END = '<!-- polecenia:end -->';
 const docBlocks = {};
-for (const doc of [...new Set(NEW.map(c => c.doc))]) {
+const areaDocs = fs.readdirSync(OUT).filter(f => /^\d\d-.*\.md$/.test(f) && (NEW.some(c => c.doc === f) || fs.readFileSync(path.join(OUT, f), 'utf8').includes(START)));
+for (const doc of areaDocs) {
   const l = NEW.filter(c => c.doc === doc);
+  if (!l.length) { const f = path.join(OUT, doc), src = fs.readFileSync(f, 'utf8'), i = src.indexOf(START), j = src.indexOf(END); const b = START + '\n\n## Planowane polecenia tej części\n\nWszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).\n\n' + END; docBlocks[doc] = i >= 0 && j > i ? src.slice(0, i) + b + src.slice(j + END.length) : src; continue; }
   let b = START + '\n\n## Planowane polecenia tej części\n\n| polecenie | co robi | poziom | cofanie | fala |\n|---|---|---|---|---|\n';
   for (const c of l) b += `| \`${c.id}\`${c.extends ? ' (rozszerzenie)' : ''} | ${esc(c.label)} | ${c.level} | ${esc(c.undo || '—')} | ${c.phase} |\n`;
   b += '\nPełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).\n\n' + END;

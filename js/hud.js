@@ -149,7 +149,7 @@ const mount = () => {
     c.cache = {}; c.st = { s: 'idle' };
     el.style.transitionDelay = (i * 45) + 'ms';
     el.title = 'Kliknij: szczegóły w Process Log';
-    el.onclick = () => { J.sfx.click(); if (c.id === 'model') J.toast((J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel + (J.hermes.latency ? ' · ping ' + J.hermes.latency + ' ms' : '') : 'Silnik lokalny') + ' · tury: ' + eg.turns + ' · znaki rozumowania: ' + eg.thinkChars); else if (c.id === 'status') $('#btnNet')?.click(); else if (c.id === 'done' && eg.last) $('#resultChip')?.classList.add('show'); else J.proc.open(); };
+    el.onclick = () => { J.sfx.click(); if (c.id === 'model') { J.wm.open('settings', { view: 'section', target: 'hermes' }); } if (c.id === 'model') J.toast((J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel + (J.hermes.latency ? ' · ping ' + J.hermes.latency + ' ms' : '') : 'Silnik lokalny') + ' · tury: ' + eg.turns + ' · znaki rozumowania: ' + eg.thinkChars); else if (c.id === 'status') J.wm.open('monitor'); else if (c.id === 'files' && J.apps.files) J.wm.open('files'); else if (c.id === 'done' && eg.last) $('#resultChip')?.classList.add('show'); else J.proc.open(); };
     hud.appendChild(el);
   });
   layout();

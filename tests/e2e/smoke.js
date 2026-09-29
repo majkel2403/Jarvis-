@@ -13,7 +13,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
   const errs = []; p.on('pageerror', e => errs.push('PAGE: ' + String(e))); p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
   await p.goto(URL + '/index.html?' + Date.now());
-  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('jarvis-os:v2', JSON.stringify({ settings: { hermesOn: false, skipBoot: true, speech: false, sound: false }, ui: { onboarded: true } })); });
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('jarvis-os:v2', JSON.stringify({ settings: { hermesOn: false, skipBoot: true, speech: false, sound: false }, ui: { onboarded: true, tourDone: true } })); });
   await p.reload(); await p.waitForTimeout(1000);
   try { await p.click('#bootEnter', { timeout: 3000 }); } catch (e) { await p.keyboard.press('Enter'); }
   await p.waitForTimeout(1500);
@@ -112,6 +112,26 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.mouse.click(hb.x, hb.y, { button: 'right' }); await p.waitForTimeout(200);
   assert(await p.evaluate(() => /Przypnij na wierzchu/.test(document.querySelector('.ctx')?.textContent || '')), 'menu okna');
   await p.keyboard.press('Escape');
+  // ===== W2: paleta z wyszukiwaniem, link #go, tryb prezentacji, ustawienia, wątki =====
+  await p.evaluate(() => { J.notes.add('Faktura za prąd', 'zapłacić do 10'); J.wm.closeAll(); });
+  await p.keyboard.press('Control+k'); await p.waitForTimeout(200); await p.keyboard.type('faktra'); await p.waitForTimeout(250);
+  const palTxt = await p.evaluate(() => document.querySelector('#paletteList').textContent);
+  assert(/Notatki/.test(palTxt) && /Faktura za prąd/.test(palTxt), 'paleta: notatka z literówką ' + palTxt.slice(0, 200));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#paletteList .pitem')].find(x => /Faktura za prąd/.test(x.textContent)); b.click(); }); await p.waitForTimeout(400);
+  assert(await p.evaluate(() => J.wm.isOpen('notes') && J.apps.notes.state(J.wm.ctx('notes')).title === 'Faktura za prąd'), 'paleta otwiera notatkę');
+  await p.evaluate(() => { location.hash = 'go=schedule/day/2026-10-02'; }); await p.waitForTimeout(600);
+  assert(await p.evaluate(() => J.wm.isOpen('schedule') && J.apps.schedule.state(J.wm.ctx('schedule')).day === '2026-10-02' && !/go=/.test(location.hash)), 'link #go');
+  await expect('tryb prezentacji', /prezentacji/);
+  assert(await p.evaluate(() => getComputedStyle(document.querySelector('#chatPanel')).display === 'none'), 'prezentacja chowa czat');
+  await expect('tryb pracy', /pracy/);
+  await p.evaluate(() => J.wm.open('settings')); await p.waitForTimeout(500);
+  await p.fill('.window[data-app="settings"] #setFind', 'powiadomienia'); await p.waitForTimeout(300);
+  const st = await p.evaluate(() => ({ hit: !!document.querySelector('.window[data-app="settings"] .set-hit'), nt: document.querySelectorAll('#ntList .row').length, kb: document.querySelectorAll('#kbList .row').length, chips: document.querySelectorAll('.set-chips .chip').length }));
+  assert(st.hit && st.nt >= 8 && st.kb >= 10 && st.chips >= 16, 'ustawienia W2 ' + JSON.stringify(st));
+  const diag = await p.evaluate(async () => (await J.diagnostics()).length); assert(diag >= 9, 'testy diagnostyczne');
+  await p.evaluate(async () => { J.chatPanel.show(); await J.uiRun('chat_thread', { op: 'new', name: 'Test W2' }, { offer: false }); }); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => document.querySelector('#chatThread')?.selectedOptions[0]?.textContent === 'Test W2'), 'wątek w nagłówku czatu');
+  await p.evaluate(async () => { await J.uiRun('chat_thread', { op: 'switch', name: 'Ogólny' }, { offer: false }); J.wm.closeAll(); });
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {

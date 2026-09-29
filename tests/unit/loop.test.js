@@ -22,6 +22,7 @@ const setup = async (settings, responses) => {
     return r();
   };
   const J = load({ dom: true, fetch, state: { settings: { hermesOn: true, hermesProvider: 'custom', hermesUrl: 'http://serwer.test/v1', hermesModel: 'm', sound: false, speech: false, ...settings } } });
+  J.__ctx.setTimeout = setTimeout; J.HERMES_RETRY_MS = 5;   // ponowienie po błędzie sieci bez czekania 2 s
   const seen = []; const add = J.chat.add; J.chat.add = (role, text, silent) => { const h = add(role, text, silent); seen.push({ role, h }); return h; };
   await wait(30);   // ai.js wczytuje historię asynchronicznie
   return { J, requests, seen, jarvisText: () => seen.filter(x => x.role === 'jarvis').map(x => x.h.text).pop() };

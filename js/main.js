@@ -391,6 +391,13 @@ const renderDock = () => {
   const w = h('button', { class: 'plain', title: 'Nowy widget na pulpicie' }, icon('plus')); w.onclick = () => { const r = w.getBoundingClientRect(); widgetMenu(r.left, r.top - 130); }; d.appendChild(w);
 };
 J.on('wm', renderDock);
+/* dok klawiaturą: jedno miejsce w kolejności Tab, strzałki między ikonami (roving tabindex), Shift F10 = menu */
+$('#dock').addEventListener('keydown', e => {
+  const l = $$('#dock button'); const i = l.indexOf(document.activeElement); if (i < 0) return;
+  const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'Home' ? -i : e.key === 'End' ? l.length - 1 - i : 0;
+  if (k) { e.preventDefault(); const n = l[(i + k + l.length) % l.length]; l.forEach(b => b.tabIndex = -1); n.tabIndex = 0; n.focus(); }
+});
+J.on('wm', () => { const l = $$('#dock button'); l.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1); });
 
 /* =================== WIDGETY: menu tworzenia =================== */
 const widgetMenu = (x, y) => ctxMenu(x, y, Object.entries(J.widgets.TYPES).map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })));
@@ -422,25 +429,47 @@ const palette = (() => {
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
     ...J.state.notes.slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
   ];
+  const TYPE_G = { apps: ['Aplikacje', null], notes: ['Notatki', 'notes'], tasks: ['Zadania', 'calendar'], widgets: ['Widgety', 'list'], shortcuts: ['Skróty', 'link'], settings: ['Ustawienia', 'settings'], commands: ['Polecenia', 'bolt'], memory: ['Pamięć', 'brain'], chat: ['Rozmowy', 'chat'], files: ['Pliki', 'doc'] };
+  const hitItem = hit => ({ g: TYPE_G[hit.type][0], ic: TYPE_G[hit.type][1] || J.apps[hit.id]?.icon || 'star', t: hit.title, s: hit.sub, key: hit.type + ':' + hit.id, open: hit.open, run: () => J.search.open(hit) });
+  const pinned = () => (J.state.ui.pinned = J.state.ui.pinned || []);
+  let seq = 0;
   const render = () => {
-    const raw = inp.value.trim(), q = norm(raw);
+    const raw = inp.value.trim(), q0 = norm(raw), my = ++seq;
     const all = base();
-    if (!q) {
-      const rec = (J.state.ui.recent || []).map(t => all.find(it => it.t === t)).filter(Boolean).map(it => ({ ...it, g: 'Ostatnie' }));
-      items = [...rec, ...all];
+    const prefix = /^[>#@?]/.test(raw) ? raw[0] : '', q = norm(prefix ? raw.slice(1).trim() : raw);
+    if (prefix === '?') {
+      items = (J.KEYS || []).map(([k, t]) => ({ g: 'Skróty klawiszowe', ic: 'bolt', t, s: k, run: () => { } }));
+    } else if (!q0) {
+      const rec = (J.state.ui.recentViews || []).slice(0, 8).map(r => ({ g: 'Ostatnie', ic: J.apps[r.app]?.icon || 'history', t: r.title, key: 'recent:' + r.app + ':' + (r.target || ''), run: () => J.registry.run(r.view ? 'app_view' : 'open_app', r.view ? { app: r.app, view: r.view, target: r.target || undefined } : { app: r.app }, { source: 'ui' }) }));
+      const pins = pinned().map(p => { if (p.open) return { g: 'Przypięte', ic: p.ic, t: p.t, key: p.k, open: p.open, run: () => J.search.open({ open: p.open }) }; const b0 = all.find(it => it.t === p.t); return b0 ? { ...b0, g: 'Przypięte', key: p.k } : null; }).filter(Boolean);
+      items = [...pins, ...rec, ...all];
+    } else if (prefix) {
+      const types = { '>': ['commands'], '#': ['notes'], '@': ['settings'] }[prefix];
+      items = J.search.sync(q, types).sort((a, b) => b.score - a.score).slice(0, 40).map(hitItem);
+      if (prefix === '>') { const m = J.registry.match(raw.slice(1))[0]; if (m) items.unshift({ g: 'Wykonaj', ic: 'bolt', t: m.cmd.label, s: 'Enter', run: () => J.brain.handle(raw.slice(1)) }); }
     } else {
       items = all.map(it => ({ it, sc: Math.max(fz(q, it.t), fz(q, it.k || '') * .6) })).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).map(x => x.it);
       const m = J.registry.match(raw)[0];
       if (m) items.unshift({ g: 'Wykonaj', ic: 'bolt', t: m.cmd.label + (Object.keys(m.args).length ? ': ' + Object.values(m.args).map(v => Array.isArray(v) ? v.join(', ') : String(v)).join(' · ').slice(0, 60) : ''), s: 'Enter', run: () => J.registry.run(m.id, m.args, { source: 'ui' }).then(r => { J.toast(r.text); if (r.ui?.highlight) J.ui.highlight(r.ui.highlight); }) });
+      /* wyniki z danych (notatki, zadania, widgety, skróty, ustawienia) zaraz po poleceniach; pamięć i rozmowy dochodzą asynchronicznie */
+      const byType = {}; J.search.sync(q, ['notes', 'tasks', 'widgets', 'shortcuts', 'settings']).sort((a, b) => b.score - a.score).forEach(hh => { (byType[hh.type] = byType[hh.type] || []).push(hh); });
+      const data = Object.values(byType).flatMap(l => l.slice(0, 8)).map(hitItem).filter(it => !items.some(x => x.t === it.t && x.g === it.g));
+      items.splice(items[0]?.g === 'Wykonaj' ? 1 : 0, 0, ...data);
+      J.search.query(raw, { types: ['memory', 'chat'], limit: 10 }).then(extra => { if (my !== seq || !extra.length || !bg.classList.contains('open')) return; const add = extra.map(hitItem); const at = items.findIndex(it => it.g === 'Jarvis'); items.splice(at < 0 ? items.length : at, 0, ...add); draw(); }).catch(() => { });
       items.push({ g: 'Jarvis', ic: 'chat', t: 'Zapytaj Jarvisa: „' + raw + '”', s: 'Enter', run: () => J.brain.handle(raw), jar: true });
       items.push({ g: 'Jarvis', ic: 'globe', t: 'Szukaj w Google: ' + raw, run: () => window.open('https://www.google.com/search?q=' + encodeURIComponent(raw), '_blank', 'noopener') });
     }
+    draw();
+  };
+  const draw = () => {
     sel = J.clamp(sel, 0, items.length - 1);
     list.innerHTML = ''; let g = '';
     items.forEach((it, i) => {
       if (it.g !== g) { g = it.g; list.appendChild(h('div', { class: 'pgroup' }, esc(g))); }
-      const b = h('button', { class: 'pitem' + (i === sel ? ' sel' : '') }, `<span class="pi">${icon(it.ic)}</span><span></span>${it.s ? `<small>${esc(it.s)}</small>` : ''}`);
-      b.children[1].textContent = it.t;
+      const pk = it.key || ('item:' + it.t), isPin = pinned().some(p => p.k === pk);
+      const b = h('button', { class: 'pitem' + (i === sel ? ' sel' : '') }, `<span class="pi">${icon(it.ic)}</span><span></span>${it.s ? `<small></small>` : ''}<i class="pstar${isPin ? ' on' : ''}" title="${isPin ? 'Odepnij' : 'Przypnij w palecie'}">★</i>`);
+      b.children[1].textContent = it.t; if (it.s) b.querySelector('small').textContent = it.s;
+      b.querySelector('.pstar').onclick = ev => { ev.stopPropagation(); const l = pinned(), k = l.findIndex(p => p.k === pk); if (k >= 0) l.splice(k, 1); else if (l.length < 12) l.push({ k: pk, t: it.t, ic: it.ic, open: it.open || null }); else J.toast('Maksymalnie 12 przypiętych'); J.save(); draw(); };
       b.onclick = () => exec(i); b.onmousemove = () => { if (sel !== i) { sel = i; mark(); } };
       list.appendChild(b);
     });
@@ -498,7 +527,7 @@ const winMenu = (id, x, y) => {
     { ic: 'close', t: isW ? 'Usuń widget' : 'Zamknij', danger: isW, run: () => isW ? J.wm.close(id) : J.uiRun('close_app', { app: id }) }
   ]);
 };
-J.winMenu = winMenu;
+J.winMenu = winMenu; J.ctxMenu = ctxMenu;
 $('#app').addEventListener('contextmenu', e => {
   if (e.target.closest('input,textarea,.window .win-body,.chat-panel,.log-panel')) return;
   e.preventDefault();
@@ -571,6 +600,74 @@ J.setFocus = on => {
 };
 
 /* =================== SKRÓTY KLAWISZOWE =================== */
+/* akcje z domyślnymi skrótami; Ustawienia → Skróty (keys_set) mogą je przemapować (J.state.settings.keys) */
+J.KEY_ACTIONS = {
+  palette: { label: 'Paleta i wyszukiwanie', def: 'Ctrl+K', run: () => palette.isOpen ? palette.close() : palette.open() },
+  voice: { label: 'Mów do Jarvisa', def: 'Ctrl+Space', run: () => J.ear.toggle() },
+  standby: { label: 'Czuwanie („Jarvis…”)', def: 'Alt+J', run: () => J.ear.setStandby(!J.ear.standby) },
+  chat: { label: 'Czat', def: 'Alt+1', run: () => J.chatPanel.toggle() },
+  log: { label: 'Process Log', def: 'Alt+2', run: () => J.proc.toggle() },
+  telemetry: { label: 'Telemetria', def: 'Alt+3', run: () => $('#deckHead')?.click() },
+  notifications: { label: 'Powiadomienia', def: 'Alt+N', run: () => J.notifs.toggle() },
+  nextWindow: { label: 'Następne okno', def: 'Alt+W', run: () => J.wm.cycle() },
+  maximize: { label: 'Maksymalizuj okno', def: 'Alt+Enter', run: () => { const f = J.wm.focused(); if (f) J.wm.toggleMax(f); } },
+  back: { label: 'Wróć', def: 'Ctrl+Alt+ArrowLeft', run: () => J.uiRun('nav_back', {}, { quiet: true }) },
+  forward: { label: 'Dalej', def: 'Ctrl+Alt+ArrowRight', run: () => J.uiRun('nav_forward', {}, { quiet: true }) },
+  desktop: { label: 'Pokaż pulpit / przywróć', def: 'Alt+D', run: () => J.wm.list().some(k => !J.wm.isMin(k)) ? J.uiRun('wm_minimize', { app: 'all' }) : J.uiRun('wm_restore', { app: 'all' }) },
+  tile: { label: 'Ułóż w kafelki', def: 'Alt+T', run: () => J.uiRun('wm_arrange', { mode: 'tile' }) },
+  present: { label: 'Tryb prezentacji', def: 'Alt+P', run: () => J.uiRun('ui_mode', { mode: J.uiMode.get() === 'present' ? 'work' : 'present' }, { offer: false }) },
+  reopen: { label: 'Otwórz ponownie zamknięte', def: 'Ctrl+Shift+T', run: () => J.uiRun('wm_reopen', {}) },
+  undo: { label: 'Cofnij', def: 'Ctrl+Z', run: () => J.uiRun('undo', {}).then(r => r.ok && J.toast(r.text)) },
+  newNote: { label: 'Nowa notatka', def: 'Ctrl+Alt+N', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
+  search: { label: 'Szukaj wszędzie', def: 'Ctrl+Shift+F', run: () => palette.open('') },
+  overlay: { label: 'Nakładka diagnostyczna', def: 'Alt+Shift+D', run: () => J.debugOverlay(!J.state.ui.debugOverlay) },
+  help: { label: 'Ściąga skrótów', def: 'F1', run: () => J.keysHelp() }
+};
+/* ---------- testy diagnostyczne (Ustawienia → O programie) ---------- */
+J.diagnostics = async () => {
+  const out = [], t = async (name, fn) => { try { const d = await fn(); out.push([true, name, d || '']); } catch (e) { out.push([false, name, String(e?.message || e).slice(0, 120)]); } };
+  await t('Internet', async () => { if (!navigator.onLine) throw new Error('przeglądarka zgłasza brak sieci'); return 'online'; });
+  await t('Zapis (localStorage)', async () => { localStorage.setItem('jarvis-os:probe', '1'); localStorage.removeItem('jarvis-os:probe'); return 'działa'; });
+  await t('Zapis (IndexedDB)', async () => { await J.store.set('probe', 1); if ((await J.store.get('probe')) !== 1) throw new Error('odczyt się nie zgadza'); await J.store.del?.('probe'); return 'działa'; });
+  await t('Hermes (mózg)', async () => { if (!J.aiReady()) return 'wyłączony — działa parser lokalny'; const l = await J.brain.models(); return 'odpowiada (' + (l?.length ?? 0) + ' modeli)'; });
+  await t('Jev (sędzia)', async () => { if (!J.judge.enabled()) return 'wyłączony'; const st = J.judge.status; if (J.judge.breaker?.open) throw new Error('wstrzymany: ' + (J.judge.breaker.reason || 'błędy')); return st.state === 'up' ? 'ostatnio ' + st.latency + ' ms' : 'włączony (bez wywołań w tej sesji)'; });
+  await t('Pogoda (Open-Meteo)', async () => { const d = await J.weather.get(); return d.city + ' ' + Math.round(d.current.temperature_2m) + '°'; });
+  await t('Kursy (Binance/CoinGecko)', async () => { await J.market.ensure(); return J.market.source; });
+  await t('Mowa (syntezator)', async () => { if (!J.voice.supported) throw new Error('brak w tej przeglądarce'); return (J.voice.list().length || 0) + ' głosów'; });
+  await t('Mikrofon (rozpoznawanie)', async () => { if (!J.ear.supported) throw new Error('brak Web Speech — użyj Chrome/Edge'); try { const p = await navigator.permissions?.query({ name: 'microphone' }); return 'zgoda: ' + (p?.state || 'nieznana'); } catch (e) { return 'dostępny'; } });
+  await t('Folder roboczy', async () => { if (!J.files?.supported) throw new Error('brak File System Access — użyj Chrome/Edge'); return J.files.handle ? 'wybrany: ' + J.files.handle.name : 'nie wybrano (Ustawienia → Pliki)'; });
+  return out;
+};
+/* ---------- samouczek (5 kroków, każdy podświetla element) ---------- */
+J.tour = async force => {
+  if (!force && J.state.ui.tourDone) return;
+  const steps = [['core', 'To rdzeń Jarvisa. Kliknij go albo naciśnij Ctrl Spacja, żeby mówić.'], ['chat', 'Czat: wpisz polecenie, np. „przypomnij mi o 18 trening”. Alt 1 pokazuje i chowa czat.'], ['dock', 'Dok z aplikacjami. Okna przeciągasz za nagłówek, Alt ←/→ przyciąga je do krawędzi, prawy przycisk na nagłówku to menu okna.'], ['palette', 'Ctrl K otwiera paletę: szukasz wszędzie i uruchamiasz polecenia.'], ['core', 'Pomyłka? Powiedz „cofnij” albo naciśnij Ctrl Z. „Wróć” wraca do poprzedniego okna. Naciśnij ?, żeby zobaczyć wszystkie skróty.']];
+  for (let i = 0; i < steps.length; i++) { J.ui.highlight(steps[i][0], (i + 1) + '/' + steps.length); const a = await J.ask(steps[i][1], [{ label: i < steps.length - 1 ? 'Dalej' : 'Gotowe', value: 'next', primary: true }, { label: 'Pomiń', value: 'skip' }], { speak: false, timeout: 120000 }); if (a !== 'next') break; }
+  J.state.ui.tourDone = true; J.save();
+};
+/* ---------- nakładka diagnostyczna ---------- */
+J.debugOverlay = on => {
+  J.state.ui.debugOverlay = !!on; J.save(); let el = $('#dbgOv'); clearInterval(J.__dbgT);
+  if (!on) { el?.remove(); return; }
+  if (!el) { el = h('pre', { id: 'dbgOv', class: 'dbg-ov' }); document.body.appendChild(el); }
+  const tick = () => { const last = J.judge?.log?.all?.().slice(-1)[0], p = J.context.packet({ quiet: true }); el.textContent = 'FPS ' + (J.fps || 0) + ' · okna ' + J.wm.count() + ' · tryb ' + J.uiMode.get() + ' · wątek ' + J.threads.current() + '\nCofnij: ' + J.undo.stack.length + (J.undo.last() ? ' (ostatnie: ' + (J.undo.last().text || '').slice(0, 40) + ')' : '') + '\nJev: ' + (last ? last.intent + ' ' + Math.round((last.conf || 0) * 100) + '% → ' + (last.outcome || last.route || '?') + ' (' + (last.ms || 0) + ' ms)' : '—') + (J.judge?.breaker?.open ? ' · WSTRZYMANY' : '') + '\nKontekst: ' + JSON.stringify({ focused: p.desktop?.focused?.app, windows: p.desktop?.windows?.length, tasks: p.tasks?.today?.length, signals: p.signals?.length }); };
+  tick(); J.__dbgT = setInterval(tick, 1000);
+};
+const comboOf = e => { const k = e.key === ' ' ? 'space' : e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase(); return J.normCombo([e.ctrlKey || e.metaKey ? 'ctrl' : '', e.altKey ? 'alt' : '', e.shiftKey && k.length > 1 || e.shiftKey && /[a-z]/.test(k) ? 'shift' : '', e.code === 'Space' ? 'space' : /^Digit\d$/.test(e.code) ? e.code.slice(5) : k].filter(Boolean).join('+')); };
+const keyOf = id => J.state.settings.keys?.[id] || J.KEY_ACTIONS[id].def;
+Object.defineProperty(J, 'KEYS', { get: () => [...Object.entries(J.KEY_ACTIONS).map(([id, a]) => [keyOf(id).replace(/Arrow(Left|Right|Up|Down)/, m => ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' })[m]), a.label]), ['Alt ←→↑↓', 'przyciągnij okno do krawędzi'], ['Alt Shift ←→↑↓', 'przesuń okno'], ['Ctrl Alt Shift ←→↑↓', 'zmień rozmiar okna'], ['Alt Shift W', 'poprzednie okno'], ['Alt Spacja', 'menu okna'], ['Esc', 'zamknij / przerwij / wyjdź z pola'], ['?', 'ściąga skrótów']], configurable: true });
+/* przemapowane skróty mają pierwszeństwo; domyślny skrót akcji przemapowanej przestaje działać */
+addEventListener('keydown', e => {
+  if (!$('#app').classList.contains('on') || e.repeat) return;
+  const inField = !!e.target.closest?.('input,textarea,select,[contenteditable]'), c = comboOf(e), custom = J.state.settings.keys || {};
+  for (const [id, a] of Object.entries(J.KEY_ACTIONS)) {
+    if (J.normCombo(keyOf(id)) !== c) continue;
+    if (inField && !/^(palette|voice|search)$/.test(id) && !/\+(ctrl|alt)|^(ctrl|alt)\+/.test(c)) return;
+    if (inField && id === 'undo') return;   // Ctrl Z w polu tekstowym = cofanie pisania
+    e.preventDefault(); e.stopImmediatePropagation(); a.run(); return;
+  }
+  if (Object.entries(custom).some(([id]) => J.KEY_ACTIONS[id] && J.normCombo(J.KEY_ACTIONS[id].def) === c)) { e.preventDefault(); e.stopImmediatePropagation(); }   // domyślny skrót akcji przemapowanej: nic
+}, true);
 addEventListener('keydown', e => {
   if (!$('#app').classList.contains('on')) return;
   const mod = e.ctrlKey || e.metaKey, inField = !!e.target.closest?.('input,textarea,select,[contenteditable]');
@@ -608,10 +705,11 @@ addEventListener('keydown', e => {
   }
   else if (e.key === '/' && !e.target.closest('input,textarea')) { e.preventDefault(); palette.open(); }
 });
+/* telefon: przesunięcie palcem od lewej krawędzi = „wróć” */
+{ let sx = null, sy = 0; addEventListener('touchstart', e => { const t = e.touches[0]; sx = t.clientX < 24 && innerWidth <= 640 ? t.clientX : null; sy = t.clientY; }, { passive: true }); addEventListener('touchend', e => { if (sx == null) return; const t = e.changedTouches[0]; if (t.clientX - sx > 80 && Math.abs(t.clientY - sy) < 60) J.uiRun('nav_back', {}, { quiet: true }); sx = null; }, { passive: true }); }
 /* przyciski myszy „wstecz / dalej” = historia okien Jarvisa (bez wychodzenia ze strony) */
 addEventListener('mouseup', e => { if (e.button === 3 || e.button === 4) { e.preventDefault(); J.uiRun(e.button === 3 ? 'nav_back' : 'nav_forward', {}, { quiet: true }); } });
 /* ściąga skrótów klawiszowych („?”) */
-J.KEYS = [['Ctrl K, /', 'paleta i wyszukiwanie'], ['Ctrl Spacja', 'mów do Jarvisa'], ['Alt J', 'czuwanie („Jarvis…”)'], ['Alt 1 / 2 / 3', 'czat / Process Log / telemetria'], ['Alt N', 'powiadomienia'], ['Alt W, Alt Shift W', 'następne / poprzednie okno'], ['Alt ←→↑↓', 'przyciągnij okno do krawędzi'], ['Alt Enter', 'maksymalizuj'], ['Alt Shift ←→↑↓', 'przesuń okno'], ['Ctrl Alt Shift ←→↑↓', 'zmień rozmiar okna'], ['Ctrl Alt ← / →', 'wróć / dalej'], ['Alt D', 'pokaż pulpit / przywróć'], ['Alt T', 'ułóż w kafelki'], ['Alt Spacja', 'menu okna'], ['Ctrl Shift T', 'otwórz ponownie zamknięte'], ['Ctrl Z', 'cofnij ostatnią akcję'], ['Esc', 'zamknij / przerwij / wyjdź z pola'], ['?', 'ta ściąga']];
 J.keysHelp = () => { J.ask('Skróty klawiszowe:\n' + J.KEYS.map(([k, t]) => k + ' — ' + t).join('\n'), [{ label: 'OK', value: 'ok', primary: true }], { speak: false, timeout: 120000 }); };
 
 /* =================== POWIADOMIENIA SYSTEMOWE =================== */
@@ -751,7 +849,10 @@ J.ask = (() => {
   return api;
 })();
 /* potwierdzenie ryzykownego narzędzia: 'yes' | 'no' | 'always' | 'timeout' */
-J.confirm = async req => {
+/* dziennik zgód (IndexedDB consent.log, 500 wpisów) — widoczny w Ustawieniach → Agent */
+const logConsent = (req, answer) => { try { J.store.push('consent.log', { ts: Date.now(), id: req.id, label: req.label, args: JSON.stringify(req.args || {}).slice(0, 160), source: req.source || '', forced: !!req.forced, answer }, 500); } catch (e) { } };
+J.confirm = async req => { const v = await confirm0(req); logConsent(req, v); return v; };
+const confirm0 = async req => {
   J.sfx.confirm();
   const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, ...(req.forced ? [] : [{ label: 'Zawsze', value: 'always' }])], { timeout: 60000 });
   if (v === null) return 'timeout';
@@ -777,6 +878,18 @@ J.confirm = async req => {
 
 /* =================== WSKAZYWANIE ELEMENTÓW (Jarvis „pokazuje palcem”) =================== */
 J.ui = {
+  /* wspólny wygląd stanów widoku (docs/spec/09-wyglad-stany.md §1): loading | empty | error | offline | denied | stale | mock */
+  state(el, kind, o = {}) {
+    if (!el) return null;
+    const ICON = { loading: '', empty: 'list', error: 'close', offline: 'wifi', denied: 'key', stale: 'history', mock: 'bolt' };
+    if (kind === 'stale' || kind === 'mock') { el.querySelector('.ui-badge')?.remove(); const b = h('span', { class: 'ui-badge ' + kind }); b.textContent = o.text || (kind === 'mock' ? 'symulacja' : 'nieaktualne'); el.prepend(b); return b; }
+    const box = h('div', { class: 'ui-state ' + kind, role: kind === 'error' ? 'alert' : 'status' });
+    box.innerHTML = kind === 'loading' ? '<i class="sk"></i><i class="sk"></i><i class="sk short"></i>' : '<div class="us-ic">' + icon(ICON[kind] || 'star', 'width="20" height="20"') + '</div><div class="us-t"></div>';
+    if (kind !== 'loading') $('.us-t', box).textContent = o.text || { empty: 'Nic tu jeszcze nie ma.', error: 'Coś poszło nie tak.', offline: 'Brak internetu.', denied: 'Brak dostępu.' }[kind] || '';
+    if (kind === 'loading' && o.text) { const t = h('div', { class: 'us-t' }); t.textContent = o.text; box.appendChild(t); }
+    if (o.action) { const b = h('button', { class: 'btn sm ' + (kind === 'empty' ? 'primary' : 'ghost') }); b.textContent = o.action.label; b.onclick = o.action.run; box.appendChild(b); }
+    el.innerHTML = ''; el.appendChild(box); return box;
+  },
   resolve(target) {
     const t = String(target || '');
     const map = { dock: '#dock', rail: '#iconRail', deck: '#deck', core: '#core', chat: J.chatPanel?.isOpen ? '#chatPanel' : '#chatChip', log: $('#workspace').classList.contains('log-open') ? '#logPanel' : '#logChip', palette: '#searchPill', notifications: '#btnNotif', voice: '#btnVoice', settings: '#btnAvatar' };
@@ -805,6 +918,7 @@ J.notifs = (() => {
     [...l.filter(hi), ...l.filter(n => !hi(n))].slice(0, 60).forEach(n => {
       const el = h('button', { class: 'nt' + (n.read ? '' : ' unread') + (hi(n) ? ' imp' : ''), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
       $('b', el).textContent = n.title; $('span', el).textContent = n.body || ''; $('small', el).textContent = rel(n.ts);
+      if (n.actions?.length && !n.done) { const bar = h('div', { class: 'nt-act' }); n.actions.forEach(a => { const b = h('span', { class: 'btn sm ghost', role: 'button', tabindex: '0' }); b.textContent = a.label; b.onclick = async ev => { ev.stopPropagation(); const r = await J.uiRun(a.cmd, a.args || {}); if (r.ok) { n.done = true; J.save(); render(); J.toast(r.text); } }; bar.appendChild(b); }); $('div', el).appendChild(bar); }
       el.onclick = () => { n.read = true; J.save(); render(); const app = KIND_APP[n.kind]; if (app === 'chat') J.chatPanel.show(); else if (app) J.wm.open(app); };
       list.appendChild(el);
     });
@@ -827,11 +941,16 @@ J.notifs = (() => {
   return api;
 })();
 /* J.notice: jedno wejście dla powiadomień (toast + centrum + opcjonalnie systemowe) */
-J.notice = ({ title, body, kind = 'info', toast = true, system = false }) => {
-  const n = { id: J.uid(), title: String(title), body: body ? String(body) : '', kind, ts: Date.now(), read: false };
+/* kanały (Ustawienia → Powiadomienia): wyłączony kanał = tylko centrum bez dymka; limit dymków na godzinę; w trybie prezentacji bez treści */
+const toastLog = {};
+J.notice = ({ title, body, kind = 'info', toast = true, system = false, actions }) => {
+  const n = { id: J.uid(), title: String(title), body: body ? String(body) : '', kind, ts: Date.now(), read: false, actions: (actions || []).slice(0, 3) };
   J.state.notifs.unshift(n); J.state.notifs.length = Math.min(J.state.notifs.length, 100); J.save();
-  if (toast) J.toast(n.title + (n.body ? ' — ' + n.body : ''), 5000);
-  if (system) J.notify?.(n.title, n.body);
+  const ch = J.notifChannel ? J.notifChannel(kind) : { on: true, sound: true, perHour: 20 };
+  const recent = (toastLog[kind] = (toastLog[kind] || []).filter(t => Date.now() - t < 3600e3));
+  const show = toast && ch.on && recent.length < (ch.perHour ?? 20);
+  if (show) { recent.push(Date.now()); J.toast(J.uiMode?.get() === 'present' ? 'Nowe powiadomienie' : n.title + (n.body ? ' — ' + n.body : ''), 5000); }
+  if (system && ch.on && J.uiMode?.get() !== 'present') J.notify?.(n.title, n.body);
   J.notifs.render(); return n;
 };
 
@@ -875,8 +994,38 @@ J.on('timer', syncWake); J.on('ear-standby', syncWake); document.addEventListene
 J.notifs.render();
 if (J.state.alerts?.length) J.market.subscribeBackground();
 J.files?.load?.();
+/* okna otwarte przy zamykaniu strony (układ startowy „last”) */
+addEventListener('pagehide', () => { try { localStorage.setItem('jarvis-os:openAtExit', JSON.stringify(J.wm.list().filter(k => !k.startsWith('w:') && !J.wm.isMin(k)))); } catch (e) { } });   // osobny klucz: pełny zapis stanu tutaj nadpisałby zmiany z innej karty
+/* link do miejsca w Jarvisie: index.html#go=app/widok/cel (docs/spec/03-nawigacja.md §5) */
+J.openGo = () => {
+  try {
+    const hp = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); const go = hp.get('go'); if (!go) return false;
+    const [app, view, target] = go.split('/').map(decodeURIComponent);
+    hp.delete('go'); history.replaceState(null, '', location.pathname + location.search + (String(hp) ? '#' + hp : ''));
+    if (!J.apps[app]) { J.toast('Link prowadzi do nieznanej aplikacji „' + app + '”'); return false; }
+    J.uiRun(view ? 'app_view' : 'open_app', view ? { app, view, target: target || undefined } : { app }, { offer: false }); return true;
+  } catch (e) { return false; }
+};
+addEventListener('hashchange', () => J.openGo());
+/* druga karta z Jarvisem: dane w tej samej przeglądarce nadpisywałyby się — jedna karta jest „główna” (D-14) */
+try {
+  const bc = new BroadcastChannel('jarvis-os'), me = J.uid(); let yielded = false;
+  bc.onmessage = ev => {
+    const m = ev.data || {};
+    if (m.t === 'hello' && m.id !== me && !yielded) bc.postMessage({ t: 'here', id: me });
+    if (m.t === 'here' && m.id !== me && !yielded && !J.state.__primary) { yielded = true; J.ask('Jarvis działa już w innej karcie. Praca w dwóch kartach naraz nadpisuje dane. Przejąć tutaj?', [{ label: 'Przejmij tutaj', value: 'take', primary: true }, { label: 'Tylko podgląd', value: 'view' }], { speak: false, timeout: 600000 }).then(v => { if (v === 'take') { yielded = false; J.state.__primary = true; bc.postMessage({ t: 'take', id: me }); } else { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.toast('Tryb podglądu — zmiany nie zostaną zapisane'); } }); }
+    if (m.t === 'take' && m.id !== me) { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.notice({ title: 'Jarvis przejęty w innej karcie', body: 'Ta karta działa teraz tylko do podglądu (zmiany nie są zapisywane). Odśwież, aby wrócić.', kind: 'info' }); }
+  };
+  bc.postMessage({ t: 'hello', id: me });
+} catch (e) { /* brak BroadcastChannel — bez ochrony dwóch kart */ }
 boot().then(() => {
   J.widgets.restore();
+  /* tryb przestrzeni i układ startowy */
+  { const m = J.state.ui.mode === 'present' ? 'work' : (J.state.ui.mode || S.startMode || 'work'); if (m !== 'work') J.uiMode.set(m); else J.state.ui.mode = 'work'; }
+  { const ls = S.layoutStartup || 'none'; if (ls === 'last') { let l = []; try { l = JSON.parse(localStorage.getItem('jarvis-os:openAtExit') || '[]'); } catch (e) { } l.forEach(id => J.apps[id] && J.wm.open(id)); } else if (ls !== 'none') J.layouts.apply(ls); }
+  setTimeout(() => J.openGo(), 400);
+  if (J.state.ui.debugOverlay) J.debugOverlay(true);
+  if (J.state.ui.onboarded && !J.state.ui.tourDone) setTimeout(() => J.tour(), 2500);
   J.hermesPing();
   J.tasks.check();
   if (S.wakeWord && J.ear.supported) setTimeout(() => J.ear.setStandby(true), 1200);

@@ -66,6 +66,8 @@ const nav = J.nav = {
     const s = nav.snapshot(); if (same(s, nav.stack[nav.stack.length - 1])) return;
     nav.stack.push(s); if (nav.stack.length > 30) nav.stack.shift();
     nav.fwd.length = 0;   // nowa nawigacja kasuje „dalej” (jak w przeglądarce)
+    /* ostatnio otwierane (recent_list, paleta): 20 pozycji bez powtórzeń */
+    if (s.focused && !String(s.focused).startsWith('w:')) { const r = J.state.ui.recentViews = (J.state.ui.recentViews || []).filter(x => !(x.app === s.focused && (x.target || null) === (s.view?.target || null))); r.unshift({ app: s.focused, view: s.view?.view || null, target: s.view?.target || null, title: (J.apps[s.focused]?.title || s.focused) + (s.view?.label ? ' — ' + s.view.label : ''), ts: Date.now() }); r.length = Math.min(r.length, 20); J.save(); }
   },
   apply(s) {
     nav.applying = true;

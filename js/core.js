@@ -70,7 +70,10 @@ const P = {
   wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10.5 10.5 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0"/><path d="M12 19.5h.01"/>',
   screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   grid: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
-  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>'
 };
 J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${P[name] || P.star}</svg>`;
 
@@ -83,7 +86,8 @@ const DEFAULTS = () => ({
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
-    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: ''
+    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: '',
+    uiScale: 100, fxLevel: 'standard', startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, flags: {}
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -124,6 +128,11 @@ J.saveNow = () => {
   return false;
 };
 J.save = J.debounce(() => J.saveNow(), 250);
+J.DEFAULTS = () => DEFAULTS();
+/* tryb bez sieci: żadnych zapytań poza tę stronę (Ustawienia → Interfejs) */
+{ const f0 = window.fetch; if (typeof f0 === 'function') window.fetch = (u, o) => { const url = String(u?.url || u); if (J.state?.settings?.offlineMode && /^(https?|wss?):/i.test(url) && !url.startsWith(location.origin)) return Promise.reject(new TypeError('Tryb bez sieci jest włączony')); return f0.call(window, u, o); }; }
+/* flagi funkcji (Ustawienia → O programie → Eksperymenty): domyślnie włączone */
+J.flag = k => (J.state.settings.flags || {})[k] !== false;
 J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.history); } catch (e) { /* historia jest pomocnicza */ } }, 400);
 /* Konfiguracja z zewnątrz (klucze i ustawienia bez wpisywania w UI):
    1) window.JARVIS_CONFIG z pliku config.local.js (ignorowany przez git, tylko lokalnie);
@@ -209,7 +218,7 @@ J.voice = (() => {
     if (current || !queue.length || !synth) return;
     const it = queue.shift(); current = it;
     const u = new SpeechSynthesisUtterance(it.text);
-    const v = pick(); if (v) u.voice = v; u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04; u.pitch = .92;
+    const v = pick(); if (v) u.voice = v; u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04 * J.clamp(+J.state.settings.speechRate || 1, .7, 1.5); u.pitch = .92; u.volume = J.clamp((J.state.settings.volume ?? 60) / 60, 0, 1);
     u.onstart = () => { api.speaking = true; J.orb.set('speaking'); J.emit('voice', true); };
     u.onend = u.onerror = () => { current = null; api.speaking = false; if (!queue.length) { J.orb.set('idle'); J.emit('voice', false); } it.resolve(); setTimeout(next, 120); };
     synth.speak(u);
@@ -260,7 +269,7 @@ J.ear = (() => {
     if (active) return;
     J.voice.stop();
     if (srec) { try { srec.abort(); } catch (e) { } }
-    rec = new SR(); rec.lang = 'pl-PL'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec = new SR(); rec.lang = J.state.settings.sttLang || 'pl-PL'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     let finalText = '';
     rec.onstart = () => { active = api.active = true; J.sfx.listen(); J.orb.set('listening', o.answer ? 'słucham odpowiedzi…' : 'słucham…'); J.emit('ear', true); startAnalyser(); };
     rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) finalText += e.results[i][0].transcript; else interim += e.results[i][0].transcript; } J.orb.banner('„' + (finalText + interim).trim() + '”'); };
@@ -280,7 +289,7 @@ J.ear = (() => {
   const startStandby = () => {
     if (!SR || active) return;
     try { srec = new SR(); } catch (e) { return; }
-    srec.lang = 'pl-PL'; srec.interimResults = true; srec.continuous = true; srec.maxAlternatives = 1;
+    srec.lang = J.state.settings.sttLang || 'pl-PL'; srec.interimResults = true; srec.continuous = true; srec.maxAlternatives = 1;
     let heard = '';
     srec.onstart = () => { startAnalyser(); J.emit('ear-standby', true); };
     srec.onresult = e => {
@@ -342,8 +351,10 @@ J.orb = (() => {
 })();
 
 /* ---------- akcent kolorystyczny ---------- */
+J.applyScale = () => { try { document.documentElement.style.setProperty('--ui-scale', String(J.clamp((+J.state.settings.uiScale || 100) / 100, .8, 1.3))); } catch (e) { } };
 J.applyTheme = () => {
   const s = J.state.settings, r = document.documentElement.style;
+  J.applyScale();
   r.setProperty('--accent', s.accent); r.setProperty('--accent-rgb', J.rgb(s.accent));
   r.setProperty('--accent2', s.accent2); r.setProperty('--accent2-rgb', J.rgb(s.accent2));
   const app = J.$('#app'); if (app) app.dataset.wall = s.wall;
@@ -455,7 +466,7 @@ J.wm = (() => {
         return true;
       }
       const el = J.h('div', { class: 'window', 'data-app': id, role: 'dialog', 'aria-label': app.title });
-      el.innerHTML = `<div class="win-head"><span class="wico">${J.icon(app.icon)}</span><b></b>
+      el.innerHTML = `<div class="win-head"><button class="bk" title="Wróć" aria-label="Wróć">‹</button><span class="wico">${J.icon(app.icon)}</span><b></b>
         <div class="win-actions"><button class="pn" title="Przypnij na wierzchu">${J.icon('pin')}</button><button class="mn" title="Minimalizuj">${J.icon('min')}</button><button class="mx" title="Maksymalizuj">${J.icon('max')}</button><button class="x" title="Zamknij">${J.icon('close')}</button></div></div>
         <div class="win-body ${app.flush ? 'flush' : ''}"></div><div class="resize"></div>${['n', 's', 'e', 'w', 'ne', 'nw', 'sw'].map(e => `<div class="rz rz-${e}" data-e="${e}"></div>`).join('')}`;
       el.querySelector('b').textContent = app.title;
@@ -473,6 +484,7 @@ J.wm = (() => {
       drag(id, el, head, 'move'); drag(id, el, el.querySelector('.resize'), 'resize', 'se');
       el.querySelectorAll('.rz').forEach(r => drag(id, el, r, 'resize', r.dataset.e));
       el.querySelector('.pn').onclick = () => api.pin(id, !open[id]?.pinned);
+      el.querySelector('.bk').onclick = () => J.uiRun ? J.uiRun('nav_back', {}, { quiet: true }) : null;
       head.addEventListener('dblclick', e => { if (!e.target.closest('.win-actions')) api.toggleMax(id); });
       el.querySelector('.mn').onclick = () => api.minimize(id);
       el.querySelector('.mx').onclick = () => api.toggleMax(id);

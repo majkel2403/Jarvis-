@@ -4,14 +4,7 @@
 'use strict';
 module.exports = [
   // nawigacja
-  ['przeszukaj wszystko pod kątem faktury', 'search_all', 'para'], ['szukaj wszędzie dentysta', 'search_all', 'local'],
-  ['do czego ostatnio zaglądałem', 'recent_list', 'para'], ['ostatnio otwierane', 'recent_list', 'local'],
-  ['włącz tryb prezentacji', 'ui_mode', 'local'], ['schowaj wszystko prywatne, będę pokazywał ekran', 'ui_mode', 'para'], ['czysty pulpit', 'ui_mode', 'para'],
   // okna
-  ['pokaż moje układy okien', 'layout_list', 'local'], ['jakie układy mam zapisane', 'layout_list', 'para'],
-  ['usuń zapisany układ wieczór', 'layout_remove', 'local'], ['wywal układ test', 'layout_remove', 'para'],
-  ['zmień nazwę układu test na nocny', 'layout_rename', 'local'], ['układ praca niech się nazywa biuro', 'layout_rename', 'para'],
-  ['przy starcie otwieraj układ skupienie', 'layout_startup', 'para'], ['układ startowy praca', 'layout_startup', 'local'],
   // widgety
   ['zrób mi kafelek z kursem ethereum', 'widget_build', 'para'], ['stwórz widget z listą zadań na jutro', 'widget_build', 'para'], ['widget z odliczaniem do piątku', 'widget_build', 'para'],
   ['w tym widgecie pokaż też solanę', 'widget_edit', 'para'], ['zamień tabelę na wykres słupkowy', 'widget_edit', 'para'],
@@ -44,21 +37,13 @@ module.exports = [
   ['minutnik 8 minut makaron', 'start_timer', 'local'], ['zacznij sesję pomodoro', 'start_timer', 'para'],
   ['dodaj ripple do obserwowanych', 'market_watchlist', 'local'], ['nie chcę już widzieć bnb w rynku', 'market_watchlist', 'para'],
   ['pokaż alerty kursów', 'market_alerts', 'local'], ['usuń wszystkie powiadomienia o cenach', 'market_alerts', 'para'],
-  ['szukaj w czacie urlop', 'chat_search', 'local'], ['co mi mówiłeś o inflacji', 'chat_search', 'para'],
-  ['eksportuj rozmowę', 'chat_export', 'local'], ['zapisz naszą rozmowę', 'chat_export', 'para'],
-  ['wyczyść historię czatu', 'chat_clear', 'local'], ['zapomnij całą naszą rozmowę', 'chat_clear', 'para'],
-  ['nowy wątek', 'chat_thread', 'local'], ['zacznijmy osobną rozmowę o pracy', 'chat_thread', 'para'],
   ['popraw fakt o pracy w pamięci', 'memory_edit', 'local'], ['źle zapamiętałeś, mam kota nie psa', 'memory_edit', 'para'],
   ['otwórz plik todo.md', 'files_open', 'local'], ['pokaż co jest w pliku raport', 'files_open', 'para'],
   ['notatnik na pierwsze miejsce w doku', 'dock_order', 'local'], ['przestaw kolejność w doku', 'dock_order', 'para'],
   // wygląd
-  ['powiększ wszystko', 'ui_scale', 'local'], ['litery są za małe', 'ui_scale', 'para'],
   ['efekty na minimum', 'fx_level', 'local'], ['za dużo tych animacji', 'fx_level', 'para'],
   ['wykres ethereum z miesiąca', 'chart_show', 'local'], ['narysuj ile miałem zadań w tym tygodniu', 'chart_show', 'para'],
   // ustawienia
-  ['zmień skrót palety na Alt+P', 'keys_set', 'local'], ['chcę otwierać czat klawiszem F2', 'keys_set', 'para'],
-  ['przywróć domyślne ustawienia wyglądu', 'settings_reset', 'local'], ['cofnij wszystkie moje zmiany w głosie', 'settings_reset', 'para'],
-  ['wyłącz powiadomienia o sieci', 'notif_channel', 'local'], ['rynek niech mnie nie zaczepia', 'notif_channel', 'para'],
   // agent
   ['utwórz rutynę wieczór', 'routine_create', 'local'], ['co piątek o 16 rób mi podsumowanie tygodnia', 'routine_create', 'para'],
   ['uruchom rutynę wieczór', 'routine_run', 'local'], ['odpal mój poranek', 'routine_run', 'para'],

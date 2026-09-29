@@ -36,7 +36,7 @@ const allowed = id => TIERS.indexOf(tier()) >= TIERS.indexOf(MIN_TIER[id] || 'P2
 
 const status = { state: 'unknown', latency: 0, calls: 0, cost: 0, lastError: '', last: null, invalid: 0, cacheHits: 0, skipped: 0 };
 const key = () => S().jevKey || S().openrouterKey || '';
-const enabled = () => !!(S().jevOn && key());
+const enabled = () => !!(S().jevOn && key() && !S().offlineMode);
 const setState = st => { if (status.state !== st) { status.state = st; J.emit('judge'); } };
 
 /* ---------- bezpiecznik: kilka błędów z rzędu → Jev jest pomijany, polecenia nie czekają ---------- */

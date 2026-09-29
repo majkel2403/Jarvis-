@@ -80,12 +80,6 @@ Nowe klucze dopisujemy do `DEFAULTS()` w `js/core.js` (katalog ustawień zaktual
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `keys_set` | Zmień skrót klawiszowy | A2 | poprzedni skrót | W2 |
-| `settings_reset` | Przywróć ustawienia sekcji | A0 | poprzednie wartości (10 min) | W2 |
-| `notif_channel` | Kanał powiadomień | A2 | poprzednie ustawienie | W2 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

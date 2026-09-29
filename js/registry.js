@@ -187,6 +187,7 @@ const api = J.registry = {
       else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
     }
     if (ctx.signal?.aborted) return fail('TIMEOUT', 'Przerwano.');
+    if (J.state.settings.offlineMode && (c.reads || []).includes('internet')) return fail('OFFLINE', 'Tryb bez sieci jest włączony — „' + c.label + '” potrzebuje internetu.');
     try {
       const r = await c.run(args, { ok, fail, ctx, cmd: c });
       J.action(id);
@@ -196,6 +197,9 @@ const api = J.registry = {
       return env;
     } catch (e) {
       if (e?.name === 'AbortError') return fail('TIMEOUT', 'Przerwano.');
+      if (J.state.settings.offlineMode && e instanceof TypeError) return fail('OFFLINE', 'Tryb bez sieci jest włączony — ta czynność potrzebuje internetu.');
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && (e instanceof TypeError || /fetch|network|sieć|połącz/i.test(e?.message || ''))) return fail('OFFLINE', 'Brak internetu — spróbuj, gdy połączenie wróci.');
+      if (e?.status === 429) return fail('RATE_LIMITED', 'Usługa jest przeciążona — spróbuj za chwilę.');
       if (e?.code) return fail(e.code, e.message);
       return fail('INTERNAL', 'Błąd: ' + (e?.message || e));
     }

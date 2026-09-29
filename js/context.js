@@ -15,6 +15,8 @@ let facts = null;
 const loadFacts = async () => { if (!facts) facts = await J.store.get('memory.facts', []); return facts; };
 J.memory = {
   async all() { return [...await loadFacts()]; },
+  /* po imporcie kopii: wczytaj fakty od nowa z magazynu */
+  reload() { facts = null; J.emit('memory'); },
   async remember(fact, scope = 'other') {
     const l = await loadFacts(); const n = J.norm(fact);
     const dup = l.find(f => J.norm(f.fact) === n); if (dup) { dup.ts = Date.now(); await J.store.set('memory.facts', l); return dup; }
@@ -41,7 +43,7 @@ J.signals = {
     queue.push(sig); while (queue.length > 40) queue.shift();
     J.store.push('signals.log', { type, ts: sig.ts, text: sig.text }, 300).catch(() => { });
     J.ev.emit('signal', { signal: sig }); J.emit('signal', sig);
-    if (opts.notice !== false) J.notice?.({ title: sig.text.split(':')[0], body: sig.text.split(':').slice(1).join(':').trim() || undefined, kind: type.split('.')[0], signal: true });
+    if (opts.notice !== false) J.notice?.({ title: sig.text.split(':')[0], body: sig.text.split(':').slice(1).join(':').trim() || undefined, kind: type.split('.')[0], signal: true, actions: opts.actions });
     if (sig.prompt) J.signals.maybeActive(sig);
     return sig;
   },
@@ -69,10 +71,10 @@ J.signals = {
 };
 
 /* ---------- ZDARZENIA → SYGNAŁY ---------- */
-J.on('timer-ended', t => J.signals.push('timer.ended', { label: t.label, total_s: Math.round(t.total / 1000) }, { prompt: 'Sygnał środowiska: minutnik „' + t.label + '” właśnie się skończył. Zapytaj krótko, co dalej (np. przerwa lub kolejny blok), i zaproponuj konkretną akcję.', notice: false }));
-J.on('task-due', t => J.signals.push('task.due', { text: t.text, time: t.time }, { prompt: 'Sygnał środowiska: nadszedł czas zadania „' + t.text + '” (' + t.time + '). Przypomnij o nim jednym zdaniem i zapytaj, czy odhaczyć albo przełożyć.', notice: false }));
+J.on('timer-ended', t => J.signals.push('timer.ended', { label: t.label, total_s: Math.round(t.total / 1000) }, { actions: [{ label: '+5 min', cmd: 'start_timer', args: { seconds: 300, label: t.label } }], prompt: 'Sygnał środowiska: minutnik „' + t.label + '” właśnie się skończył. Zapytaj krótko, co dalej (np. przerwa lub kolejny blok), i zaproponuj konkretną akcję.', notice: false }));
+J.on('task-due', t => J.signals.push('task.due', { id: t.id, text: t.text, time: t.time }, { actions: [{ label: 'Zrobione', cmd: 'tasks_complete', args: { task: t.id } }, { label: '+15 min', cmd: 'tasks_update', args: { task: t.id, snooze_minutes: 15 } }, { label: 'Jutro', cmd: 'tasks_update', args: { task: t.id, date: J.nlp.date('jutro') } }], prompt: 'Sygnał środowiska: nadszedł czas zadania „' + t.text + '” (' + t.time + '). Przypomnij o nim jednym zdaniem i zapytaj, czy odhaczyć albo przełożyć.', notice: false }));
 J.on('task-overdue', list => J.signals.push('task.overdue', { count: list.length, text: list.map(t => t.time + ' ' + t.text).join(', ') }, { text: 'W międzyczasie minęły: ' + list.map(t => t.time + ' ' + t.text).join(', '), prompt: 'Sygnał środowiska: w czasie nieobecności minęły zadania: ' + list.map(t => t.time + ' ' + t.text).join(', ') + '. Zaproponuj, co z nimi zrobić (odhaczyć, przełożyć).' }));
-J.on('market-alert', a => J.signals.push('market.alert', { symbol: a.symbol, price: a.price, text: a.symbol + ' ' + (a.direction === 'above' ? 'przekroczył' : 'spadł poniżej') + ' ' + J.fmtMoney(a.price) + ' (teraz ' + J.fmtMoney(a.now) + ')' }, { prompt: 'Sygnał środowiska: kurs ' + a.symbol + ' ' + (a.direction === 'above' ? 'przekroczył' : 'spadł poniżej') + ' ' + J.fmtMoney(a.price) + ' — aktualnie ' + J.fmtMoney(a.now) + '. Poinformuj użytkownika jednym zdaniem.' }));
+J.on('market-alert', a => J.signals.push('market.alert', { symbol: a.symbol, price: a.price, text: a.symbol + ' ' + (a.direction === 'above' ? 'przekroczył' : 'spadł poniżej') + ' ' + J.fmtMoney(a.price) + ' (teraz ' + J.fmtMoney(a.now) + ')' }, { actions: [{ label: 'Pokaż', cmd: 'app_view', args: { app: 'market', view: 'coin', target: a.symbol } }], prompt: 'Sygnał środowiska: kurs ' + a.symbol + ' ' + (a.direction === 'above' ? 'przekroczył' : 'spadł poniżej') + ' ' + J.fmtMoney(a.price) + ' — aktualnie ' + J.fmtMoney(a.now) + '. Poinformuj użytkownika jednym zdaniem.' }));
 addEventListener('online', () => J.signals.push('network.changed', { online: true, text: 'połączenie przywrócone' }, { notice: false }));
 addEventListener('offline', () => J.signals.push('network.changed', { online: false, text: 'brak internetu' }, { notice: false }));
 J.on('hermes', () => { const st = J.hermes.status; if (st === 'down') J.signals.push('hermes.status', { status: st, text: 'Hermes offline — działa silnik lokalny' }, { notice: false }); });

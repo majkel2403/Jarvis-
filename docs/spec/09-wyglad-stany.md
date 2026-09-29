@@ -153,7 +153,6 @@ Ukryte: czat, Process Log, centrum powiadomień (liczba zostaje, treści nie), t
 
 | polecenie | co robi | poziom | cofanie | fala |
 |---|---|---|---|---|
-| `ui_scale` | Skala interfejsu | A2 | poprzednia skala | W2 |
 | `fx_level` | Poziom efektów | A2 | poprzedni poziom | W5 |
 | `chart_show` | Pokaż wykres | A2 | usuń widget | W4 |
 

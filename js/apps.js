@@ -246,13 +246,16 @@ J.apps.chat = {
   mount(body, ctx, arg) {
     body.innerHTML = `<div class="chat">
       <div class="panel-head" style="font-weight:600"><span class="status"></span> Jarvis <span class="mode-pill" id="modePill"></span>
-        <button class="btn sm ghost" id="chatClear" title="Nowa rozmowa">${icon('refresh', 'width="12" height="12"')}</button>
+        <select class="input chat-thread" id="chatThread" title="Wątek rozmowy"></select>
+        <button class="btn sm ghost" id="chatFind" title="Szukaj w rozmowach">${icon('search', 'width="12" height="12"')}</button>
+        <button class="btn sm ghost" id="chatMore" title="Więcej: eksport, nowy wątek">⋯</button>
+        <button class="btn sm ghost" id="chatClear" title="Wyczyść rozmowę (można cofnąć)">${icon('refresh', 'width="12" height="12"')}</button>
         <button class="btn sm ghost" id="chatHide" title="Schowaj panel czatu">${icon('close', 'width="12" height="12"')}</button></div>
       <div class="messages" id="messages"></div>
       <div class="suggest" id="suggest"></div>
       <div class="composer">
         <button class="mic" id="chatMic" title="Mów">${icon('mic')}</button>
-        <input class="input" id="chatInput" placeholder="Powiedz Jarvisowi, co ma zrobić…" autocomplete="off">
+        <textarea class="input" id="chatInput" rows="1" placeholder="Powiedz Jarvisowi, co ma zrobić… (Shift Enter — nowa linia)" autocomplete="off"></textarea>
         <button class="send" id="chatSend" title="Wyślij">${icon('send')}</button>
       </div></div>`;
     const box = $('#messages', body), input = $('#chatInput', body);
@@ -262,13 +265,28 @@ J.apps.chat = {
     const sugg = ['Co potrafisz?', 'Jaka jest pogoda?', 'Kurs bitcoina', 'Ustaw minutnik na 5 minut', 'Zanotuj: kupić mleko', 'Przypomnij mi o 18:00 trening', 'Oblicz 15% z 2400', 'Zmień motyw na fiolet'];
     $('#suggest', body).innerHTML = sugg.map(s => `<button>${esc(s)}</button>`).join('');
     $('#suggest', body).onclick = e => { const b = e.target.closest('button'); if (b) J.brain.handle(b.textContent); };
-    const send = () => { const v = input.value.trim(); if (!v) return; input.value = ''; J.brain.handle(v); };
+    const fit = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight || 36, 6 * 20 + 16) + 'px'; };
+    const send = () => { const v = input.value.trim(); if (!v) return; input.value = ''; fit(); J.brain.handle(v); };
     $('#chatSend', body).onclick = send;
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); if (e.key === 'ArrowUp' && !input.value) { input.value = J.chat.lastUser() || ''; } });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } if (e.key === 'ArrowUp' && !input.value) { input.value = J.chat.lastUser() || ''; fit(); } });
+    input.addEventListener('input', fit);
+    /* wątki */
+    const drawThreads = () => { const sel = $('#chatThread', body); if (!sel) return; sel.innerHTML = ''; J.threads.list().forEach(t => { const o = J.h('option', { value: t.id }); o.textContent = t.name; sel.appendChild(o); }); const o = J.h('option', { value: '__new' }); o.textContent = '+ Nowy wątek…'; sel.appendChild(o); sel.value = J.threads.current(); };
+    drawThreads(); sub(ctx, 'thread', drawThreads);
+    $('#chatThread', body).onchange = e => { const v = e.target.value; if (v === '__new') { const n = prompt('Nazwa nowego wątku:', 'Nowy wątek'); if (n && n.trim()) J.uiRun('chat_thread', { op: 'new', name: n.trim() }, { offer: false }); else drawThreads(); } else J.uiRun('chat_thread', { op: 'switch', name: v }, { offer: false }); };
+    $('#chatFind', body).onclick = () => J.palette.open('');
+    $('#chatMore', body).onclick = e => { const r = e.target.getBoundingClientRect(); J.ctxMenu?.(r.left, r.bottom + 4, [
+      { ic: 'download', t: 'Eksportuj ten wątek (.md)', run: () => J.uiRun('chat_export', { range: 'session' }) },
+      { ic: 'download', t: 'Eksportuj wszystkie wątki (.md)', run: () => J.uiRun('chat_export', { range: 'all' }) },
+      { ic: 'plus', t: 'Nowy wątek', run: () => { const n = prompt('Nazwa nowego wątku:', 'Nowy wątek'); if (n && n.trim()) J.uiRun('chat_thread', { op: 'new', name: n.trim() }, { offer: false }); } },
+      { ic: 'notes', t: 'Zmień nazwę wątku', run: () => { const n = prompt('Nowa nazwa wątku:'); if (n && n.trim()) J.uiRun('chat_thread', { op: 'rename', name: n.trim() }); } },
+      { ic: 'refresh', t: 'Ponów ostatnie pytanie', run: () => { const l = J.chat.lastUser(); if (l) J.brain.handle(l); } },
+      '-', { ic: 'trash', t: 'Wyczyść ten wątek', danger: true, run: () => J.uiRun('chat_clear', {}) }
+    ]); };
     $('#chatMic', body).onclick = () => J.ear.toggle();
     sub(ctx, 'ear', on => $('#chatMic', body)?.classList.toggle('rec', on));
     $('#chatHide', body).onclick = () => J.chatPanel.hide();
-    $('#chatClear', body).onclick = () => { J.brain.reset(); J.chat.reset(); J.chat.bind(box); };
+    $('#chatClear', body).onclick = () => J.uiRun('chat_clear', {});
     ctx.onClose(() => J.chat.unbind(box));
     setTimeout(() => input.focus(), 50);
     if (arg) J.brain.handle(arg);
@@ -277,10 +295,20 @@ J.apps.chat = {
 };
 
 /* historia czatu (niezależna od okna) */
+/* ---------- wątki rozmów: każdy ma własną historię dla modelu, dymki i streszczenie („Ogólny” = stare klucze) ---------- */
+J.threads = {
+  list() { const l = J.state.ui.threads = J.state.ui.threads || []; if (!l.some(t => t.id === 'main')) l.unshift({ id: 'main', name: 'Ogólny', ts: Date.now() }); return l; },
+  current: () => J.state.ui.thread && J.threads.list().some(t => t.id === J.state.ui.thread) ? J.state.ui.thread : 'main',
+  key: (k, id) => { const t = id || J.threads.current(); return t === 'main' ? 'chat.' + k : 'chat.t.' + t + '.' + k; },
+  byName(q) { const n = J.norm(q); return J.threads.list().find(t => t.id === q || J.norm(t.name) === n) || J.threads.list().find(t => J.norm(t.name).includes(n)); },
+  touch() { const t = J.threads.list().find(x => x.id === J.threads.current()); if (t) { t.ts = Date.now(); J.save(); } },
+  create(name) { const l = J.threads.list(); if (l.length >= 50) throw Object.assign(new Error('Masz już 50 wątków — usuń albo użyj istniejącego.'), { code: 'LIMIT' }); const t = { id: J.uid(), name: String(name || 'Nowy wątek').slice(0, 40), ts: Date.now() }; l.push(t); J.save(); return t; },
+  async switch(id) { if (id === J.threads.current()) return; J.state.ui.thread = id; J.save(); await J.brain?.reload?.(); await J.chat.reload(); J.emit('thread'); }
+};
 J.chat = (() => {
   let items = [], box = null, restored = false;
-  const persist = J.debounce(() => J.store.set('chat.items', items.filter(i => !i.typing).slice(-80).map(({ role, text }) => ({ role, text }))), 500);
-  const restore = async () => { if (restored) return; restored = true; try { const saved = await J.store.get('chat.items', []); if (saved.length && !items.some(i => i.role === 'user')) { items = saved.map(x => ({ ...x })); if (box) { box.innerHTML = ''; items.forEach(it => box.appendChild(draw(it))); scroll(); } } } catch (e) { } };
+  const persist = J.debounce(() => J.store.set(J.threads.key('items'), items.filter(i => !i.typing).slice(-80).map(({ role, text }) => ({ role, text }))), 500);
+  const restore = async () => { if (restored) return; restored = true; try { const saved = await J.store.get(J.threads.key('items'), []); if (saved.length && !items.some(i => i.role === 'user')) { items = saved.map(x => ({ ...x })); if (box) { box.innerHTML = ''; items.forEach(it => box.appendChild(draw(it))); scroll(); } } } catch (e) { } };
   const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
   const draw = it => {
     const e = h('div', { class: 'msg ' + it.role });
@@ -293,7 +321,36 @@ J.chat = (() => {
   const api = {
     bind(b) { box = b; b.innerHTML = ''; restore(); if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nHermes (' + J.state.settings.hermesModel + ') jest skonfigurowany — status połączenia widać w nagłówku.' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
     unbind(b) { if (box === b) box = null; },
-    reset() { items = []; J.store.del('chat.items'); },
+    reset() { items = []; J.store.del(J.threads.key('items')); },
+    /* ponowne wczytanie po zmianie wątku */
+    async reload() { items = []; restored = false; if (box) { box.innerHTML = ''; await restore(); if (!items.length) api.add('jarvis', 'Wątek „' + (J.threads.list().find(t => t.id === J.threads.current())?.name || '') + '”. O czym rozmawiamy?', true); } else await restore(); },
+    items: () => items.filter(i => !i.typing).map(({ role, text }) => ({ role, text })),
+    /* kopia do „Cofnij” po wyczyszczeniu */
+    snapshot: () => items.filter(i => !i.typing).map(({ role, text }) => ({ role, text })),
+    async restoreSnapshot(l) { items = l.map(x => ({ ...x })); await J.store.set(J.threads.key('items'), l); if (box) { box.innerHTML = ''; items.forEach(it => box.appendChild(draw(it))); scroll(); } },
+    /* szukanie w rozmowach wszystkich wątków */
+    async searchAll(q) {
+      const out = [], cur = J.threads.current();
+      for (const t of J.threads.list()) {
+        const l = t.id === cur ? api.items() : await J.store.get(J.threads.key('items', t.id), []);
+        l.forEach((it, i) => { if (it.role !== 'user' && it.role !== 'jarvis') return; const sc = J.search.score(q, it.text); if (sc) out.push({ id: t.id + ':' + i, text: it.text, role: it.role, thread: t.name, threadId: t.id, index: i, score: sc * .9 }); });
+      }
+      return out.sort((a, b) => b.score - a.score).slice(0, 30);
+    },
+    async goto(threadId, index) {
+      if (threadId && threadId !== J.threads.current()) await J.threads.switch(threadId);
+      J.chatPanel?.show(); const l = items.filter(i => !i.typing), it = l[index]; if (it?.el) { it.el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); it.el.classList.remove('hl'); void it.el.offsetWidth; it.el.classList.add('hl'); }
+    },
+    /* rozmowa jako Markdown */
+    async markdown(scope = 'session') {
+      const threads = scope === 'all' ? J.threads.list() : J.threads.list().filter(t => t.id === J.threads.current());
+      let md = '# Rozmowa z Jarvisem — ' + new Date().toLocaleString('pl-PL') + '\n';
+      for (const t of threads) {
+        const l = t.id === J.threads.current() ? api.items() : await J.store.get(J.threads.key('items', t.id), []);
+        md += '\n## Wątek: ' + t.name + '\n\n' + l.map(it => it.role === 'user' ? '**Ty:** ' + it.text : it.role === 'jarvis' ? '**Jarvis:** ' + it.text : '> ' + it.text).join('\n\n') + '\n';
+      }
+      return md;
+    },
     link(url) { const it = { role: 'link', text: url }; items.push(it); if (box) { const e = h('div', { class: 'msg link' }); const a = h('a', { href: url, target: '_blank', rel: 'noopener' }); a.textContent = url; e.appendChild(a); it.el = e; box.appendChild(e); scroll(); } },
     /* szybkie odpowiedzi (ui_ask / potwierdzenia): zwraca element do usunięcia */
     quick(question, options, onPick) { if (!box) return null; const e = h('div', { class: 'msg quick' }, '<div class="q"></div><div class="opts"></div>'); e.querySelector('.q').textContent = question; const o = e.querySelector('.opts'); options.forEach(op => { const b = h('button', { class: 'btn sm' + (op.primary ? ' primary' : op.danger ? ' ghost danger' : ' ghost') }, ''); b.textContent = op.label; b.onclick = () => onPick(op.value); o.appendChild(b); }); box.appendChild(e); scroll(); return e; },
@@ -419,7 +476,7 @@ J.apps.schedule = {
     const render = () => {
       const now = J.hhmm();
       const list = J.state.tasks.filter(t => t.date === day);
-      tl.innerHTML = list.length ? '' : '<div class="empty">Brak zadań na ten dzień. Dodaj pierwsze powyżej lub powiedz: „przypomnij mi o 18:00 trening”.</div>';
+      tl.innerHTML = ''; if (!list.length) { if (J.ui?.state) J.ui.state(tl, 'empty', { text: 'Brak zadań na ten dzień. Dodaj pierwsze powyżej albo powiedz: „przypomnij mi o 18:00 trening”.' }); else tl.innerHTML = '<div class="empty">Brak zadań na ten dzień.</div>'; }
       const nextIdx = day === J.today() ? list.findIndex(t => !t.done && t.time >= now) : -1;
       list.forEach((t, i) => {
         const el = h('div', { class: 'task' + (t.done ? ' done' : '') + (i === nextIdx ? ' now' : '') }, `<input type="checkbox" ${t.done ? 'checked' : ''}><span class="t">${esc(t.time || '—')}</span><span class="n"></span><button class="del" title="Usuń">×</button>`);
@@ -518,8 +575,8 @@ J.apps.weather = {
         <div class="src"><span>Wschód ${dl.sunrise[0].slice(11)} · Zachód ${dl.sunset[0].slice(11)}</span><span>Open-Meteo</span></div>`;
     };
     const load = async city => {
-      out.innerHTML = '<div class="empty">Pobieram prognozę…</div>';
-      try { show(await J.weather.get(city)); } catch (e) { out.innerHTML = '<div class="empty">' + esc(e.message || 'Brak połączenia z serwisem pogody') + '</div>'; }
+      if (J.ui?.state) J.ui.state(out, 'loading', { text: 'Pobieram prognozę…' }); else out.innerHTML = '<div class="empty">Pobieram prognozę…</div>';
+      try { show(await J.weather.get(city)); } catch (e) { if (J.ui?.state) J.ui.state(out, navigator.onLine === false || J.state.settings.offlineMode ? 'offline' : 'error', { text: navigator.onLine === false ? 'Brak internetu — pogoda wróci, gdy połączenie wróci.' : (e.message || 'Nie udało się pobrać pogody.'), action: { label: 'Spróbuj ponownie', run: () => load(city) } }); else out.innerHTML = '<div class="empty">' + esc(e.message || 'Brak połączenia z serwisem pogody') + '</div>'; }
     };
     $('#wf', body).onsubmit = e => { e.preventDefault(); const v = $('#wc', body).value.trim(); if (v) load(v); };
     $('#wg', body).onclick = () => {
@@ -732,7 +789,12 @@ J.apps.settings = {
       <label class="toggle"><div>Dźwięki interfejsu<small>Syntezowane efekty audio</small></div><span class="switch"><input type="checkbox" data-k="sound"><i></i></span></label>
       <label class="toggle"><div>Jarvis mówi na głos<small>Odpowiedzi odczytywane syntezatorem mowy</small></div><span class="switch"><input type="checkbox" data-k="speech"><i></i></span></label>
       <label class="toggle"><div>Pomiń animację startową<small>Szybsze uruchamianie</small></div><span class="switch"><input type="checkbox" data-k="skipBoot"><i></i></span></label>
+      <div class="row" style="font-size:11.5px"><span style="flex:1">Skala interfejsu<small class="dim" id="usV" style="margin-left:6px"></small></span><input type="range" id="uiScale" min="80" max="130" step="5" style="width:170px"></div>
+      <div class="row" style="font-size:11.5px"><span style="flex:1">Tryb startowy przestrzeni</span><select class="input" id="startMode" style="width:170px"><option value="work">praca (okna)</option><option value="clean">czysty pulpit</option><option value="focus">skupienie</option></select></div>
+      <label class="toggle"><div>Tryb bez sieci<small>Żadnych wywołań internetu (Hermes, Jev, pogoda, kursy) — działa parser i dane lokalne</small></div><span class="switch"><input type="checkbox" data-k="offlineMode"><i></i></span></label>
       <div class="label">Głos</div><select class="input" id="vs"></select>
+      <div class="row" style="font-size:11.5px"><span style="flex:1">Tempo mowy</span><input type="range" id="spRate" min="0.7" max="1.5" step="0.05" style="width:150px"></div>
+      <div class="row" style="font-size:11.5px"><span style="flex:1">Język rozpoznawania mowy</span><select class="input" id="sttLang" style="width:150px"><option value="pl-PL">polski</option><option value="en-US">angielski</option></select></div>
       <div class="label">Użytkownik</div><div class="row"><input class="input" id="un" maxlength="3" placeholder="Inicjały" style="width:90px"><input class="input" id="city" placeholder="Miasto (pogoda)"><button class="btn" id="cityGo">Zapisz</button></div>
       <div class="label">Hermes · Nous Research ${icon('key', 'width="11" height="11" style="vertical-align:-1px"')}</div>
       <div class="card col">
@@ -744,6 +806,8 @@ J.apps.settings = {
         <div class="row"><button class="btn primary" id="hTest">Połącz i testuj</button><button class="btn ghost danger" id="hDel">Usuń klucz</button></div>
         <div class="dim" id="hInfo" style="font-size:10.5px;line-height:1.5"></div>
         <div class="muted" id="hHelp" style="font-size:10.5px;line-height:1.55"></div>
+        <div class="row" style="font-size:11.5px"><span style="flex:1">Koszt odpowiedzi<small class="dim" style="display:block;font-size:10px">tani = lżejszy model zawsze · zrównoważony = lżejszy tylko do rozmowy · najlepszy = zawsze główny</small></span><select class="input" id="hPreset" style="width:150px"><option value="cheap">tani</option><option value="balanced">zrównoważony</option><option value="max">najlepszy</option></select></div>
+        <div class="row" style="font-size:11.5px"><span style="flex:1">Dzienny limit (USD, OpenRouter; 0 = bez)<small class="dim" id="hDayUsed" style="display:block;font-size:10px"></small></span><input class="input" id="hDaily" type="number" min="0" max="50" step="0.1" style="width:80px"></div>
       </div>
       <div class="label">Agent i proaktywność</div>
       <div class="card col">
@@ -774,16 +838,36 @@ J.apps.settings = {
         <div class="dim" id="jvStats" style="font-size:10.5px;line-height:1.6"></div>
         <div class="dim" id="jvInfo" style="font-size:10.5px;line-height:1.5"></div>
       </div>
+      <div class="label">Powiadomienia</div>
+      <div class="card col" id="ntBox"><div class="dim" style="font-size:10.5px">Wyłączony kanał trafia tylko do centrum powiadomień (bez dymka i dźwięku). Limit = ile dymków na godzinę.</div><div id="ntList" class="col"></div></div>
+      <div class="label">Skróty klawiszowe</div>
+      <div class="card col"><div class="dim" style="font-size:10.5px">Kliknij pole i naciśnij nową kombinację (z Ctrl albo Alt). Esc — anuluj. Skróty przeglądarki są zablokowane.</div><div id="kbList" class="col"></div><div class="row"><button class="btn sm ghost" id="kbReset">Przywróć domyślne skróty</button></div></div>
+      <div class="label">Układy okien</div>
+      <div class="card col"><div class="row" style="font-size:11.5px"><span style="flex:1">Układ przy starcie</span><select class="input" id="layStart" style="width:170px"></select></div><div id="layList" class="col"></div><div class="row"><button class="btn sm ghost" id="laySave">Zapisz bieżący układ…</button></div></div>
       <div class="label">Pamięć Jarvisa</div>
       <div class="card col" id="memBox"><div class="dim" style="font-size:10.5px">Fakty zapamiętane poleceniem „zapamiętaj, że…” trafiają do kontekstu każdej rozmowy.</div><div id="memList" class="col"></div></div>
       <div class="label">Folder roboczy (pliki)</div>
       <div class="card col"><div class="row"><span id="fsInfo" class="dim" style="flex:1;font-size:11px"></span><button class="btn sm" id="fsPick">Wybierz folder</button><button class="btn sm ghost" id="fsPerm" title="Odśwież uprawnienia">Odśwież dostęp</button></div></div>
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
-      <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.0 · skróty: <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>Esc</kbd> zamknij okno</div>`;
+      <div class="card col" style="margin-top:8px"><div class="row" style="font-size:11.5px"><b style="flex:1">Co jest zapisane w tej przeglądarce</b><button class="btn sm ghost" id="stoRefresh">Odśwież</button></div><div id="stoList" class="col" style="font-size:11px"></div></div>
+      <div class="label">O programie</div>
+      <div class="card col">
+        <div style="font-size:11.5px">Jarvis OS 2.1 · specyfikacja i plan: <code>docs/spec</code></div>
+        <div class="row"><button class="btn sm primary" id="diagRun">Testy diagnostyczne</button><button class="btn sm ghost" id="tourRun">Pokaż samouczek</button><button class="btn sm ghost" id="keysShow">Skróty (?)</button></div>
+        <div id="diagOut" class="col" style="font-size:11px"></div>
+        <label class="toggle"><div>Nakładka diagnostyczna<small>Alt Shift D: pakiet kontekstu, ostatnia decyzja Jeva, FPS, stos „Cofnij”</small></div><span class="switch"><input type="checkbox" id="dbgOverlay"><i></i></span></label>
+        <div class="dim" style="font-size:10.5px">Eksperymenty (flagi funkcji) — wyłącz funkcję, jeśli sprawia kłopot:</div><div id="flagList" class="col"></div>
+      </div>
+      <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.1 · <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>?</kbd> wszystkie skróty · <kbd>Esc</kbd> zamknij</div>`;
     /* nawigacja po sekcjach (polecenie „otwórz ustawienia Jev”): etykiety dostają identyfikatory, okno przewija się do wybranej */
-    const SEC = [['openrouter', /^openrouter/], ['akcent', /^kolor akcentu/], ['tapeta', /^tapeta/], ['interfejs', /^interfejs/], ['glos', /^glos/], ['uzytkownik', /^uzytkownik/], ['hermes', /^hermes/], ['agent', /^agent i proaktywnosc/], ['jev', /^sedzia jev/], ['pamiec', /^pamiec/], ['pliki', /^folder roboczy/], ['dane', /^dane/]];
+    const SEC = [['openrouter', /^openrouter/], ['akcent', /^kolor akcentu/], ['tapeta', /^tapeta/], ['interfejs', /^interfejs/], ['glos', /^glos/], ['uzytkownik', /^uzytkownik/], ['hermes', /^hermes/], ['agent', /^agent i proaktywnosc/], ['jev', /^sedzia jev/], ['powiadomienia', /^powiadomienia/], ['skroty', /^skroty klawiszowe/], ['uklady', /^uklady okien/], ['pamiec', /^pamiec/], ['pliki', /^folder roboczy/], ['dane', /^dane/], ['oprogramie', /^o programie/]];
     $$('.label', body).forEach(l => { const hit = SEC.find(([, re]) => re.test(J.norm(l.textContent))); if (hit) l.dataset.sec = hit[0]; });
+    /* pasek sekcji + wyszukiwanie pól (docs/spec/10-ustawienia.md §1) */
+    { const nav = h('div', { class: 'set-nav' }, '<input class="input" id="setFind" placeholder="Szukaj w ustawieniach…"><div class="set-chips"></div>'); body.prepend(nav);
+      const labels = { openrouter: 'Konto AI', akcent: 'Kolor', tapeta: 'Tapeta', interfejs: 'Interfejs', glos: 'Głos', uzytkownik: 'Użytkownik', hermes: 'Hermes', agent: 'Agent', jev: 'Jev', powiadomienia: 'Powiadomienia', skroty: 'Skróty', uklady: 'Układy', pamiec: 'Pamięć', pliki: 'Pliki', dane: 'Dane', oprogramie: 'O programie' };
+      const chips = $('.set-chips', nav); Object.entries(labels).forEach(([k, t]) => { const b = h('button', { class: 'chip' }); b.textContent = t; b.onclick = () => ctx.goSection(k); chips.appendChild(b); });
+      $('#setFind', nav).oninput = e => { const q = J.norm(e.target.value.trim()); $$('.set-hit', body).forEach(x => x.classList.remove('set-hit')); if (q.length < 2) return; const el = [...$$('.label, .toggle, .row, .card > div', body)].find(x => J.norm(x.textContent).includes(q)); if (el) { el.classList.add('set-hit'); el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); } }; }
     const goSection = sec => { const l = $('[data-sec="' + sec + '"]', body); if (!l) return false; l.scrollIntoView?.({ block: 'start', behavior: 'smooth' }); l.classList.remove('hl'); void l.offsetWidth; l.classList.add('hl'); setTimeout(() => l.classList.remove('hl'), 2200); return true; };
     let secNow = null; ctx.goSection = sec => { const r = goSection(sec); if (r !== false) secNow = sec; return r; };
     ctx.state = () => secNow ? { view: 'section', target: secNow, label: secNow } : null;
@@ -795,6 +879,42 @@ J.apps.settings = {
     const drawWl = () => { wl.innerHTML = ''; walls.forEach(([k, n, bg]) => { const e = h('button', { class: 'wall' + (s.wall === k ? ' on' : ''), style: `background-image:${bg}` }, n); e.onclick = () => { s.wall = k; J.applyTheme(); J.save(); drawWl(); J.sfx.click(); }; wl.appendChild(e); }); };
     drawWl();
     $$('input[data-k]', body).forEach(i => { i.checked = !!s[i.dataset.k]; i.onchange = () => { s[i.dataset.k] = i.checked; J.save(); J.emit('settings'); J.sfx.click(); }; });
+    /* Hermes: preset kosztu i dzienny limit */
+    { const hp = $('#hPreset', body), hd = $('#hDaily', body), hu = $('#hDayUsed', body); if (hp) { hp.value = s.hermesPreset || 'balanced'; hp.onchange = () => { s.hermesPreset = hp.value; J.save(); }; hd.value = s.hermesDailyBudget || 0; hd.onchange = () => { s.hermesDailyBudget = J.clamp(+hd.value || 0, 0, 50); J.save(); }; hu.textContent = 'dziś: $' + (J.hermesBudget?.used() || 0).toFixed(4); } }
+    /* dziennik zgód */
+    { const al = $('#aAllow', body); if (al) { const b = h('button', { class: 'btn sm ghost', style: 'margin-left:6px' }, 'Dziennik zgód'); b.onclick = async () => { const l = (await J.store.get('consent.log', [])).slice(-15).reverse(); J.ask(l.length ? l.map(x => new Date(x.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + x.label + ' (' + x.source + (x.forced ? ', wymuszona' : '') + ') → ' + ({ yes: 'tak', no: 'nie', always: 'zawsze', timeout: 'brak odpowiedzi' }[x.answer] || x.answer)).join('\n') : 'Dziennik zgód jest pusty.', [{ label: 'OK', value: 'ok', primary: true }], { speak: false, timeout: 120000 }); }; $('#aAllowClr', body)?.after(b); } }
+    /* interfejs, głos */
+    const us = $('#uiScale', body), usV = $('#usV', body); if (us) { us.value = s.uiScale || 100; usV.textContent = us.value + '%'; us.oninput = () => { usV.textContent = us.value + '%'; }; us.onchange = () => J.uiRun('ui_scale', { percent: +us.value }, { offer: false }); }
+    const sm = $('#startMode', body); if (sm) { sm.value = s.startMode || 'work'; sm.onchange = () => { s.startMode = sm.value; J.save(); J.emit('settings'); }; }
+    const sr = $('#spRate', body); if (sr) { sr.value = s.speechRate || 1; sr.onchange = () => { s.speechRate = +sr.value; J.save(); J.voice.speak('Tak brzmi nowe tempo mowy.', { force: true, replace: true }); }; }
+    const sl = $('#sttLang', body); if (sl) { sl.value = s.sttLang || 'pl-PL'; sl.onchange = () => { s.sttLang = sl.value; J.save(); }; }
+    /* powiadomienia */
+    const CH = { task: 'Zadania i przypomnienia', timer: 'Minutnik', market: 'Rynek (alerty kursów)', network: 'Sieć', agent: 'Agent (Jarvis sam z siebie)', files: 'Pliki', hermes: 'Hermes i Jev', routine: 'Rutyny' };
+    const drawNt = () => { const box = $('#ntList', body); if (!box) return; box.innerHTML = ''; Object.entries(CH).forEach(([k, t]) => { const c = J.notifChannel(k); const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><label class="mini"><input type="checkbox" data-f="on"> pokazuj</label><label class="mini"><input type="checkbox" data-f="sound"> dźwięk</label><input class="input" type="number" min="0" max="60" data-f="perHour" style="width:58px" title="limit na godzinę">'); r.children[0].textContent = t; $('[data-f=on]', r).checked = c.on; $('[data-f=sound]', r).checked = c.sound; $('[data-f=perHour]', r).value = c.perHour; $$('input', r).forEach(inp => inp.onchange = () => J.uiRun('notif_channel', { kind: k, on: $('[data-f=on]', r).checked, sound: $('[data-f=sound]', r).checked, per_hour: J.clamp(+$('[data-f=perHour]', r).value || 0, 0, 60) }, { offer: false })); box.appendChild(r); }); };
+    drawNt();
+    /* skróty klawiszowe: kliknij pole i naciśnij kombinację */
+    const drawKb = () => { const box = $('#kbList', body); if (!box || !J.KEY_ACTIONS) return; box.innerHTML = ''; Object.entries(J.KEY_ACTIONS).forEach(([id, a]) => { const cur = s.keys?.[id] || a.def; const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><button class="btn sm ghost kb-key"></button><button class="btn sm ghost" title="Domyślny">↺</button>'); r.children[0].textContent = a.label; const kb = r.children[1]; kb.textContent = cur; r.children[2].onclick = () => J.uiRun('keys_set', { action: id, keys: 'reset' }, { offer: false }).then(drawKb);
+      kb.onclick = () => { kb.textContent = 'naciśnij…'; kb.classList.add('rec'); const on = e => { e.preventDefault(); e.stopPropagation(); if (e.key === 'Escape') { done(); return; } if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return; const combo = [e.ctrlKey || e.metaKey ? 'Ctrl' : '', e.altKey ? 'Alt' : '', e.shiftKey ? 'Shift' : '', e.code === 'Space' ? 'Space' : /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key.length === 1 ? e.key.toUpperCase() : e.key].filter(Boolean).join('+'); done(); J.uiRun('keys_set', { action: id, keys: combo }, { offer: false }).then(drawKb); }; const done = () => { removeEventListener('keydown', on, true); kb.classList.remove('rec'); kb.textContent = s.keys?.[id] || a.def; }; addEventListener('keydown', on, true); };
+      box.appendChild(r); }); };
+    setTimeout(drawKb, 0); $('#kbReset', body).onclick = () => J.uiRun('keys_set', { action: 'all', keys: 'reset' }).then(drawKb);
+    /* układy okien */
+    const drawLay = () => { const box = $('#layList', body), st = $('#layStart', body); if (!box) return; box.innerHTML = ''; const saved = Object.entries(J.state.layouts || {}); if (!saved.length) box.innerHTML = '<div class="dim" style="font-size:11px">Brak zapisanych układów. Presety: ' + J.layouts.presets().join(', ') + '.</div>';
+      saved.forEach(([name, l]) => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"><b></b> <small class="dim"></small></span><button class="btn sm ghost">Zastosuj</button><button class="btn sm ghost">Nazwa</button><button class="btn sm ghost danger">×</button>'); $('b', r).textContent = name; $('small', r).textContent = l.apps.map(a => J.APP_NAMES[a.id] || a.id).join(', '); const [ap, rn, rm] = $$('button', r); ap.onclick = () => J.uiRun('wm_arrange', { mode: 'layout', layout: name }); rn.onclick = () => { const n = prompt('Nowa nazwa układu:', name); if (n && n.trim()) J.uiRun('layout_rename', { name, to: n.trim() }).then(drawLay); }; rm.onclick = () => J.uiRun('layout_remove', { name }).then(drawLay); box.appendChild(r); });
+      st.innerHTML = ''; [['none', 'bez układu'], ['last', 'okna z poprzedniej sesji'], ...J.layouts.list().map(n => [n, n])].forEach(([v, t]) => { const o = h('option', { value: v }); o.textContent = t; st.appendChild(o); }); st.value = s.layoutStartup || 'none'; st.onchange = () => J.uiRun('layout_startup', { name: st.value }, { offer: false }); };
+    drawLay(); $('#laySave', body).onclick = () => { const n = prompt('Nazwa układu:'); if (n && n.trim()) J.uiRun('layout_save', { name: n.trim() }).then(drawLay); };
+    sub(ctx, 'settings', () => { drawNt(); });
+    /* co jest zapisane */
+    const drawSto = async () => { const box = $('#stoList', body); if (!box) return; box.innerHTML = '<div class="dim">Liczę…</div>'; const rows = []; try { rows.push(['localStorage: stan (ustawienia, notatki, zadania, widgety…)', (localStorage.getItem('jarvis-os:v2') || '').length]); } catch (e) { }
+      for (const k of ['chat.history', 'chat.items', 'chat.summary', 'memory.facts', 'proc.history', 'jev.log', 'signals.log', 'consent.log', 'widgets.cache']) { try { const v = await J.store.get(k, null); if (v != null) rows.push(['IndexedDB: ' + k, JSON.stringify(v).length]); } catch (e) { } }
+      box.innerHTML = ''; rows.forEach(([t, n]) => { const r = h('div', { class: 'row' }, '<span style="flex:1"></span><span class="dim"></span>'); r.children[0].textContent = t; r.children[1].textContent = n > 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'; box.appendChild(r); }); };
+    $('#stoRefresh', body).onclick = drawSto; drawSto();
+    /* o programie: testy diagnostyczne, samouczek, nakładka, flagi */
+    $('#diagRun', body).onclick = async () => { const out = $('#diagOut', body); out.innerHTML = '<div class="dim">Sprawdzam…</div>'; const l = await J.diagnostics(); out.innerHTML = ''; l.forEach(([ok, t, d]) => { const r = h('div', { class: 'row' }, '<span></span><span style="flex:1"></span>'); r.children[0].textContent = ok ? '✓' : '✗'; r.children[0].style.color = ok ? 'var(--ok)' : 'var(--err)'; r.children[1].textContent = t + (d ? ' — ' + d : ''); out.appendChild(r); }); const cp = h('button', { class: 'btn sm ghost' }, 'Kopiuj raport'); cp.onclick = () => navigator.clipboard?.writeText(l.map(([o, t, d]) => (o ? '✓ ' : '✗ ') + t + (d ? ' — ' + d : '')).join('\n')).then(() => J.toast('Skopiowano raport')); out.appendChild(cp); };
+    $('#tourRun', body).onclick = () => J.tour?.(true);
+    $('#keysShow', body).onclick = () => J.keysHelp?.();
+    const dbg = $('#dbgOverlay', body); dbg.checked = !!J.state.ui.debugOverlay; dbg.onchange = () => J.debugOverlay?.(dbg.checked);
+    const FLAGS = { w1_windows: 'Okna: uchwyty, przypinanie, menu okna', w2_search: 'Wyszukiwanie wszędzie w palecie', w2_modes: 'Tryby przestrzeni', w2_threads: 'Wątki czatu', w3_notes: 'Notatki: kosz, wersje, tagi', w3_tasks: 'Zadania: powtarzanie, priorytety', w4_widget_spec: 'Widgety z opisu', w4_routines: 'Rutyny', w5_fx: 'Efekty (poziom)' };
+    const fl = $('#flagList', body); Object.entries(FLAGS).forEach(([k, t]) => { const r = h('label', { class: 'toggle' }, '<div></div><span class="switch"><input type="checkbox"><i></i></span>'); r.children[0].textContent = t; const c = $('input', r); c.checked = J.flag(k); c.onchange = () => { s.flags = { ...(s.flags || {}), [k]: c.checked }; J.save(); J.emit('settings'); J.toast('Zmiana zadziała w pełni po odświeżeniu strony.'); }; fl.appendChild(r); });
     const vs = $('#vs', body);
     const fillVoices = () => { const v = J.voice.list(); vs.innerHTML = '<option value="">Automatyczny (polski)</option>' + v.map(x => `<option ${x.name === s.voiceName ? 'selected' : ''} value="${esc(x.name)}">${esc(x.name)} · ${esc(x.lang)}</option>`).join(''); };
     fillVoices(); setTimeout(fillVoices, 600);
@@ -818,9 +938,9 @@ J.apps.settings = {
     $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
-    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', jevKey: '', openrouterKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey, ok = s.openrouterKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.state.settings.openrouterKey = ok; J.saveNow(); J.store.set('proc.history', J.state.history || []); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
-    $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) { J.store.clear().finally(() => J.resetAll()); } };
+    $('#exp', body).onclick = async () => { const data = await J.backup.export(); const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: 'jarvis-os-kopia-' + J.today() + '.json' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); J.toast('Kopia zapisana (bez kluczy API)'); };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const d = JSON.parse(await f.text()); const pv = J.backup.preview(d); const mode = await J.ask('Plik zawiera: ' + pv.text + '. Co zrobić?', [{ label: 'Scal z moimi danymi', value: 'merge', primary: true }, { label: 'Zastąp wszystko', value: 'replace', danger: true }, { label: 'Anuluj', value: 'no' }], { speak: false }); if (mode !== 'merge' && mode !== 'replace') return; await J.backup.import(d, mode); J.toast('Zaimportowano — przeładowuję…'); setTimeout(() => location.reload(), 900); } catch (err) { J.toast('Nie udało się zaimportować: ' + err.message); } };
+    $('#rst', body).onclick = async () => { const v = await J.ask('Co wyczyścić?', [{ label: 'Tylko rozmowy', value: 'chat' }, { label: 'Tylko dziennik Jeva', value: 'jevlog' }, { label: 'Pozycje okien', value: 'windows' }, { label: 'Wszystko', value: 'all', danger: true }, { label: 'Anuluj', value: 'no' }], { speak: false }); if (!v || v === 'no') return; if (v === 'all') { const ok2 = await J.ask('Na pewno usunąć WSZYSTKIE dane Jarvis OS (notatki, zadania, ustawienia, rozmowy)? Tego nie da się cofnąć — zrób wcześniej eksport.', [{ label: 'Usuń wszystko', value: 'yes', danger: true }, { label: 'Anuluj', value: 'no', primary: true }], { speak: false }); if (ok2 === 'yes') J.store.clear().finally(() => J.resetAll()); return; } J.toast(await J.backup.clear(v)); drawSto(); };
     /* agent */
     const aWake = $('#aWake', body); aWake.checked = !!s.wakeWord && J.ear.supported; aWake.disabled = !J.ear.supported; aWake.onchange = () => J.ear.setStandby(aWake.checked);
     sub(ctx, 'settings', () => { aWake.checked = !!J.ear.standby; });

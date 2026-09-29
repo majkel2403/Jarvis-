@@ -2,16 +2,16 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **72** · odwracalnych: 30 · wymagających zgody (ryzyko ≠ safe): 11 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **87** · odwracalnych: 40 · wymagających zgody (ryzyko ≠ safe): 14 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 41 |
-| A2 sam + Cofnij | 17 |
-| A1 pyta „Chodzi o…?” | 5 |
-| A0 zawsze zgoda | 9 |
+| A3 sam, po cichu | 46 |
+| A2 sam + Cofnij | 23 |
+| A1 pyta „Chodzi o…?” | 6 |
+| A0 zawsze zgoda | 12 |
 
 ## Aplikacje i okna
 
@@ -30,6 +30,10 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich. | app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library | safe | A3 | tak | „otworz ponownie zamkniete [okno]”, „przywroc zamkniete okno”, „przywroc ostatnio zamkniete okno” |
 | `wm_restore` | Przywróć okna — Przywraca zminimalizowane okno albo wszystkie (app="all") — odwrotność „pokaż pulpit”. | **app**: string | safe | A3 | tak | „przywroc okna”, „przywroc wszystkie okna”, „pokaz z powrotem [wszystkie] okna” |
 | `wm_close_others` | Zamknij pozostałe — Zamyka wszystkie okna poza wskazanym (widgety zostają). Da się cofnąć. | **app**: string | safe | A1 | tak | „zostaw tylko {app}”, „zamknij pozostale [okna]”, „zamknij wszystko (poza\|oprocz) {app}” |
+| `layout_list` | Lista układów — Presety i zapisane układy okien z listą aplikacji oraz układ startowy. | — | safe | A3 | — | „jakie mam uklady”, „lista ukladow”, „pokaz [moje] zapisane uklady” |
+| `layout_remove` | Usuń układ — Usuwa zapisany układ okien (presetów nie można usunąć). Wymaga potwierdzenia. | **name**: string | confirm | A0 | tak | „usun uklad {name}”, „skasuj uklad {name}”, „wywal uklad {name}” |
+| `layout_rename` | Zmień nazwę układu — Zmienia nazwę zapisanego układu okien. | **name**: string; **to**: string | safe | A2 | tak | „zmien nazwe ukladu {name} na {to}”, „uklad {name} niech sie nazywa {to}”, „przemianuj uklad {name} na {to}” |
+| `layout_startup` | Układ startowy — Układ stosowany przy uruchomieniu: nazwa układu, "last" (okna z poprzedniej sesji) albo "none". | **name**: string | safe | A2 | tak | „na starcie wlaczaj uklad {name}”, „ustaw uklad startowy {name}”, „uklad startowy {name}” |
 
 ## Zadania i czas
 
@@ -49,7 +53,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
-| `settings_open` | Otwórz sekcję ustawień — Otwiera Ustawienia przewinięte do sekcji: openrouter, akcent, tapeta, interfejs, glos, uzytkownik, hermes, agent, jev, pamiec, pliki, dane (nawigacja, niczego n | **section**: openrouter\|akcent\|tapeta\|interfejs\|glos\|uzytkownik\|hermes\|agent\|jev\|pamiec\|pliki\|dane | safe | A3 | — | „otworz ustawienia {section}”, „pokaz ustawienia {section}”, „przejdz do ustawien {section}” |
+| `settings_open` | Otwórz sekcję ustawień — Otwiera Ustawienia przewinięte do sekcji: openrouter, akcent, tapeta, interfejs, glos, uzytkownik, hermes, agent, jev, powiadomienia, skroty, uklady, pamiec, pl | **section**: openrouter\|akcent\|tapeta\|interfejs\|glos\|uzytkownik\|hermes\|agent\|jev\|powiadomienia\|skroty\|uklady\|… | safe | A3 | — | „otworz ustawienia {section}”, „pokaz ustawienia {section}”, „przejdz do ustawien {section}” |
 | `get_status` | Raport stanu — Pełny stan środowiska: okna, widgety, notatki, zadania, minutnik, skróty, połączenie, tryb agenta. | — | safe | A3 | — | „status”, „raport”, „stan systemu” |
 | `ui_highlight` | Wskaż element — Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id). | **target**: string; text: string | safe | A3 | — | — |
 | `ui_narrate` | Komunikat na Core — Krótki komunikat statusu na Core (np. "szukam w sieci…") bez wpisu w czacie; speak=true wypowiada go. | **text**: string; speak: boolean | safe | A3 | — | — |
@@ -63,6 +67,10 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `palette_open` | Paleta poleceń — Otwiera paletę poleceń, opcjonalnie z wpisanym zapytaniem. | query: string | safe | A3 | — | „[otworz] palete [polecen]”, „szukaj polecen” |
 | `notifications_open` | Centrum powiadomień — Pokazuje centrum powiadomień (przypomnienia, sygnały, komunikaty). | — | safe | A3 | — | „[pokaz] powiadomienia”, „co mnie ominelo”, „centrum powiadomien” |
 | `help` | Co potrafisz — Lista możliwości Jarvisa pogrupowana według dziedzin. | — | safe | A3 | — | „pomoc”, „help”, „co potrafisz” |
+| `ui_scale` | Skala interfejsu — Powiększa albo zmniejsza treść interfejsu (80–130%). step=up\|down\|reset albo percent. | percent: number; step: up\|down\|reset | safe | A2 | tak | „powieksz interfejs”, „zmniejsz interfejs”, „powieksz wszystko” |
+| `notif_channel` | Kanał powiadomień — Włącza/wyłącza rodzaj powiadomień (task=zadania, timer=minutnik, market=rynek, network=sieć, agent=agent, files=pliki, hermes=Hermes, routine=rutyny), dźwięk al | **kind**: task\|timer\|market\|network\|agent\|files\|hermes\|routine; on: boolean; sound: boolean; per_hour: integer | safe | A2 | tak | „wylacz powiadomienia (z rynku\|o sieci\|z zadan)”, „wlacz powiadomienia z rynku”, „bez dzwieku przy zadaniach” |
+| `keys_set` | Zmień skrót klawiszowy — Przypisuje skrót do akcji (np. palette, chat, log, notifications, voice, undo, reopen, desktop, tile, present, back, forward). keys="reset" przywraca domyślny;  | **action**: string; **keys**: string | safe | A2 | tak | „(paleta\|czat\|log\|powiadomienia) pod {keys}”, „zmien skrot (palety\|czatu) na {keys}”, „przywroc domyslne skroty” |
+| `settings_reset` | Przywróć ustawienia sekcji — Przywraca domyślne wartości jednej sekcji ustawień: wyglad, glos, agent, jev, hermes, skroty, powiadomienia. Klucze API zostają. Wymaga potwierdzenia. | **section**: wyglad\|glos\|agent\|jev\|hermes\|skroty\|powiadomienia | confirm | A0 | tak | „przywroc domyslny wyglad”, „zresetuj ustawienia (glosu\|jeva\|agenta)”, „domyslne ustawienia (jeva\|glosu)” |
 
 ## Notatki
 
@@ -127,6 +135,9 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku: notes note\|search, schedule day, timer timer\|stopwatch, market coin, weather city, settings section, terminal run (tylko | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library; view: string; target: string | safe | A3 | — | „pokaz stoper”, „pokaz zakladke stoper [w minutniku]”, „otworz minutnik na stoperze” |
 | `nav_forward` | Dalej (po „wróć”) — Idzie do przodu w historii okien i widoków — odwrotność nav_back. | — | safe | A3 | — | „dalej”, „naprzod”, „idz dalej” |
+| `search_all` | Szukaj wszędzie — Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, rozmowach, ustawieniach, poleceniach i plikach. Zwraca wyniki z typem; show=true otwie | **query**: string; types: string[]; limit: integer; show: boolean | safe | A3 | — | „szukaj wszedzie {query}”, „znajdz wszystko o {query}”, „gdzie mam cos o {query}” |
+| `recent_list` | Ostatnio otwierane — Lista ostatnio otwieranych okien i widoków (do szybkiego powrotu przez app_view). | limit: integer | safe | A3 | — | „ostatnio otwierane”, „co ostatnio otwieralem”, „ostatnie okna” |
+| `ui_mode` | Tryb przestrzeni — Przełącza tryb pulpitu: work (okna), clean (pusty pulpit, okna zminimalizowane), focus (skupienie), present (prezentacja: bez czatu, logu, powiadomień i prywatn | **mode**: work\|clean\|focus\|present | safe | A3 | tak | „tryb prezentacji”, „posprzataj pulpit”, „czysty pulpit” |
 
 ## Agent
 
@@ -134,4 +145,13 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `undo` | Cofnij — Cofa ostatnią akcję (count = ile ostatnich, minutes = wszystko z ostatnich N minut). force=true cofa mimo późniejszej zmiany obiektu. | count: integer; minutes: integer; force: boolean | safe | A3 | — | „cofnij”, „cofnij (dwie\|trzy) ostatnie [rzeczy]”, „cofnij wszystko z ostatnich {minutes} minut” |
 | `undo_list` | Historia do cofnięcia — Lista ostatnich akcji, które da się cofnąć (10 minut). | — | safe | A3 | — | „co moge cofnac”, „historia do cofniecia”, „historia zmian” |
+
+## Czat
+
+| id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
+|---|---|---|---|---|---|---|
+| `chat_search` | Szukaj w rozmowach — Szuka w historii rozmów wszystkich wątków; show=true przewija czat do najlepszego wyniku. | **query**: string; show: boolean | safe | A3 | — | „szukaj w czacie {query}”, „szukaj w rozmowach {query}”, „co mowiles o {query}” |
+| `chat_export` | Eksport rozmowy — Zapisuje rozmowę jako plik Markdown (pobranie): range=session (ten wątek) albo all (wszystkie wątki). | range: session\|all | safe | A1 | — | „eksportuj (czat\|rozmowe)”, „zapisz (te\|nasza) rozmowe [do pliku]”, „pobierz historie rozmowy” |
+| `chat_clear` | Wyczyść rozmowę — Usuwa historię bieżącego wątku (i streszczenie). Wymaga potwierdzenia; „Cofnij” działa przez 10 minut. | — | confirm | A0 | tak | „wyczysc (czat\|rozmowe\|historie czatu)”, „usun historie rozmowy”, „zacznijmy od czystej karty” |
+| `chat_thread` | Wątki rozmów — Wątki rozmów: op=new (nowy, name), switch (przełącz, name), list, rename (bieżący na name). Każdy wątek ma własną historię. | **op**: new\|switch\|list\|rename; name: string | safe | A2 | tak | „nowy watek [o {name}]”, „przelacz na watek {name}”, „jakie mam watki” |
 

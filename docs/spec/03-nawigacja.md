@@ -196,12 +196,6 @@ Konflikty z przeglądarką: nie przejmujemy `Ctrl T/W/N/L/R/Tab`, `F5`, `F11`, `
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `search_all` | Szukaj wszędzie | A3 | — | W2 |
-| `recent_list` | Ostatnio otwierane | A3 | — | W2 |
-| `ui_mode` | Tryb przestrzeni | A3 | poprzedni tryb | W2 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

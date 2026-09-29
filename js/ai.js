@@ -27,7 +27,10 @@ J.HERMES_PRESETS = {
   custom: { label: 'Własny serwer (Ollama / LM Studio / vLLM)', url: 'http://localhost:11434/v1', model: 'hermes3', format: 'auto' }
 };
 const cfg = () => { const s = J.state.settings; const provider = s.hermesProvider || 'agent'; return { url: (s.hermesUrl || '').replace(/\/+$/, ''), key: s.hermesKey || (provider === 'openrouter' || /openrouter\.ai/.test(s.hermesUrl || '') ? s.openrouterKey || '' : ''), model: s.hermesModel || 'hermes-agent', provider }; };
-J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url);
+J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url && !J.state.settings.offlineMode);
+/* dzienny limit kosztu Hermesa (OpenRouter zwraca koszt w polu usage) */
+const hermesDay = () => { const st = J.state.stats, d = J.today(); if (!st.hermesDay || st.hermesDay.d !== d) st.hermesDay = { d, cost: 0, calls: 0 }; return st.hermesDay; };
+J.hermesBudget = { used: () => hermesDay().cost, exceeded: () => { const b = +J.state.settings.hermesDailyBudget || 0; return b > 0 && hermesDay().cost >= b; } };
 /* format narzędzi: 'hermes' (tekstowy <tool_call>) | 'openai' (natywne tool_calls); 'auto' rozstrzyga test połączenia */
 const toolFormat = () => { const s = J.state.settings; const f = s.toolFormat && s.toolFormat !== 'auto' ? s.toolFormat : (J.hermes.format || J.HERMES_PRESETS[s.hermesProvider]?.format || 'hermes'); return f === 'auto' ? 'hermes' : f; };
 J.hermes = { status: 'unknown', checked: 0, tools: [], format: null, latency: 0, lastError: '' };
@@ -96,8 +99,8 @@ const trimHistory = (arr, max, keep) => {
   while (start > 0 && !isRealUser(arr[start])) start--;
   return arr.slice(start);
 };
-const loadHistory = async () => { try { history = trimHistory((await J.store.get('chat.history', [])).filter(m => m && m.role && typeof m.content === 'string'), MAX_HIST); summary = await J.store.get('chat.summary', ''); } catch (e) { history = []; } loaded = true; J.emit('history'); };
-const persist = J.debounce(() => { J.store.set('chat.history', trimHistory(history, MAX_HIST)); J.store.set('chat.summary', summary || ''); }, 400);
+const loadHistory = async () => { try { history = trimHistory((await J.store.get(J.threads.key('history'), [])).filter(m => m && m.role && typeof m.content === 'string'), MAX_HIST); summary = await J.store.get(J.threads.key('summary'), ''); } catch (e) { history = []; } loaded = true; J.emit('history'); };
+const persist = J.debounce(() => { J.store.set(J.threads.key('history'), trimHistory(history, MAX_HIST)); J.store.set(J.threads.key('summary'), summary || ''); J.threads.touch(); }, 400);
 const histSize = () => history.reduce((n, m) => n + String(m.content).length, 0);
 let summarizing = false;
 const summarize = async () => {
@@ -125,14 +128,22 @@ const streamChat = async (messages, o = {}) => {
   controller = new AbortController();
   const body = { model: o.model || c.model, messages, stream: true, temperature: o.temperature ?? 0.6 };
   if (o.format === 'openai') { body.tools = R.tools(); body.tool_choice = 'auto'; }
+  if (c.provider === 'openrouter') body.usage = { include: true };   // koszt w ostatniej porcji strumienia (dzienny limit)
+  if (J.hermesBudget.exceeded()) { const er = new Error('Dzienny limit kosztu Hermesa (' + J.state.settings.hermesDailyBudget + ' USD) został osiągnięty — do jutra odpowiada silnik lokalny. Limit zmienisz w Ustawieniach → Hermes.'); er.net = true; er.budget = true; throw er; }
   let r;
-  try { r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify(body) }); }
-  catch (e) { if (e.name === 'AbortError') throw e; const er = new Error(netError()); er.net = true; throw er; }
-  if (!r.ok) { const er = new Error(await httpError(r)); er.net = [401, 403, 404, 502, 503].includes(r.status); er.status = r.status; throw er; }
+  /* jedno ponowienie po 2 s przy błędzie sieci albo 502/503 (np. chwilowy restart serwera) */
+  for (let attempt = 0; ; attempt++) {
+    try { r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify(body) }); }
+    catch (e) { if (e.name === 'AbortError') throw e; if (attempt === 0 && !J.state.settings.offlineMode) { J.proc.active && J.proc.step('system', 'Hermes nie odpowiada — ponawiam za 2 s', [], { status: 'err' }); await new Promise(res => setTimeout(res, J.HERMES_RETRY_MS ?? 2000)); if (controller.signal.aborted) throw Object.assign(new Error('przerwano'), { name: 'AbortError' }); continue; } const er = new Error(J.state.settings.offlineMode ? 'Tryb bez sieci jest włączony — Hermes niedostępny.' : netError()); er.net = true; throw er; }
+    if (!r.ok && [502, 503].includes(r.status) && attempt === 0) { await new Promise(res => setTimeout(res, J.HERMES_RETRY_MS ?? 2000)); continue; }
+    break;
+  }
+  if (!r.ok) { const er = new Error(r.status === 429 ? 'Hermes jest przeciążony (429) — spróbuj za chwilę.' : await httpError(r)); er.net = [401, 403, 404, 502, 503, 429].includes(r.status); er.status = r.status; er.code = r.status === 429 ? 'RATE_LIMITED' : undefined; throw er; }
+  const noteUsage = u => { if (!u) return; const d = hermesDay(); d.calls++; d.cost = +(d.cost + (+u.cost || 0)).toFixed(6); J.save(); };
   const native = new Map();   // index -> {id, name, args}
   const finishNative = () => [...native.values()].map(t => { let args = {}; try { args = JSON.parse(t.args || '{}'); } catch (e) { args = null; } return { id: t.id, name: t.name, args, ok: args !== null, raw: t.args }; });
   if (!r.body || !(r.headers.get('content-type') || '').includes('event-stream')) {
-    const j = await r.json(); const m = j.choices?.[0]?.message || {}; const t = m.content || '';
+    const j = await r.json(); noteUsage(j.usage); const m = j.choices?.[0]?.message || {}; const t = m.content || '';
     (m.tool_calls || []).forEach((tc, i) => native.set(i, { id: tc.id, name: tc.function?.name, args: tc.function?.arguments || '{}' }));
     on.delta?.(t); return { content: t, calls: finishNative(), raw: t };
   }
@@ -152,6 +163,7 @@ const streamChat = async (messages, o = {}) => {
       let j; try { j = JSON.parse(data); } catch (e) { continue; }
       if (ev === 'hermes.tool.progress' || j.type === 'hermes.tool.progress') { on.tool?.(j); continue; }
       if (j.error) throw new Error('Hermes: ' + (j.error.message || JSON.stringify(j.error)));
+      if (j.usage) noteUsage(j.usage);
       const d = j.choices?.[0]?.delta || {};
       if (d.reasoning_content || d.reasoning) on.reason?.(d.reasoning_content || d.reasoning);
       if (d.tool_calls) for (const tc of d.tool_calls) { const k = tc.index ?? native.size; const cur = native.get(k) || { id: tc.id || ('call_' + k), name: '', args: '' }; if (tc.id) cur.id = tc.id; if (tc.function?.name) cur.name += tc.function.name; if (tc.function?.arguments) cur.args += tc.function.arguments; native.set(k, cur); }
@@ -258,7 +270,9 @@ const hermes = async (text, bubble, opts = {}) => {
   let reply = '', budget = BUDGET(), turn = 0, toolsUsed = 0, t0 = Date.now(), lastTurn = false;
   const envText = (summary ? '<summary>' + summary + '</summary>\n' : '') + J.context.text({ full: opts.fullContext }) + (opts.judge ? '\n<judge>' + JSON.stringify({ intent: opts.judge.intent.id, confidence: opts.judge.intent.confidence, alternatives: opts.judge.intent.alts, destructive: opts.judge.destructive, needs_clarification: opts.judge.clarify, refers_to_focused_window: opts.judge.current, dialog_act: opts.judge.act?.id, user_rejected_intents: opts.judge.rejected }) + '</judge>' : '');
   /* D11: rozmowa o niskim ryzyku może iść do lżejszego (tańszego) modelu, jeśli użytkownik go ustawił */
-  const lite = opts.judge && opts.judge.intent.id === 'conversation' && opts.judge.intent.confidence >= .7 && J.state.settings.hermesModelLite ? J.state.settings.hermesModelLite : null;
+  /* D11 + preset kosztu: cheap = lżejszy model zawsze (jeśli ustawiony), max = zawsze główny */
+  const preset = J.state.settings.hermesPreset || 'balanced', liteModel = J.state.settings.hermesModelLite;
+  const lite = !liteModel || preset === 'max' ? null : preset === 'cheap' ? liteModel : (opts.judge && opts.judge.intent.id === 'conversation' && opts.judge.intent.confidence >= .7 ? liteModel : null);
   let injected = false;   // D10: w tej wymianie pojawiła się treść z zewnątrz z podejrzanymi instrukcjami
   try {
     for (;;) {
@@ -349,6 +363,10 @@ J.brain = {
   get history() { return history; },
   get summary() { return summary; },
   reset() { resetGen++; history.length = 0; summary = ''; persist(); J.context.reset(); },
+  /* zmiana wątku: historia i streszczenie z innego klucza */
+  async reload() { resetGen++; await loadHistory(); },
+  snapshot: () => ({ history: history.slice(), summary }),
+  restoreSnapshot(sn) { history.length = 0; history.push(...(sn.history || [])); summary = sn.summary || ''; persist(); },
   abort() { let did = false; if (controller) { controller.abort(); did = true; } if (taskAbort) { taskAbort.abort(); did = true; } J.ask?.cancel?.(); return did; },
   async models() { const c = cfg(); let r; try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(netError()); } if (!r.ok) throw new Error(await httpError(r)); const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean); },
   /* test połączenia + autodetekcja formatu narzędzi */
@@ -403,7 +421,7 @@ J.brain = {
       else if (J.aiReady() && !skipNet) {
         try {
           reply = await hermes(text, bubble, { signal: taskAbort.signal, fullContext: fromSignal, judge: verdict }); setStatus('up');
-          if (J.judge?.available() && J.judge.allowed('verify') && lastResults.length && reply) {
+          if (J.judge?.available() && J.judge.allowed('verify') && (lastResults.length || J.state.settings.hermesPreset === 'max') && lastResults.length && reply) {
             J.ev.emit('task.verifying', { results: lastResults.length });
             const p = await J.judge.verify(reply, lastResults);
             J.ev.emit('task.verified', { p });

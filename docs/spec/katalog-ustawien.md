@@ -15,15 +15,32 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Głos i dźwięk | `silentVoice` | `false` | boolean | — | — |
 | Głos i dźwięk | `sound` | `true` | boolean | — | — |
 | Głos i dźwięk | `speech` | `true` | boolean | — | — |
+| Głos i dźwięk | `speechRate` | `1` | number | — | — |
 | Głos i dźwięk | `voiceName` | `""` | string | — | — |
 | Głos i dźwięk | `wakeWord` | `false` | boolean | tak | — |
+| Hermes (mózg) | `hermesDailyBudget` | `0` | number | — | — |
 | Hermes (mózg) | `hermesKey` | — | string | tak | tak |
 | Hermes (mózg) | `hermesModel` | `"hermes-agent"` | string | tak | — |
 | Hermes (mózg) | `hermesModelLite` | `""` | string | — | — |
 | Hermes (mózg) | `hermesOn` | `true` | boolean | tak | — |
+| Hermes (mózg) | `hermesPreset` | `"balanced"` | string | — | — |
 | Hermes (mózg) | `hermesProvider` | `"agent"` | string | tak | — |
 | Hermes (mózg) | `hermesUrl` | `"http://localhost:8642/v1"` | string | tak | — |
 | Hermes (mózg) | `toolFormat` | `"auto"` | string | — | — |
+| Inne | `dockOrder` | `[]` | object | — | — |
+| Inne | `favCities` | `[]` | object | — | — |
+| Inne | `flags` | `{}` | object | — | — |
+| Inne | `fxLevel` | `"standard"` | string | — | — |
+| Inne | `keys` | — | object | — | tak |
+| Inne | `layoutStartup` | `"none"` | string | — | — |
+| Inne | `notif` | `{}` | object | — | — |
+| Inne | `offlineMode` | `false` | boolean | — | — |
+| Inne | `startMode` | `"work"` | string | — | — |
+| Inne | `sttLang` | `"pl-PL"` | string | — | — |
+| Inne | `uiScale` | `100` | number | — | — |
+| Inne | `units` | `{"temp":"C","wind":"kmh"}` | object | — | — |
+| Inne | `volume` | `60` | number | — | — |
+| Inne | `watchlist` | `["BTC","ETH","SOL","BNB"]` | object | — | — |
 | OpenRouter | `openrouterKey` | — | string | tak | tak |
 | Sędzia Jev | `jevA2` | `0.92` | number | — | — |
 | Sędzia Jev | `jevA3` | `0.8` | number | — | — |

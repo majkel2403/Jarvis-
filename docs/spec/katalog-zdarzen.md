@@ -39,14 +39,16 @@
 | ui | `notes` | apps.js, commands.js |
 | ui | `plan` | events.js |
 | ui | `proc-end` | process.js |
-| ui | `settings` | apps.js, commands.js, core.js, main.js |
+| ui | `settings` | apps.js, commands-ext.js, commands.js, core.js, main.js |
 | ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |
 | ui | `task-overdue` | context.js |
 | ui | `tasks` | apps.js, commands.js |
+| ui | `thread` | apps.js, commands-ext.js |
 | ui | `timer` | apps.js, commands.js |
 | ui | `timer-ended` | apps.js |
+| ui | `ui-mode` | commands-ext.js |
 | ui | `undo-done` | undo.js |
 | ui | `undo-offer` | undo.js |
 | ui | `undo-stack` | undo.js |

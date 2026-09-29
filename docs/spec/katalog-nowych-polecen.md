@@ -2,32 +2,15 @@
 
 > Generuje `node tools/gen-spec.js`. Źródło: `docs/spec/nowe-polecenia.js`. Szczegóły w dokumencie z kolumny „opis w”. „rozszerzenie” = polecenie już istnieje, zmieniają się argumenty.
 
-Planowanych: **53** (nowych 50, rozszerzeń 3). Po wdrożeniu rejestr będzie miał ok. 122 poleceń.
+Planowanych: **38** (nowych 35, rozszerzeń 3). Po wdrożeniu rejestr będzie miał ok. 122 poleceń.
 
 | fala | liczba |
 |---|---|
 | W1 | 0 |
-| W2 | 15 |
+| W2 | 0 |
 | W3 | 28 |
 | W4 | 9 |
 | W5 | 1 |
-
-## Nawigacja
-
-| id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
-|---|---|---|---|---|---|---|---|
-| `search_all` | Szukaj wszędzie — Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, historii czatu, ustawieniach i poleceniach. Zwraca listę wyników z typem i akcją „otwórz”. | **query**: string; types: string[]; limit: number | A3 | — | W2 | [03-nawigacja.md](03-nawigacja.md) | „szukaj wszędzie bank”, „gdzie mam coś o wakacjach”, „znajdź wszystko o spotkaniu” |
-| `recent_list` | Ostatnio otwierane — Lista ostatnio otwieranych okien, notatek i widoków (do szybkiego powrotu). | limit: number | A3 | — | W2 | [03-nawigacja.md](03-nawigacja.md) | „co ostatnio otwierałem”, „ostatnie okna”, „pokaż ostatnie” |
-| `ui_mode` | Tryb przestrzeni — Przełącza tryb pulpitu: work (okna), clean (pusty pulpit, sam rdzeń), focus (jedno okno + cisza), present (bez prywatnych danych i logu). Tryb idle/thinking ustawia agent sam. | **mode**: work\|clean\|focus\|present | A3 | poprzedni tryb | W2 | [03-nawigacja.md](03-nawigacja.md) | „tryb prezentacji”, „posprzątaj pulpit”, „tryb pracy” |
-
-## Aplikacje i okna
-
-| id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
-|---|---|---|---|---|---|---|---|
-| `layout_list` | Lista układów — Presety i zapisane układy okien z listą aplikacji. | — | A3 | — | W2 | [04-okna.md](04-okna.md) | „jakie mam układy”, „lista układów”, „pokaż zapisane układy” |
-| `layout_remove` | Usuń układ — Usuwa zapisany układ okien (presetów nie można usunąć). | **name**: string | A0 | przywróć układ (10 min) | W2 | [04-okna.md](04-okna.md) | „usuń układ biuro”, „skasuj układ praca2”, „nie potrzebuję układu wieczór” |
-| `layout_rename` | Zmień nazwę układu — Zmienia nazwę zapisanego układu. | **name**: string; **to**: string | A2 | poprzednia nazwa | W2 | [04-okna.md](04-okna.md) | „zmień nazwę układu biuro na praca”, „nazwij układ wieczór domowy”, „przemianuj układ rynek na giełda” |
-| `layout_startup` | Układ startowy — Ustawia układ stosowany przy każdym uruchomieniu (albo wyłącza). | **name**: string | A2 | poprzedni układ startowy | W2 | [04-okna.md](04-okna.md) | „na starcie włączaj układ praca”, „ustaw układ startowy rynek”, „wyłącz układ startowy” |
 
 ## Pulpit i widgety
 
@@ -78,15 +61,6 @@ Planowanych: **53** (nowych 50, rozszerzeń 3). Po wdrożeniu rejestr będzie mi
 | `market_watchlist` | Lista obserwowanych — Dodaje/usuwa kryptowalutę z listy w Monitorze rynku (tylko podgląd — żadnego handlu). | **op**: add\|remove\|list; symbol: string | A2 | odwrotna operacja | W3 | [08-aplikacje.md](08-aplikacje.md) | „dodaj dogecoina do obserwowanych”, „usuń solanę z rynku”, „jakie kryptowaluty obserwuję” |
 | `market_alerts` | Alerty kursów — Lista i usuwanie alertów market_watch. | **op**: list\|remove\|clear; alert: string | A2 | przywróć alert | W3 | [08-aplikacje.md](08-aplikacje.md) | „jakie mam alerty”, „usuń alert na bitcoina”, „wyczyść alerty kursów” |
 
-## Czat
-
-| id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
-|---|---|---|---|---|---|---|---|
-| `chat_search` | Szukaj w rozmowach — Szuka w historii czatu (IndexedDB); wynik przewija czat do wiadomości. | **query**: string | A3 | — | W2 | [08-aplikacje.md](08-aplikacje.md) | „o czym rozmawialiśmy wczoraj o banku”, „znajdź w czacie przepis”, „szukaj w rozmowach hasło wifi” |
-| `chat_export` | Eksport rozmowy — Zapisuje rozmowę jako .md (pobranie). | range: session\|all | A1 | — | W2 | [08-aplikacje.md](08-aplikacje.md) | „zapisz tę rozmowę do pliku”, „eksportuj czat”, „pobierz historię rozmowy” |
-| `chat_clear` | Wyczyść rozmowę — Usuwa historię czatu (i streszczenie). Nieodwracalne. | — | A0 | — | W2 | [08-aplikacje.md](08-aplikacje.md) | „wyczyść czat”, „usuń historię rozmowy”, „zacznijmy od czystej karty” |
-| `chat_thread` | Wątki rozmów — Nowy wątek, przełączenie, lista, zmiana nazwy (każdy wątek ma własną historię i streszczenie). | **op**: new\|switch\|list\|rename; name: string | A2 | poprzedni wątek | W2 | [08-aplikacje.md](08-aplikacje.md) | „nowy wątek o wakacjach”, „przełącz na wątek praca”, „jakie mam wątki” |
-
 ## Pamięć
 
 | id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
@@ -103,12 +77,8 @@ Planowanych: **53** (nowych 50, rozszerzeń 3). Po wdrożeniu rejestr będzie mi
 
 | id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
 |---|---|---|---|---|---|---|---|
-| `ui_scale` | Skala interfejsu — Powiększa albo zmniejsza cały interfejs (80–130%). | percent: number; step: up\|down\|reset | A2 | poprzednia skala | W2 | [09-wyglad-stany.md](09-wyglad-stany.md) | „powiększ interfejs”, „zmniejsz wszystko”, „skala 110 procent” |
 | `fx_level` | Poziom efektów — Efekty: tool (oszczędnie), standard, cinema (pełne); off = bez animacji. | **level**: off\|tool\|standard\|cinema | A2 | poprzedni poziom | W5 | [09-wyglad-stany.md](09-wyglad-stany.md) | „wyłącz animacje”, „tryb kinowy”, „mniej efektów” |
 | `chart_show` | Pokaż wykres — Skrót do widget_build: wykres z danych polecenia A3 (kursy, zadania w tygodniu, aktywność, koszt, pewność Jeva). | **source**: crypto\|tasks_week\|activity\|cost\|jev_confidence\|weather_hours; symbol: string; range: 1h\|24h\|7d\|30d; kind: line\|bar\|area\|spark | A2 | usuń widget | W4 | [09-wyglad-stany.md](09-wyglad-stany.md) | „pokaż wykres bitcoina z tygodnia”, „wykres zadań w tym tygodniu”, „pokaż na wykresie temperaturę na dziś” |
-| `keys_set` | Zmień skrót klawiszowy — Przypisuje skrót do akcji z mapy skrótów (sprawdza konflikty z przeglądarką i innymi skrótami). | **action**: string; **keys**: string | A2 | poprzedni skrót | W2 | [10-ustawienia.md](10-ustawienia.md) | „paleta pod Alt+P”, „zmień skrót czatu na Alt+C”, „przywróć domyślne skróty” |
-| `settings_reset` | Przywróć ustawienia sekcji — Przywraca domyślne wartości jednej sekcji (klucze zostają). | **section**: wyglad\|glos\|agent\|jev\|hermes\|skroty\|powiadomienia | A0 | poprzednie wartości (10 min) | W2 | [10-ustawienia.md](10-ustawienia.md) | „przywróć domyślny wygląd”, „zresetuj ustawienia głosu”, „domyślne ustawienia Jeva” |
-| `notif_channel` | Kanał powiadomień — Włącza/wyłącza rodzaj powiadomień (zadania, minutnik, rynek, sieć, agent) albo zmienia dźwięk/limit na godzinę. | **kind**: task\|timer\|market\|network\|agent\|files\|hermes; on: boolean; sound: boolean; per_hour: number | A2 | poprzednie ustawienie | W2 | [10-ustawienia.md](10-ustawienia.md) | „wyłącz powiadomienia z rynku”, „bez dźwięku przy zadaniach”, „maksymalnie 3 powiadomienia na godzinę” |
 
 ## Agent
 
