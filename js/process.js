@@ -92,7 +92,7 @@ const end = (status, result) => {
   // do historii trafia wersja bez elementów DOM i z ucięciem długich pól
   const saved = { id: t.id, title: t.title, ts: t.ts, dur: t.dur, status: t.status, result: cap(t.result), events: J.ev.compact(t.id),
     steps: t.steps.map(s => ({ id: s.id, kind: s.kind, title: s.title, status: s.status, ts: s.ts, dur: s.dur, preview: s.preview, fields: (s.fields || []).map(f => [f[0], cap(f[1]), f[2]]) })) };
-  J.state.history.unshift(saved); J.state.history.length = Math.min(J.state.history.length, MAX_HISTORY); J.save();
+  J.state.history.unshift(saved); J.state.history.length = Math.min(J.state.history.length, MAX_HISTORY); J.saveHistory();
   cur = null; viewing = saved; Object.defineProperty(saved, '_live', { value: t, enumerable: false });   // panel dalej pokazuje ten sam log (z żywymi elementami)
   render(); chip();
   J.emit('proc-end', saved);
@@ -160,7 +160,7 @@ const renderHist = () => {
   const box = $('#lpHist'); box.innerHTML = '';
   if (!J.state.history.length) { box.innerHTML = '<div class="lp-empty">Historia jest pusta.</div>'; return; }
   const clear = h('button', { class: 'btn sm ghost danger', style: 'margin:8px 12px' }, J.icon('trash', 'width="12" height="12"') + ' Wyczyść historię');
-  clear.onclick = () => { J.state.history = []; J.save(); if (viewing && viewing !== cur) viewing = null; render(); };
+  clear.onclick = () => { J.state.history = []; J.saveHistory(); if (viewing && viewing !== cur) viewing = null; render(); };
   box.appendChild(clear);
   J.state.history.forEach(t => {
     const b = h('button', { class: 'hitem', 'data-s': t.status }, '<span class="hdot"></span><div><b></b><small></small></div>');
@@ -203,6 +203,14 @@ J.proc = {
     $$('.lp-tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
     stepsBox().addEventListener('scroll', e => { const b = e.target; b.dataset.follow = (b.scrollHeight - b.scrollTop - b.clientHeight < 40) ? '1' : '0'; });
     ['approval.requested', 'approval.resolved', 'task.paused', 'task.resumed'].forEach(t => J.ev.on(t, () => { if (cur) render(); }));
+    /* historia zadań mieszka w IndexedDB; stare dane z głównego klucza (localStorage) są dołączane i przenoszone */
+    J.store.get('proc.history', null).then(async saved => {
+      const legacy = J.state.history || [];
+      if (Array.isArray(saved) && saved.length) { const ids = new Set(legacy.map(x => x.id)); J.state.history = legacy.concat(saved.filter(x => x && !ids.has(x.id))).sort((a, b) => b.ts - a.ts).slice(0, MAX_HISTORY); }
+      if (J.state.history.length) await J.store.set('proc.history', J.state.history);
+      J.historyMigrated = true; J.save();   // dopiero teraz główny klucz przestaje trzymać historię
+      render();
+    }).catch(() => { });
     render(); chip();
   }
 };

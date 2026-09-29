@@ -66,6 +66,24 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.waitForTimeout(1200);
   const persisted = await p.evaluate(async () => ({ hist: (await J.store.get('chat.history', [])).length, facts: (await J.memory.all()).length, notes: J.state.notes.length, widgets: J.widgets.list.length }));
   assert(persisted.hist >= 10 && persisted.facts === 1 && persisted.notes === 2 && persisted.widgets === 1, 'trwałość ' + JSON.stringify(persisted));
+  // historia zadań mieszka w IndexedDB, a główny klucz localStorage jest lekki (bez historii)
+  const store = await p.evaluate(async () => ({ idb: (await J.store.get('proc.history', [])).length, blob: JSON.parse(localStorage.getItem('jarvis-os:v2')).history.length, migrated: J.historyMigrated === true, ready: J.store.ready }));
+  assert(store.idb >= 1 && store.blob === 0 && store.migrated && store.ready, 'historia w IndexedDB ' + JSON.stringify(store));
+  // model nigdy nie dostaje kluczy API (settings_get)
+  const leak = await p.evaluate(async () => { J.state.settings.jevKey = 'sk-or-SEKRET'; J.state.settings.openrouterKey = 'sk-or-SEKRET2'; const r = await J.registry.run('settings_get', {}, { source: 'hermes' }); J.state.settings.jevKey = ''; J.state.settings.openrouterKey = ''; return JSON.stringify(r); });
+  assert(!/SEKRET/.test(leak), 'wyciek kluczy w settings_get');
+  // wygląd: brak jasnych „białych” przycisków w oknach, karty HUD nie nachodzą na pasek zadania ani dok (też na niskim ekranie)
+  const white = await p.evaluate(async () => { for (const a of ['schedule', 'settings', 'terminal']) { J.wm.open(a); await new Promise(r => setTimeout(r, 200)); } const light = c => { const m = c.match(/rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)/); if (!m) return false; const al = m[4] === undefined ? 1 : +m[4]; return al > .6 && (+m[1] + +m[2] + +m[3]) / 3 > 200; }; const bad = [...document.querySelectorAll('.window button')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.height && !e.classList.contains('wall') && light(getComputedStyle(e).backgroundColor); }).map(e => e.className); J.wm.closeAll(); return bad; });
+  assert(white.length === 0, 'jasne przyciski w oknach: ' + white.join(','));
+  for (const [w, h] of [[1280, 720], [1440, 800], [1600, 900]]) {
+    await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(400);
+    await p.evaluate(() => { J.ev.emit('task.created', { title: 'Test układu', task_id: 'lay1' }); J.orb.set('thinking', 'analizuję'); });
+    await p.waitForTimeout(1300);
+    const bad = await p.evaluate(() => { const rc = s => document.querySelector(s)?.getBoundingClientRect(), banner = rc('#task'), dock = rc('#dock'), top = rc('.topbar'); const hit = (a, b) => b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; const cards = [...document.querySelectorAll('.hc')].map(e => ({ id: e.dataset.id, r: e.getBoundingClientRect() })); const out = []; cards.forEach(c => { if (hit(c.r, banner)) out.push(c.id + '×baner'); if (hit(c.r, dock)) out.push(c.id + '×dok'); if (c.r.top < top.bottom) out.push(c.id + '×pasek'); }); return out; });
+    assert(bad.length === 0, 'kolizje HUD przy ' + w + 'x' + h + ': ' + bad.join(','));
+    await p.evaluate(() => { J.ev.emit('task.completed', { title: 'x', task_id: 'lay1' }); }); await p.waitForTimeout(300);
+  }
+  await p.setViewportSize({ width: 1600, height: 900 });
   if (process.env.SHOT) await p.screenshot({ path: path.join(process.env.SHOT, 'smoke.png') });
   await b.close();
   if (errs.length) { console.error('Błędy w konsoli:', errs); process.exit(1); }

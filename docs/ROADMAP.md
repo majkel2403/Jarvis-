@@ -6,7 +6,7 @@ Dokument opisuje stan projektu po przebudowie wyglądu (gałąź `claude/neon-da
 
 Zrealizowane w kodzie i pokryte testami (`tests/unit`, `tests/e2e`):
 
-- **Faza 0** — poprawki 7.1–7.15 (zaległe przypomnienia zbierane po powrocie, link w czacie gdy przeglądarka blokuje kartę, koercja typów, historia zachowana po błędzie, jawne `show` w narzędziach, kolejka mowy, streszczenie kroczące, cichy tryb głosowy, IndexedDB, Wake Lock, powiadomienie o nowej wersji SW, `aria-label` w doku, widgety odporne na Esc/„zamknij wszystko”), testy jednostkowe (102) i dymny w Chromium, CI.
+- **Faza 0** — poprawki 7.1–7.15 (zaległe przypomnienia zbierane po powrocie, link w czacie gdy przeglądarka blokuje kartę, koercja typów, historia zachowana po błędzie, jawne `show` w narzędziach, kolejka mowy, streszczenie kroczące, cichy tryb głosowy, IndexedDB, Wake Lock, powiadomienie o nowej wersji SW, `aria-label` w doku, widgety odporne na Esc/„zamknij wszystko”), testy jednostkowe i dymny w Chromium, CI (stan liczby testów: patrz sekcja „Audyt i naprawy” niżej).
 - **Faza 1** — Command Registry (`js/registry.js`, `js/commands.js`), narzędzia/paleta/menu/„co potrafisz” z jednego rejestru, koperta wyniku z kodami, Context Packet z diffem (`js/context.js`), reguły groundingu w prompcie.
 - **Faza 2** — 58 narzędzi (CRUD notatek, zadań, okien, widgetów, minutnika, ustawień, terminala, rynku, pogody, schowka, plików, pamięci, UI), uprawnienia z potwierdzeniem Tak/Nie/Zawsze (chip przy Core, czat, głos), `ui_highlight / ui_narrate / ui_ask / ui_toast`.
 - **Faza 3** — historia i czat w IndexedDB, streszczenie kroczące, profil (`memory_*`), budżety tury → `PAUSED` z pytaniem, `AbortSignal` do narzędzi.
@@ -16,6 +16,19 @@ Zrealizowane w kodzie i pokryte testami (`tests/unit`, `tests/e2e`):
 - **Faza 7 (część)** — pauza rysowania w tle, adaptacyjna jakość, backoff pingu, pauza WebSocketu, centrum powiadomień, onboarding, paleta z dopasowaniem rozmytym i „Ostatnie”, przyciąganie i kafelkowanie okien, układy, klikalne karty HUD.
 
 - **Sędzia Jev** (`js/judge.js`) — model decyzyjny TypeSafe przez OpenRouter jako trzecia warstwa obok rejestru i Hermesa: fan-out intencja/ryzyko/dwuznaczność/deixis w jednym wywołaniu, trasy wykonaj/zapytaj/Hermes według progów, dynamiczne potwierdzenia, rozstrzyganie kandydatów w `findNote/findTask`, weryfikacja odpowiedzi (stan `VERIFYING`), pilność sygnałów w trybie aktywnym, test w Ustawieniach, sonda `tests/jev-probe.js` na polskich wypowiedziach, testy z zamockowanym API.
+
+**Audyt i naprawy (29.09.2026)** — zrealizowane i pokryte testami (124 testy jednostkowe + dymny w Chromium):
+
+- `settings_get` nie zwraca modelowi żadnych kluczy API (wcześniej wyciekały `jevKey` i `openrouterKey`).
+- Polecenia **głosowe** dostają pytanie Tak/Nie przy działaniach ryzykownych (usuwanie, zamykanie); polecenia wpisane ręcznie działają jak dotąd bez pytania.
+- Zapis danych: historia Process Log przeniesiona do IndexedDB (główny klucz localStorage jest lekki), przepełnienie pamięci nie jest ciche (odzysk miejsca + ostrzeżenie), stare dane są migrowane bez utraty.
+- Konfiguracja z adresu: zalecany fragment `#` (nie trafia do serwera); `?` nadal działa, ale pokazuje ostrzeżenie.
+- Historia rozmowy jest przycinana tylko na granicy wymiany (koniec z błędem 400 od „osieroconej” odpowiedzi narzędzia); streszczenie nie wraca po „nowej rozmowie”.
+- Prompt systemowy jest stały (godzina i streszczenie jadą w wiadomości użytkownika) — serwer może go zapamiętać między turami.
+- Tryb prywatny sędziego Jev domyślnie włączony dla nowych użytkowników.
+- Wdrożenie na Pages czeka na testy jednostkowe i publikuje tylko pliki aplikacji; service worker podmienia na `index.html` wyłącznie nawigację; ping Hermesa tylko po zmianie jego konfiguracji; usunięty martwy kod.
+- Wygląd: koniec z białymi kafelkami dni w Harmonogramie (i ciemny schemat kolorów dla natywnych kontrolek), kontrast przygaszonych napisów z 3,8:1 do 5,8:1, żaden napis poniżej 10 px (poza wąską kolumną telemetrii), karta HUD nie skacze po najechaniu, scena HUD skaluje się tak, żeby karty nie chowały się pod paskiem zadania i dokiem (sprawdzone od 1024×600 do 2560×1300), najwyżej dwa powiadomienia naraz (na telefonie nad dokiem), chipy Process Log i Czat na telefonie to same ikony, systemowe „ogranicz ruch” zatrzymuje też Core, jezioro i cząsteczki, brak przykładowych zadań o stałych godzinach (uruchomiona wieczorem aplikacja od razu ogłaszała „zaległe”), widoczny fokus w polu Terminala.
+- Nowe testy: pętla rozmowy z Hermesem na atrapie serwera (oba formaty narzędzi, awaria sieci, zły JSON), migracja historii, przepełnienie zapisu.
 
 Nie zrealizowane (świadomie odłożone): i18n PL/EN, motyw jasny i wysokiego kontrastu, wirtualne pulpity, RSS i kursy walut, pełny tryb mobilny z dolnym paskiem, audyt a11y (pułapka fokusu w palecie). Wymagają decyzji z sekcji 11 albo osobnej iteracji.
 

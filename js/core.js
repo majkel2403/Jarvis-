@@ -83,17 +83,12 @@ const DEFAULTS = () => ({
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
-    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivate: false
+    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivate: true
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
   ],
-  tasks: [
-    { id: J.uid(), date: J.today(), time: '09:00', text: 'Spotkanie zespołu', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '11:30', text: 'Analiza rynku', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '14:00', text: 'Budowa Jarvis OS', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '16:00', text: 'Testy środowiska', done: false, fired: false }
-  ],
+  tasks: [],   // bez przykładowych zadań o stałych godzinach: uruchomione wieczorem od razu ogłaszały „zaległe”
   shortcuts: [],
   log: [],
   history: [],
@@ -117,7 +112,19 @@ J.state = (() => {
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 }; s.layouts = s.layouts && typeof s.layouts === 'object' ? s.layouts : {};
   return s;
 })();
-J.save = J.debounce(() => { try { localStorage.setItem(KEY, JSON.stringify(J.state)); } catch (e) { /* tryb prywatny */ } }, 250);
+/* Zapis stanu. Historia Process Log jest duża, więc leży osobno (IndexedDB, J.saveHistory) i nie zapycha
+   głównego klucza. Gdy przeglądarka odmówi zapisu (brak miejsca / tryb prywatny), nie kończy się to po cichu:
+   najpierw zwalniamy odtwarzalne dane i próbujemy jeszcze raz, a jeśli i to zawiedzie — użytkownik dostaje ostrzeżenie. */
+J.saveNow = () => {
+  // historia zostaje w głównym kluczu tylko do czasu, aż bezpiecznie trafi do IndexedDB (J.historyMigrated)
+  const write = slim => localStorage.setItem(KEY, JSON.stringify({ ...J.state, history: (J.historyMigrated || slim) ? [] : (J.state.history || []) }));
+  try { write(false); J.saveFailed = false; return true; } catch (e) { /* spróbujemy zwolnić miejsce */ }
+  try { J.state.notifs.length = Math.min(J.state.notifs.length, 20); J.state.log = []; write(true); J.saveFailed = false; return true; } catch (e) { /* nadal nie */ }
+  if (!J.saveFailed) { J.saveFailed = true; J.toast?.('⚠ Nie mogę zapisać danych w przeglądarce (brak miejsca albo tryb prywatny). Zmiany znikną po zamknięciu karty — wyeksportuj dane w Ustawieniach.', 10000); }
+  return false;
+};
+J.save = J.debounce(() => J.saveNow(), 250);
+J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.history); } catch (e) { /* historia jest pomocnicza */ } }, 400);
 /* Konfiguracja z zewnątrz (klucze i ustawienia bez wpisywania w UI):
    1) window.JARVIS_CONFIG z pliku config.local.js (ignorowany przez git, tylko lokalnie);
    2) jednorazowo z adresu: index.html?jevKey=sk-or-…&jevOn=1&hermesKey=… — parametry są zapisywane i usuwane z paska adresu.
@@ -129,9 +136,20 @@ J.bootstrapConfig = () => {
   let n = 0;
   try { if (window.JARVIS_CONFIG) n += apply(window.JARVIS_CONFIG, 'config.local.js'); } catch (e) { }
   try {
-    const u = new URL(location.href); const src = {}; let hit = false;
-    for (const k of ALLOW) if (u.searchParams.has(k)) { src[k] = u.searchParams.get(k); u.searchParams.delete(k); hit = true; }
-    if (hit) { n += apply(src, 'url'); if ((src.jevKey || src.openrouterKey) && src.jevOn == null) { J.state.settings.jevOn = true; J.save(); } history.replaceState?.(null, '', u.pathname + (u.search || '') + u.hash); }
+    /* Zalecane: fragment po znaku # (index.html#jevKey=…) — przeglądarka NIE wysyła go do serwera strony.
+       Stary sposób (?jevKey=…) nadal działa, ale adres z „?” trafia do serwera hostingu, więc dajemy ostrzeżenie. */
+    const u = new URL(location.href); const src = {}; let hit = false, viaQuery = false, viaHash = false;
+    const hp = new URLSearchParams(String(u.hash || '').replace(/^#/, ''));
+    for (const k of ALLOW) {
+      if (hp.has(k)) { src[k] = hp.get(k); hp.delete(k); hit = viaHash = true; }
+      if (u.searchParams.has(k)) { src[k] = u.searchParams.get(k); u.searchParams.delete(k); hit = viaQuery = true; }
+    }
+    if (hit) {
+      n += apply(src, 'url'); if ((src.jevKey || src.openrouterKey) && src.jevOn == null) { J.state.settings.jevOn = true; J.save(); }
+      if (viaQuery && (src.jevKey || src.openrouterKey || src.hermesKey)) J.configViaQuery = true;
+      if (viaHash) u.hash = hp.toString() ? '#' + hp.toString() : '';
+      history.replaceState?.(null, '', u.pathname + (u.search || '') + (u.hash || ''));
+    }
   } catch (e) { }
   return n;
 };
@@ -293,10 +311,11 @@ J.ear = (() => {
 /* ---------- toasty ---------- */
 J.toast = (text, ms = 2600) => {
   const box = J.$('#toasts'); if (!box) return;
+  J.lastToastAt = Date.now();
   const t = J.h('div', { class: 'toast' }, '<i></i><span></span>');
   t.querySelector('span').textContent = text;
   box.appendChild(t);
-  while (box.children.length > 4) box.firstElementChild.remove();
+  while (box.children.length > 2) box.firstElementChild.remove();   // najwyżej dwa naraz — stos powiadomień zasłaniał interfejs
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, ms);
 };
 
