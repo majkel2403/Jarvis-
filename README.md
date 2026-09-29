@@ -93,7 +93,7 @@ Jarvis OS (przeglądarka) ──SSE /bridge/events──┐
 
 ### Instalacja (Windows, Hermes natywnie — bez WSL)
 1. **Most:** `bridge\start-bridge.bat` (zostaw uruchomiony). Token jest w `%USERPROFILE%\.jarvis-os\bridge-token`; strona Jarvis OS pobiera go sama (parowanie tylko dla dozwolonego Origin).
-2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, a potem bez `-DryRun` (dodaj `-CopyAuth`, by skopiować logowanie do dostawcy modelu). Klonuje Twój aktywny profil **bez kanałów** (Telegram zostaje w starym profilu), konfiguruje MCP, toolsety, `.env` i `SOUL.md`, robi kopię `config.yaml`. Twój obecny gateway nie jest zmieniany.
+2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, a potem bez `-DryRun` (dodaj `-LoginXai`, by od razu zalogować profil do Groka — osobne logowanie xAI, bo tokeny xAI są jednorazowe i nie wolno ich kopiować między profilami). Klonuje Twój aktywny profil **bez kanałów** (Telegram zostaje w starym profilu), konfiguruje MCP, toolsety, `.env` i `SOUL.md`, robi kopię `config.yaml`. Twój obecny gateway nie jest zmieniany.
 3. **Gateway:** `hermes\start-desktop-gateway.bat` (profil `jarvis-desktop`, API na `:8643`).
 4. **Jarvis OS:** *Ustawienia → Hermes → „Hermes Desktop (profil jarvis-desktop + most MCP)”*, wpisz `API_SERVER_KEY` wypisany przez instalator. Tryb MCP włącza się sam, gdy profil zgłosi się do mostu (*Ustawienia → Most pulpitu dla Hermesa* pokazuje status).
 
