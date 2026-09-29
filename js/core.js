@@ -80,7 +80,8 @@ const DEFAULTS = () => ({
   settings: {
     accent: '#33d6ff', accent2: '#a25cff', look: 4, wall: 'photo', particles: true, sound: true,
     speech: true, voiceName: '',
-    hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
+    hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', hermesMode: 'auto',
+    bridgeOn: true, bridgeUrl: 'http://127.0.0.1:8651', bridgeToken: '', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
     openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivate: true
@@ -130,8 +131,8 @@ J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.his
    2) jednorazowo z adresu: index.html?jevKey=sk-or-…&jevOn=1&hermesKey=… — parametry są zapisywane i usuwane z paska adresu.
    Dozwolone klucze ustawień: tylko z listy poniżej. */
 J.bootstrapConfig = () => {
-  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
-  const BOOL = ['jevOn', 'jevPrivate', 'hermesOn', 'wakeWord', 'skipBoot'];
+  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'hermesMode', 'bridgeOn', 'bridgeUrl', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
+  const BOOL = ['jevOn', 'jevPrivate', 'hermesOn', 'bridgeOn', 'wakeWord', 'skipBoot'];
   const apply = (src, from) => { let n = 0; for (const [k, v] of Object.entries(src || {})) { if (!ALLOW.includes(k) || v == null || v === '') continue; J.state.settings[k] = BOOL.includes(k) ? /^(1|true|tak|on|yes)$/i.test(String(v)) : String(v); n++; } if (n) { J.save(); J.configuredFrom = from; } return n; };
   let n = 0;
   try { if (window.JARVIS_CONFIG) n += apply(window.JARVIS_CONFIG, 'config.local.js'); } catch (e) { }

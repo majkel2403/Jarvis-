@@ -1,0 +1,1164 @@
+[
+ {
+  "name": "open_app",
+  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji. Np.: „otworz app”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    }
+   },
+   "required": [
+    "app"
+   ]
+  }
+ },
+ {
+  "name": "close_app",
+  "description": "Zamyka okno aplikacji. app=\"all\" zamyka wszystkie okna (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „zamknij app”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library",
+      "all",
+      "current"
+     ]
+    }
+   },
+   "required": [
+    "app"
+   ]
+  }
+ },
+ {
+  "name": "wm_list",
+  "description": "Zwraca otwarte okna z pozycją, rozmiarem, stanem i tym, które jest aktywne. Np.: „jakie okna sa otwarte”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "wm_focus",
+  "description": "Przenosi okno na wierzch (przywraca, jeśli zminimalizowane). app=\"next\" = następne okno. Np.: „przelacz na app”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library",
+      "next"
+     ]
+    }
+   },
+   "required": [
+    "app"
+   ]
+  }
+ },
+ {
+  "name": "wm_minimize",
+  "description": "Minimalizuje okno do doku. app=\"all\" pokazuje pulpit. Np.: „zminimalizuj app”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library",
+      "all",
+      "current"
+     ]
+    }
+   },
+   "required": [
+    "app"
+   ]
+  }
+ },
+ {
+  "name": "wm_arrange",
+  "description": "Układa okna: tile (kafelki z otwartych okien), left/right/top/bottom (przyciąga aktywne okno do krawędzi), max (maksymalizuje), center; layout=nazwa zapisanego układu lub presetu (praca, rynek, czysto). Np.: „uloz okna”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "mode": {
+     "type": "string",
+     "enum": [
+      "tile",
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "max",
+      "center",
+      "layout"
+     ]
+    },
+    "layout": {
+     "type": "string",
+     "description": "nazwa układu przy mode=layout"
+    },
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ],
+     "description": "okno do przyciągnięcia; domyślnie aktywne"
+    }
+   },
+   "required": [
+    "mode"
+   ]
+  }
+ },
+ {
+  "name": "wm_move",
+  "description": "Ustawia pozycję (x,y) i/lub rozmiar (w,h) okna w pikselach względem pulpitu.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    },
+    "x": {
+     "type": "number"
+    },
+    "y": {
+     "type": "number"
+    },
+    "w": {
+     "type": "number",
+     "minimum": 280
+    },
+    "h": {
+     "type": "number",
+     "minimum": 180
+    }
+   },
+   "required": [
+    "app"
+   ]
+  }
+ },
+ {
+  "name": "layout_save",
+  "description": "Zapisuje bieżący układ otwartych okien pod nazwą (do wm_arrange mode=layout). Np.: „zapisz uklad jako name”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "maxLength": 40
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "notes_list",
+  "description": "Zwraca listę notatek (id, tytuł, data, liczba słów). Użyj przed edycją, jeśli nie znasz id. Np.: „pokaz (liste notatek|moje notatki|jakie mam notatki)”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "limit": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 100
+    }
+   }
+  }
+ },
+ {
+  "name": "notes_read",
+  "description": "Zwraca pełną treść notatki (po id lub fragmencie tytułu). show=true otwiera ją w Notatniku. Np.: „przeczytaj notatke note”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id lub tytuł"
+    },
+    "show": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  }
+ },
+ {
+  "name": "notes_search",
+  "description": "Przeszukuje tytuły i treść notatek; zwraca dopasowania z fragmentem. Np.: „szukaj w notatkach query”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  }
+ },
+ {
+  "name": "create_note",
+  "description": "Tworzy notatkę. show=false nie otwiera Notatnika. Np.: „zanotuj content”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "title": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "content": {
+     "type": "string"
+    },
+    "show": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "content"
+   ]
+  }
+ },
+ {
+  "name": "notes_append",
+  "description": "Dopisuje tekst na końcu istniejącej notatki (po id lub tytule). Np.: „dopisz do notatki note: text”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string"
+    },
+    "show": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "note",
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "notes_update",
+  "description": "Zmienia tytuł i/lub zastępuje całą treść notatki. Np.: „zmien tytul notatki note na title”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "content": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  }
+ },
+ {
+  "name": "notes_delete",
+  "description": "Usuwa notatkę (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun notatke note”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  }
+ },
+ {
+  "name": "tasks_list",
+  "description": "Zwraca zadania: range=today (domyślnie), tomorrow, week, all, overdue. Np.: „pokaz (zadania|plan|harmonogram) na (dzis|dzisiaj)”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "range": {
+     "type": "string",
+     "enum": [
+      "today",
+      "tomorrow",
+      "week",
+      "all",
+      "overdue"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "add_task",
+  "description": "Dodaje zadanie do Harmonogramu; o podanej godzinie Jarvis przypomni głosem. Obsługuje czas względny przez pole \"in\" (np. \"20 minut\"). Np.: „przypomnij mi text”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string"
+    },
+    "time": {
+     "type": "string",
+     "format": "time",
+     "description": "HH:MM"
+    },
+    "date": {
+     "type": "string",
+     "format": "date",
+     "description": "YYYY-MM-DD, jutro, piątek"
+    },
+    "in": {
+     "type": "string",
+     "description": "czas względny, np. \"20 minut\", \"2 godziny\""
+    },
+    "show": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "tasks_complete",
+  "description": "Oznacza zadanie jako wykonane (done=false cofa). Np.: „odhacz task”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string",
+     "description": "id lub treść"
+    },
+    "done": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "task"
+   ]
+  }
+ },
+ {
+  "name": "tasks_update",
+  "description": "Zmienia treść, godzinę lub datę zadania. Do przesunięcia o czas użyj snooze_minutes. Np.: „przesun task na time”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string"
+    },
+    "time": {
+     "type": "string",
+     "format": "time"
+    },
+    "date": {
+     "type": "string",
+     "format": "date"
+    },
+    "snooze_minutes": {
+     "type": "integer",
+     "minimum": 1
+    }
+   },
+   "required": [
+    "task"
+   ]
+  }
+ },
+ {
+  "name": "tasks_remove",
+  "description": "Usuwa zadanie z Harmonogramu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun zadanie task”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "task"
+   ]
+  }
+ },
+ {
+  "name": "start_timer",
+  "description": "Uruchamia minutnik na podaną liczbę sekund. Np.: „minutnik seconds”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "seconds": {
+     "type": "number",
+     "minimum": 1,
+     "maximum": 86400
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "show": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "seconds"
+   ]
+  }
+ },
+ {
+  "name": "timer_control",
+  "description": "stop zatrzymuje minutnik, extend dodaje sekundy, status zwraca pozostały czas. Np.: „(zatrzymaj|wylacz|stop) minutnik”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "stop",
+      "extend",
+      "status"
+     ]
+    },
+    "seconds": {
+     "type": "number",
+     "minimum": 1
+    }
+   },
+   "required": [
+    "action"
+   ]
+  }
+ },
+ {
+  "name": "get_datetime",
+  "description": "Zwraca aktualną datę, godzinę, dzień tygodnia i strefę czasową. Np.: „ktora jest godzina”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "create_widget",
+  "description": "Tworzy widget na pulpicie: note (tekst), list (pozycje do odhaczania), result (wynik zadania). Np.: „dodaj widget title”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "type": {
+     "type": "string",
+     "enum": [
+      "note",
+      "list",
+      "result"
+     ]
+    },
+    "title": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "content": {
+     "type": "string"
+    },
+    "items": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "type",
+    "title"
+   ]
+  }
+ },
+ {
+  "name": "widgets_list",
+  "description": "Zwraca widgety na pulpicie z id, typem, tytułem i skrótem treści. Np.: „jakie mam widgety”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "widgets_update",
+  "description": "Zmienia tytuł, treść (note/result) lub dodaje/odhacza pozycje listy (add_items, check_item). Np.: „dodaj do listy widget add_items”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string",
+     "description": "id lub tytuł"
+    },
+    "title": {
+     "type": "string"
+    },
+    "content": {
+     "type": "string"
+    },
+    "add_items": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "check_item": {
+     "type": "string"
+    },
+    "uncheck_item": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "widget"
+   ]
+  }
+ },
+ {
+  "name": "widgets_remove",
+  "description": "Usuwa widget z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun widget widget”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "widget"
+   ]
+  }
+ },
+ {
+  "name": "add_shortcut",
+  "description": "Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). Np.: „dodaj skrot name”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    },
+    "url": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "shortcut_remove",
+  "description": "Usuwa skrót z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun skrot name”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "set_theme",
+  "description": "Zmienia kolor akcentu interfejsu. Np.: „motyw color”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "color": {
+     "type": "string",
+     "enum": [
+      "jarvis",
+      "cyjan",
+      "niebieski",
+      "fiolet",
+      "zielony",
+      "złoty",
+      "czerwony",
+      "różowy"
+     ]
+    }
+   },
+   "required": [
+    "color"
+   ]
+  }
+ },
+ {
+  "name": "set_wallpaper",
+  "description": "Zmienia tapetę: photo (jezioro w górach), aurora, void (pustka). Bez argumentu — następna. Np.: „tapeta wallpaper”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "wallpaper": {
+     "type": "string",
+     "enum": [
+      "photo",
+      "aurora",
+      "void"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "focus_mode",
+  "description": "Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło). Np.: „tryb skupienia”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "on": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "on"
+   ]
+  }
+ },
+ {
+  "name": "get_weather",
+  "description": "Aktualna pogoda i prognoza (Open-Meteo). Bez miasta — lokalizacja użytkownika. show=false nie otwiera okna. Np.: „jaka jest pogoda”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "city": {
+     "type": "string"
+    },
+    "days": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 6
+    },
+    "show": {
+     "type": "boolean"
+    }
+   }
+  }
+ },
+ {
+  "name": "get_crypto_prices",
+  "description": "Aktualne kursy BTC, ETH, SOL, BNB w USD ze zmianą 24h (CoinGecko / Binance). Np.: „kurs (bitcoina|btc|ethereum|eth|solany|sol|bnb)”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "symbol": {
+     "type": "string",
+     "enum": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "BNB"
+     ]
+    },
+    "show": {
+     "type": "boolean"
+    }
+   }
+  }
+ },
+ {
+  "name": "market_watch",
+  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "symbol": {
+     "type": "string",
+     "enum": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "BNB"
+     ]
+    },
+    "direction": {
+     "type": "string",
+     "enum": [
+      "above",
+      "below"
+     ]
+    },
+    "price": {
+     "type": "number",
+     "minimum": 0
+    },
+    "remove": {
+     "type": "boolean"
+    }
+   }
+  }
+ },
+ {
+  "name": "calculate",
+  "description": "Dokładnie liczy wyrażenie (+ - * / ^ % nawiasy sqrt sin cos log ln pi) i procenty. Np.: „oblicz expression”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "expression": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "expression"
+   ]
+  }
+ },
+ {
+  "name": "open_url",
+  "description": "Otwiera stronę WWW w nowej karcie. Znane serwisy: youtube, google, github, gmail, spotify, netflix, facebook, twitter, wikipedia, mapy, linkedin, reddit, allegro, nous, hermes, chatgpt, wp, onet. Adresy spoza listy zaufanych wymagają potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „otworz strone url”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "url": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "url"
+   ]
+  }
+ },
+ {
+  "name": "web_search",
+  "description": "Otwiera wyszukiwanie Google z zapytaniem w nowej karcie. Np.: „wyszukaj query”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  }
+ },
+ {
+  "name": "clipboard_write",
+  "description": "Kopiuje tekst do schowka systemowego. Np.: „skopiuj text”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "clipboard_read",
+  "description": "Zwraca tekst ze schowka (wymaga zgody przeglądarki). Wymaga potwierdzenia użytkownika. Np.: „co mam w schowku”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "get_status",
+  "description": "Pełny stan środowiska: okna, widgety, notatki, zadania, minutnik, skróty, połączenie, tryb agenta. Np.: „status”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "ui_highlight",
+  "description": "Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "target": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string",
+     "description": "krótki podpis"
+    }
+   },
+   "required": [
+    "target"
+   ]
+  }
+ },
+ {
+  "name": "ui_narrate",
+  "description": "Krótki komunikat statusu na Core (np. \"szukam w sieci…\") bez wpisu w czacie; speak=true wypowiada go.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string",
+     "maxLength": 120
+    },
+    "speak": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "ui_toast",
+  "description": "Pokazuje powiadomienie w interfejsie i zapisuje je w centrum powiadomień.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "title": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "body": {
+     "type": "string",
+     "maxLength": 200
+    }
+   },
+   "required": [
+    "title"
+   ]
+  }
+ },
+ {
+  "name": "ui_ask",
+  "description": "Zadaje użytkownikowi pytanie z opcjami (szybkie odpowiedzi w czacie i głosem) i zwraca wybraną odpowiedź. Używaj przy dwuznaczności zamiast zgadywać.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "question": {
+     "type": "string"
+    },
+    "options": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "question"
+   ]
+  }
+ },
+ {
+  "name": "speak",
+  "description": "Wypowiada tekst syntezatorem mowy. Np.: „powiedz text”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "sound_toggle",
+  "description": "Włącza/wyłącza dźwięki interfejsu i/lub mowę Jarvisa. Np.: „(wylacz|wycisz) dzwieki”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "sound": {
+     "type": "boolean"
+    },
+    "speech": {
+     "type": "boolean"
+    }
+   }
+  }
+ },
+ {
+  "name": "settings_get",
+  "description": "Zwraca bieżące ustawienia (bez kluczy API). Np.: „jakie mam ustawienia”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "settings_set",
+  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice. Np.: „ustaw miasto na value”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "enum": [
+      "city",
+      "user",
+      "particles",
+      "sound",
+      "speech",
+      "skipBoot",
+      "proactive",
+      "wakeWord",
+      "quietFrom",
+      "quietTo",
+      "briefingTime",
+      "summaryTime",
+      "silentVoice"
+     ]
+    },
+    "value": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "key",
+    "value"
+   ]
+  }
+ },
+ {
+  "name": "terminal_run",
+  "description": "Wykonuje wbudowane polecenie Terminala Jarvis OS (help, ls, neofetch, date, echo, calc…) i zwraca tekstowy wynik. Np.: „wykonaj w terminalu command”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "command": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "command"
+   ]
+  }
+ },
+ {
+  "name": "notifications_open",
+  "description": "Pokazuje centrum powiadomień (przypomnienia, sygnały, komunikaty). Np.: „pokaz powiadomienia”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "memory_remember",
+  "description": "Zapisuje trwały fakt o użytkowniku lub preferencję (np. \"pracuję zdalnie\", \"lubię kawę o 9\"). Fakty trafiają do kontekstu każdej rozmowy. Np.: „zapamietaj ze fact”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "fact": {
+     "type": "string",
+     "maxLength": 200
+    },
+    "scope": {
+     "type": "string",
+     "enum": [
+      "profile",
+      "preference",
+      "project",
+      "other"
+     ]
+    }
+   },
+   "required": [
+    "fact"
+   ]
+  }
+ },
+ {
+  "name": "memory_recall",
+  "description": "Zwraca zapamiętane fakty pasujące do zapytania (bez zapytania — wszystkie). Np.: „co o mnie wiesz”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    }
+   }
+  }
+ },
+ {
+  "name": "memory_forget",
+  "description": "Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapomnij ze fact”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "fact": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "fact"
+   ]
+  }
+ },
+ {
+  "name": "files_list",
+  "description": "Lista plików w folderze roboczym Jarvisa (File System Access, Chrome/Edge). Np.: „pokaz moje pliki”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "files_read",
+  "description": "Zwraca treść pliku tekstowego z folderu roboczego. Np.: „przeczytaj plik name”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "files_write",
+  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapisz plik name: text”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string"
+    },
+    "append": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "name",
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "files_export_note",
+  "description": "Zapisuje notatkę jako plik .md w folderze roboczym. Np.: „eksportuj notatke note do pliku”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  }
+ }
+]

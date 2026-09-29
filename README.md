@@ -63,7 +63,28 @@ Jarvis rozmawia z Hermesem przez API zgodne z OpenAI (`/v1/chat/completions`, st
 3. Uruchom `hermes gateway` (serwer nasłuchuje na `http://localhost:8642`).
 4. W Jarvis OS wpisz ten sam klucz i kliknij **Połącz i testuj** — test sprawdza połączenie i wykrywa format narzędzi.
 
-Jarvis wysyła nagłówek `X-Hermes-Session-Key`, więc pamięć długoterminowa Hermesa jest przypisana do tej przeglądarki. Postęp narzędzi agenta (`hermes.tool.progress`) pojawia się w czacie i w karcie „Dane zewnętrzne”.
+Postęp narzędzi agenta (`hermes.tool.progress`) pojawia się w czacie i w karcie „Dane zewnętrzne”. (Nagłówek `X-Hermes-Session-Key` nie jest wysyłany: Hermes Agent 0.21 nie dopuszcza go w CORS, więc zapytanie z przeglądarki zostałoby zablokowane.)
+
+### Hermes Desktop — natywne narzędzia przez most MCP (zalecane, Windows bez WSL)
+
+Hermes Agent **ignoruje** pole `tools` z zapytania klienta, więc najpewniejsza droga to narzędzia MCP. Most `bridge/jarvis_bridge.py` wystawia Hermesowi **wszystkie polecenia z Command Registry** jako `mcp__jarvis_desktop__*` (te same schematy, walidacja, zgody Tak / Nie / Zawsze i Process Log co przy poleceniach lokalnych). Pętlę narzędzi prowadzi Hermes; wynik każdego narzędzia wraca do niego jako koperta `{ok, code, data, text}`.
+
+```
+Jarvis OS (przeglądarka) ──SSE /bridge/events──┐
+   ▲   wynik POST /bridge/result               │
+   │   schematy POST /bridge/tools     bridge/jarvis_bridge.py  (127.0.0.1:8651)
+   │                                    ▲ MCP streamable HTTP /mcp  (Bearer token)
+   └── chat ──► Hermes gateway (profil jarvis-desktop, :8643) ─┘
+```
+
+1. **Most:** `bridge\start-bridge.bat` (zostaw uruchomiony). Token jest w `%USERPROFILE%\.jarvis-os\bridge-token`; strona pobiera go sama (parowanie tylko dla dozwolonego Origin).
+2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, potem bez `-DryRun` (opcjonalnie `-LoginXai` dla Groka). Klonuje aktywny profil **bez kanałów**, ustawia MCP, lekki zestaw narzędzi (`memory`, `web`, `session_search`, `jarvis_desktop`; bez skilli, terminala i plików), `.env` i `SOUL.md`. Twój obecny gateway nie jest zmieniany.
+3. **Gateway:** `hermes\start-desktop-gateway.bat` (API na `:8643`).
+4. **Jarvis OS:** *Ustawienia → Hermes → „Hermes Desktop (profil jarvis-desktop + most MCP)”*, wpisz `API_SERVER_KEY` profilu — albo lokalnie w `config.local.js` (`hermesProvider: 'desktop'`, `hermesKey`). Tryb MCP włącza się sam, gdy profil zgłosi się do mostu (*Ustawienia → Most pulpitu dla Hermesa*).
+
+Lista narzędzi, którą Hermes widzi od startu, to migawka `bridge/tools.json`. Po zmianie `js/commands.js` odśwież ją: `node bridge/export-tools.js` (test jednostkowy pilnuje zgodności); otwarta karta i tak zgłasza mostowi aktualne schematy, a Hermes zobaczy zmianę po restarcie gatewaya. Test mostu (symulowana karta + prawdziwy klient MCP): `%USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe bridge\test_bridge.py`. Autostart mostu i gatewaya (opcjonalnie): `bridge\install-autostart.ps1`.
+
+> **Bezpieczeństwo mostu:** nasłuchuje tylko na `127.0.0.1`; `/mcp` wymaga tokenu Bearer, kanał przeglądarki — tokenu i dozwolonego Origin (CORS + Private Network Access); polecenia trafiają do widocznej / ostatnio aktywnej karty.
 
 ### Inne źródła modelu Hermes
 
@@ -130,7 +151,8 @@ js/registry.js        Command Registry: schematy, koercja, uprawnienia, dopasowa
 js/commands.js        wszystkie polecenia / narzędzia modelu
 js/context.js         Context Packet, sygnały, proaktywność, rutyny, przypomnienia, pamięć
 js/judge.js           sędzia Jev (OpenRouter): intencja, ryzyko, dwuznaczność, weryfikacja, pilność
-js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty, plan, pytania, budżety, streszczenia)
+js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty + tryb MCP, plan, pytania, budżety, streszczenia)
+js/bridge.js          klient mostu MCP: polecenia Hermesa (SSE) → Command Registry, publikacja schematów
 js/process.js         Process Log (kroki, plan, historia, replay)
 js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje
 js/widgets.js         widgety pulpitu
@@ -139,6 +161,8 @@ js/dash.js            wskaźnik trybu, pasek statusu, telemetria
 js/main.js            start, efekty, pulpit, dok, paleta, pytania/zgody, powiadomienia, onboarding, skróty
 sw.js                 service worker (offline)
 tests/                testy jednostkowe (Node) i dymne (Playwright)
+bridge/               most MCP (Python), migawka narzędzi tools.json, testy, atrapa gatewaya
+hermes/               profil jarvis-desktop: SOUL.md, apply_profile.py, install-profile.ps1, start-desktop-gateway.bat
 docs/ROADMAP.md       plan rozwoju i stan realizacji
 ```
 
