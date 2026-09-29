@@ -1,0 +1,112 @@
+/* =========================================================
+   JARVIS OS — Event Bus + maszyna stanów (Visual Engine, warstwa 1)
+
+   Zasada: animacja wynika WYŁĄCZNIE z rzeczywistych zdarzeń.
+   Hermes / lokalny silnik → J.ev.emit(typ, payload) → reducer → visual state → renderer.
+   Nie ma tu zdarzeń „na niby": planowanie, weryfikacja, pauza i zgoda
+   pojawią się dopiero, gdy backend faktycznie je udostępni.
+
+   Wystawiane dziś:  task.created · task.completed · task.failed · task.cancelled
+                     model.started · model.completed · model.failed
+                     tool.started · tool.completed · tool.failed
+   Stany (mode):     IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR
+   Zarezerwowane:    PAUSED · APPROVAL_REQUIRED · VERIFYING · RECOVERING
+   ========================================================= */
+'use strict';
+(() => {
+const MAX_EVENTS = 400;
+
+/* ---------- Event Bus ---------- */
+const subs = {};
+let seq = 0;
+const byTask = new Map();       // task_id -> [events]
+J.ev = {
+  emit(type, payload = {}, source = 'jarvis') {
+    const e = { event_id: 'evt_' + (++seq), task_id: payload.task_id || J.proc?.current?.id || engine.taskId || null, timestamp: Date.now(), type, source, payload };
+    if (e.task_id) { const l = byTask.get(e.task_id) || []; l.push(e); if (l.length > MAX_EVENTS) l.shift(); byTask.set(e.task_id, l); if (byTask.size > 30) byTask.delete(byTask.keys().next().value); }
+    reduce(e);
+    for (const k of [type, '*']) (subs[k] || []).forEach(fn => { try { fn(e); } catch (err) { console.error(err); } });
+    return e;
+  },
+  on(type, fn) { (subs[type] = subs[type] || []).push(fn); return () => { subs[type] = subs[type].filter(f => f !== fn); }; },
+  events: id => byTask.get(id) || [],
+  /* kategoria węzła dla narzędzia (klienckiego lub serwerowego Hermesa) */
+  nodeFor(tool) {
+    const t = String(tool || '').toLowerCase();
+    if (/weather|crypto|open_url|search|web|browser|fetch|http|url|scrape/.test(t)) return 'internet';
+    if (/note|notat/.test(t)) return 'notes';
+    if (/task|timer|datetime|schedule|calendar|cron/.test(t)) return 'calendar';
+    if (/file|read|write|patch|terminal|shell|exec|bash|code|edit/.test(t)) return 'files';
+    if (/memory|remember|recall/.test(t)) return 'memory';
+    if (/delegate|agent|spawn/.test(t)) return 'agent';
+    if (/calc/.test(t)) return 'calc';
+    if (/open_app|close_app|theme|wallpaper|shortcut|widget|focus|status/.test(t)) return 'desktop';
+    return 'tool';
+  }
+};
+const LABEL = { model: 'Model', internet: 'Internet', notes: 'Notatki', calendar: 'Harmonogram', files: 'Pliki', memory: 'Pamięć', agent: 'Agent', calc: 'Obliczenia', desktop: 'Pulpit', tool: 'Narzędzie' };
+
+/* ---------- Visual State (to czyta renderer) ---------- */
+const engine = J.engine = {
+  mode: 'IDLE', activity: .06, taskId: null, since: Date.now(),
+  nodes: {},            // id -> {id,label,status:'active'|'done'|'failed', active, calls, spawn, doneAt}
+  packets: [],          // {node, dir:'in'|'out', t0}
+  flash: { t: 0, kind: '' },   // puls zakończenia zadania
+  listening: false,
+  last: null,           // podsumowanie ostatniego zadania {task_id,title,tools,nodes,dur,status,result}
+  get state() { return this; },
+  /* kolor Core zależny od stanu (r,g,b) albo null = kolor motywu */
+  rgb() {
+    const now = Date.now();
+    if (this.mode === 'COMPLETED' && now - this.since < 2600) return '57,229,154';
+    if (this.mode === 'ERROR' && now - this.since < 3500) return '255,184,77';
+    if (this.mode === 'THINKING') return J.rgb(J.state.settings.accent2);
+    return null;
+  }
+};
+const setMode = m => { if (engine.mode !== m) { engine.mode = m; engine.since = Date.now(); } };
+const activeCount = () => Object.values(engine.nodes).filter(n => n.status === 'active' && n.id !== 'model').length;
+const recompute = () => {
+  if (!engine.taskId) return;
+  const tools = activeCount(), model = engine.nodes.model?.status === 'active';
+  if (tools) { setMode('EXECUTING'); engine.activity = Math.min(.95, .55 + .12 * tools); }
+  else if (model) { setMode('THINKING'); engine.activity = .4; }
+  else { setMode('THINKING'); engine.activity = .3; }   // między krokami zadania
+};
+const node = id => engine.nodes[id] || (engine.nodes[id] = { id, label: LABEL[id] || id, status: 'active', active: 0, calls: 0, spawn: Date.now(), doneAt: 0 });
+const packet = (id, dir) => { engine.packets.push({ node: id, dir, t0: Date.now() }); if (engine.packets.length > 60) engine.packets.shift(); };
+
+const reduce = e => {
+  const p = e.payload;
+  switch (e.type) {
+    case 'task.created':
+      engine.taskId = e.task_id; engine.nodes = {}; engine.packets = []; engine.startedAt = e.timestamp; engine.toolCalls = 0;
+      setMode('THINKING'); engine.activity = .35; break;
+    case 'model.started': { const n = node('model'); n.status = 'active'; n.active++; n.calls++; packet('model', 'out'); recompute(); break; }
+    case 'model.completed': case 'model.failed': { const n = node('model'); n.active = Math.max(0, n.active - 1); if (!n.active) { n.status = e.type === 'model.failed' ? 'failed' : 'done'; n.doneAt = e.timestamp; } packet('model', 'in'); recompute(); break; }
+    case 'tool.started': { const n = node(p.node || J.ev.nodeFor(p.tool)); n.status = 'active'; n.active++; n.calls++; n.lastTool = p.tool; engine.toolCalls++; packet(n.id, 'out'); recompute(); break; }
+    case 'tool.completed': case 'tool.failed': {
+      const n = node(p.node || J.ev.nodeFor(p.tool)); n.active = Math.max(0, n.active - 1);
+      if (e.type === 'tool.failed') n.failed = true;
+      if (!n.active) { n.status = n.failed ? 'failed' : 'done'; n.doneAt = e.timestamp; }
+      packet(n.id, 'in'); recompute(); break;
+    }
+    case 'task.completed': case 'task.failed': case 'task.cancelled': {
+      const ok = e.type === 'task.completed';
+      Object.values(engine.nodes).forEach(n => { if (n.status === 'active') { n.status = 'done'; n.doneAt = e.timestamp; n.active = 0; } });
+      engine.flash = { t: e.timestamp, kind: ok ? 'ok' : e.type === 'task.failed' ? 'err' : 'cancel' };
+      engine.last = { task_id: e.task_id, title: p.title || '', status: e.type.slice(5), tools: engine.toolCalls || 0, nodes: Object.keys(engine.nodes).filter(k => k !== 'model').length, dur: e.timestamp - (engine.startedAt || e.timestamp), result: p.result || '' };
+      setMode(ok ? 'COMPLETED' : e.type === 'task.failed' ? 'ERROR' : 'IDLE'); engine.activity = ok ? .2 : .3;
+      engine.taskId = null;
+      setTimeout(() => { if (engine.taskId === null && (engine.mode === 'COMPLETED' || engine.mode === 'ERROR')) setMode(engine.listening ? 'LISTENING' : 'IDLE'); }, 3600);
+      break;
+    }
+  }
+};
+
+/* mikrofon = LISTENING (tylko gdy nie trwa zadanie) */
+J.on('ear', on => { engine.listening = on; if (!engine.taskId) setMode(on ? 'LISTENING' : 'IDLE'); if (on && !engine.taskId) engine.activity = .2; });
+
+/* płynne opadanie aktywności w spoczynku */
+setInterval(() => { if (!engine.taskId && (engine.mode === 'IDLE')) engine.activity += (.06 - engine.activity) * .2; }, 250);
+})();

@@ -137,8 +137,10 @@ const exec = async (name, input) => {
 
 const run = async (name, input) => {
   const st = J.proc.step('tool', name, [['Argumenty', input == null ? '(brak)' : input]], { running: true });
+  J.ev.emit('tool.started', { tool: name, args: input });
   const r = await exec(name, input);
   if (r.ok) st.done([['Wynik', r.text]], String(r.text).slice(0, 80)); else st.fail(r.text);
+  J.ev.emit(r.ok ? 'tool.completed' : 'tool.failed', { tool: name, text: String(r.text).slice(0, 200) });
   return r;
 };
 
@@ -359,13 +361,22 @@ const hermes = async (text, bubble) => {
       const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
       let thought = null, firstTok = 0;
       let raw;
+      const serverTools = [];   // narzędzia Hermesa zgłoszone w tej turze (SSE hermes.tool.progress)
+      J.ev.emit('model.started', { model: c.model, turn: turn + 1 }, 'hermes');
       try {
         raw = await streamChat(msgs,
           acc => { if (!firstTok) firstTok = Date.now(); const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
-          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
+          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
           r => { if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
-      } catch (e) { thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message); throw e; }
+      } catch (e) {
+        thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message);
+        serverTools.forEach(t => J.ev.emit('tool.failed', { tool: t, source: 'hermes' }, 'hermes'));
+        J.ev.emit('model.failed', { model: c.model, error: e.message }, 'hermes'); throw e;
+      }
       thought?.done();
+      // Hermes raportuje start narzędzia; koniec = koniec strumienia tej tury
+      serverTools.forEach(t => J.ev.emit('tool.completed', { tool: t, source: 'hermes' }, 'hermes'));
+      J.ev.emit('model.completed', { model: c.model, chars: raw.length }, 'hermes');
       if (!thought) { const tm = /<think>([\s\S]*?)<\/think>/.exec(raw); if (tm && tm[1].trim()) J.proc.step('thought', 'Rozumowanie modelu', [['Myśli', tm[1].trim()]]); }
       ms.done([['Surowa odpowiedź', raw], ['Do pierwszego tokenu', firstTok ? fmtMs(firstTok - ms.step.ts) : '—']], raw.length + ' znaków');
       history.push({ role: 'assistant', content: raw });
@@ -419,6 +430,7 @@ J.brain = {
     const bubble = J.chat.add('jarvis', '');
     J.orb.set('thinking', 'analizuję: „' + text.slice(0, 60) + '”');
     J.proc.start(text);
+    J.ev.emit('task.created', { title: text });
     let reply, status = 'ok';
     try {
       if (J.aiReady()) {
@@ -446,7 +458,7 @@ J.brain = {
       J.proc.step('error', 'Błąd asystenta', [['Komunikat', e.message], ['Stos', e.stack]], { status: 'err', preview: e.message.slice(0, 70) });
       status = 'err'; reply = '⚠ ' + e.message;
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 3000);
-    } finally { busy = false; J.proc.end(status, reply); }
+    } finally { busy = false; J.ev.emit(status === 'ok' ? 'task.completed' : status === 'abort' ? 'task.cancelled' : 'task.failed', { title: text, result: reply }); J.proc.end(status, reply); }
   }
 };
 J.brain.local = local;

@@ -118,7 +118,7 @@ const statusText = { run: 'wykonuję…', ok: 'zakończono', err: 'błąd', abor
 const meta = () => {
   const t = viewing && (viewing === cur ? cur : viewing._live || viewing); if (!t) return;
   const dur = t.status === 'run' ? Date.now() - t.ts : t.dur;
-  $('#lpMeta').textContent = new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' · ' + fmtDur(dur || 0) + ' · ' + (t.steps.length) + ' kroków';
+  $('#lpMeta').textContent = new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' · ' + fmtDur(dur || 0) + ' · ' + t.steps.length + ' ' + J.pl(t.steps.length, 'krok', 'kroki', 'kroków');
 };
 const render = () => {
   $$('.lp-tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
@@ -153,7 +153,7 @@ const renderHist = () => {
   J.state.history.forEach(t => {
     const b = h('button', { class: 'hitem', 'data-s': t.status }, '<span class="hdot"></span><div><b></b><small></small></div>');
     b.querySelector('b').textContent = t.title;
-    b.querySelector('small').textContent = new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + fmtDur(t.dur || 0) + ' · ' + t.steps.length + ' kroków';
+    b.querySelector('small').textContent = new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + fmtDur(t.dur || 0) + ' · ' + t.steps.length + ' ' + J.pl(t.steps.length, 'krok', 'kroki', 'kroków');
     b.onclick = () => { viewing = t; tab = 'task'; render(); };
     box.appendChild(b);
   });

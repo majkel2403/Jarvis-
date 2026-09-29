@@ -85,7 +85,7 @@ const fx = (() => {
         c.fillStyle = `rgba(${rgb},.75)`; c.beginPath(); c.arc(a.x, a.y, a.r, 0, 7); c.fill();
       }
     }
-    orbDraw(now);
+    orbDraw(now); flowDraw(now);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -100,8 +100,11 @@ function orbDraw(t) {
   if (orbCv.width !== size * dpr) { orbCv.width = orbCv.height = size * dpr; oc.setTransform(dpr, 0, 0, dpr, 0, 0); }
   oc.clearRect(0, 0, size, size);
   const st = J.orb.state, wrap = $('#coreWrap');
-  const col = getComputedStyle(wrap).getPropertyValue('--accent-rgb').trim() || '33,217,255';
+  const eg = J.engine;
+  const col = eg.rgb() || getComputedStyle(wrap).getPropertyValue('--accent-rgb').trim() || '33,217,255';
   let target = st === 'speaking' ? .55 + Math.random() * .45 : st === 'listening' ? .25 : st === 'thinking' ? .35 : st === 'alert' ? .6 : .08;
+  if (st !== 'speaking' && st !== 'listening') target = Math.max(target, eg.activity * .8);
+  const breath = st === 'idle' && eg.mode === 'IDLE' ? .72 + .28 * Math.sin(t / 1600) : 1;   // powolny oddech: 72%→100% jasności
   const an = J.ear.analyser;
   if (st === 'listening' && an) { an.getByteFrequencyData(freq); target = Math.min(1, freq.slice(2, 40).reduce((a, b) => a + b, 0) / 38 / 110); }
   orbAmp += (target - orbAmp) * .12;
@@ -118,7 +121,7 @@ function orbDraw(t) {
       i ? oc.lineTo(x, y) : oc.moveTo(x, y);
     }
     oc.closePath();
-    oc.strokeStyle = `rgba(${col},${ring ? .25 : .55 + orbAmp * .4})`; oc.lineWidth = ring ? 1 : 1.6;
+    oc.strokeStyle = `rgba(${col},${(ring ? .25 : .55 + orbAmp * .4) * breath})`; oc.lineWidth = ring ? 1 : 1.6;
     oc.shadowColor = `rgba(${col},.9)`; oc.shadowBlur = 12; oc.stroke(); oc.shadowBlur = 0;
   }
   if (st === 'thinking') {
@@ -131,6 +134,71 @@ function orbDraw(t) {
   oc.save(); oc.translate(cx, cy); oc.rotate(t / 9000);
   for (let i = 0; i < 72; i++) { oc.rotate(Math.PI * 2 / 72); oc.fillStyle = `rgba(${col},${i % 6 ? .12 : .4})`; oc.fillRect(176, -.5, i % 6 ? 5 : 10, 1); }
   oc.restore();
+}
+
+/* =================== VISUAL ENGINE: węzły, przepływ danych, puls zakończenia =================== */
+const flowCv = $('#flowCanvas'), fc = flowCv.getContext('2d');
+const SLOT = { model: -90, internet: -40, files: 12, agent: 52, notes: 205, calendar: 160, desktop: -140, memory: 128, calc: 232, tool: 100 };
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+function flowDraw(now) {
+  const box = flowCv.parentElement.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  const W = Math.round(box.width), H = Math.round(box.height);
+  if (flowCv.width !== W * dpr || flowCv.height !== H * dpr) { flowCv.width = W * dpr; flowCv.height = H * dpr; }
+  fc.setTransform(dpr, 0, 0, dpr, 0, 0); fc.clearRect(0, 0, W, H);
+  const eg = J.engine, wall = Date.now(), cx = W / 2, cy = H / 2;
+  const acc = J.rgb(S.accent), col = eg.rgb() || acc;
+  const rx = Math.min(W * .3, 270), ry = Math.min(H * .34, 235);
+  // Core: puls zakończenia (biały → szmaragdowy / bursztynowy) — tylko po realnym task.*
+  const ft = wall - eg.flash.t;
+  if (eg.flash.t && ft < 1500) {
+    const k = ft / 1500, c = eg.flash.kind === 'ok' ? '57,229,154' : eg.flash.kind === 'err' ? '255,184,77' : '160,190,220';
+    fc.lineWidth = 2.2 * (1 - k) + .6; fc.strokeStyle = `rgba(${ft < 180 ? '255,255,255' : c},${(1 - k) * .9})`;
+    fc.beginPath(); fc.arc(cx, cy, 128 + easeOut(k) * 150, 0, 7); fc.stroke();
+  }
+  const list = Object.values(eg.nodes);
+  const pos = {};
+  list.forEach(n => {
+    const a = (SLOT[n.id] ?? 100) * Math.PI / 180;
+    pos[n.id] = { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry };
+  });
+  // usuwanie wygaszonych węzłów po zakończeniu zadania
+  for (const n of list) if (n.status !== 'active' && n.doneAt && wall - n.doneAt > (eg.taskId ? 60000 : 4200)) delete eg.nodes[n.id];
+  for (const n of list) {
+    const p = pos[n.id], sp = easeOut(Math.min(1, (wall - n.spawn) / 650));
+    let alpha = sp; if (n.status !== 'active' && !eg.taskId) alpha *= 1 - Math.max(0, Math.min(1, (wall - n.doneAt - 2600) / 1500));
+    if (alpha <= .01) continue;
+    const ncol = n.status === 'failed' ? '255,184,77' : n.status === 'done' ? '57,229,154' : (n.id === 'model' ? J.rgb(S.accent2) : acc);
+    const px = cx + (p.x - cx) * sp, py = cy + (p.y - cy) * sp;
+    // łącze Core → węzeł
+    fc.lineWidth = 1; fc.strokeStyle = `rgba(${ncol},${alpha * (n.status === 'active' ? .42 : .16)})`;
+    fc.beginPath(); fc.moveTo(cx, cy); fc.lineTo(px, py); fc.stroke();
+    // cząstki płyną tylko dopóki węzeł faktycznie pracuje
+    if (n.status === 'active') {
+      const cnt = 5;
+      for (let i = 0; i < cnt; i++) {
+        const u = ((now / 1100) + i / cnt + (n.id.length % 5) * .13) % 1;
+        fc.fillStyle = `rgba(${ncol},${alpha * (.35 + .5 * Math.sin(u * Math.PI))})`;
+        fc.beginPath(); fc.arc(cx + (px - cx) * (.18 + u * .78), cy + (py - cy) * (.18 + u * .78), 1.6, 0, 7); fc.fill();
+      }
+    }
+    // korpus węzła
+    const pulse = n.status === 'active' ? 1 + .18 * Math.sin(now / 240) : 1;
+    fc.shadowColor = `rgba(${ncol},.9)`; fc.shadowBlur = n.status === 'active' ? 16 : 7;
+    fc.fillStyle = `rgba(${ncol},${alpha})`; fc.beginPath(); fc.arc(px, py, 6 * pulse, 0, 7); fc.fill(); fc.shadowBlur = 0;
+    fc.strokeStyle = `rgba(${ncol},${alpha * .55})`; fc.lineWidth = 1; fc.beginPath(); fc.arc(px, py, 12 * pulse, 0, 7); fc.stroke();
+    fc.font = '600 10px Inter, system-ui, sans-serif'; fc.textAlign = 'center';
+    fc.fillStyle = `rgba(226,240,255,${alpha * .92})`; fc.fillText(n.label + (n.calls > 1 ? ' ×' + n.calls : ''), px, py + 27);
+    if (n.lastTool && n.id !== 'model') { fc.font = '9px JetBrains Mono, monospace'; fc.fillStyle = `rgba(150,175,200,${alpha * .8})`; fc.fillText(n.lastTool.slice(0, 22), px, py + 39); }
+  }
+  // pakiety danych: Core → węzeł (start) i węzeł → Core (wynik)
+  eg.packets = eg.packets.filter(k => wall - k.t0 < 900);
+  for (const k of eg.packets) {
+    const p = pos[k.node]; if (!p) continue;
+    const u = easeOut((wall - k.t0) / 900), f = k.dir === 'out' ? u : 1 - u;
+    const x = cx + (p.x - cx) * (.18 + f * .8), y = cy + (p.y - cy) * (.18 + f * .8);
+    fc.shadowColor = `rgba(${col},1)`; fc.shadowBlur = 12; fc.fillStyle = `rgba(255,255,255,${1 - u * .6})`;
+    fc.beginPath(); fc.arc(x, y, k.dir === 'in' ? 3.2 : 2.4, 0, 7); fc.fill(); fc.shadowBlur = 0;
+  }
 }
 
 /* =================== ZEGAR / POGODA / WĘZŁY =================== */
@@ -412,6 +480,27 @@ J.chatPanel = (() => {
   $('#edgeL').onclick = () => api.show(); $('#edgeR').onclick = () => J.proc.open();
   return api;
 })();
+
+/* =================== WYNIK ZADANIA (chip przy Core) + STOP =================== */
+{
+  const chip = $('#resultChip'), stop = $('#taskStop'); let chipT;
+  const pl = J.pl;
+  const fmtD = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+  stop.onclick = () => J.brain.abort();
+  J.ev.on('task.created', () => { stop.classList.remove('hidden'); chip.classList.remove('show'); clearTimeout(chipT); });
+  ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, () => {
+    stop.classList.add('hidden');
+    const l = J.engine.last; if (!l || (l.status === 'completed' && !l.tools)) return;   // zwykła odpowiedź czatu nie tworzy artefaktu
+    const ok = l.status === 'completed';
+    chip.dataset.s = l.status;
+    chip.innerHTML = `<b>${ok ? 'Zadanie zakończone' : l.status === 'failed' ? 'Zadanie nie powiodło się' : 'Zadanie przerwane'}</b><span>${l.tools} ${pl(l.tools, 'wywołanie', 'wywołania', 'wywołań')} narzędzi · ${l.nodes} ${pl(l.nodes, 'źródło', 'źródła', 'źródeł')} · ${fmtD(l.dur)}</span><div class="rc-act"></div>`;
+    const act = $('.rc-act', chip);
+    if (ok && l.result) { const b = h('button', { class: 'btn sm primary' }, icon('pin', 'width="12" height="12"') + ' Przypnij wynik'); b.onclick = () => { J.widgets.create('result', { title: l.title.slice(0, 40), content: l.result, meta: 'Zadanie · ' + fmtD(l.dur) }); chip.classList.remove('show'); }; act.appendChild(b); }
+    const lg = h('button', { class: 'btn sm ghost' }, 'Process Log'); lg.onclick = () => J.proc.open(); act.appendChild(lg);
+    setTimeout(() => chip.classList.add('show'), 700);   // wynik „wyłania się” po pulsie Core
+    clearTimeout(chipT); chipT = setTimeout(() => chip.classList.remove('show'), 12000);
+  }));
+}
 
 /* =================== START =================== */
 // kontenery z overflow:hidden potrafią się „przewinąć” przy fokusie — trzymamy je w miejscu
