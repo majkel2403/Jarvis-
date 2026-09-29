@@ -384,8 +384,9 @@ J.apps.market = {
 /* ---------- HARMONOGRAM ---------- */
 J.apps.schedule = {
   title: 'Harmonogram', icon: 'calendar', w: 420, h: 480,
-  mount(body, ctx) {
-    let day = J.today();
+  mount(body, ctx, arg) {
+    const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    let day = isDay(arg) ? arg : J.today();
     body.innerHTML = `<div class="day-strip" id="days"></div>
       <form class="row" id="tf" style="margin-bottom:12px"><input class="input" type="time" id="tt" style="width:100px"><input class="input" id="tx" placeholder="Nowe zadanie…" required><button class="btn primary">${icon('plus', 'width="13" height="13"')}</button></form>
       <div class="tasks" id="tl"></div>`;
@@ -419,12 +420,14 @@ J.apps.schedule = {
     sub(ctx, 'tasks', () => { renderDays(); render(); });
     const iv = setInterval(render, 30e3); ctx.onClose(() => clearInterval(iv));
     ctx.state = () => ({ day });
+    ctx.setDay = d => { if (isDay(d)) { day = d; renderDays(); render(); } };   // nawigacja: „pokaż piątek”
     // import kalendarza .ics (VEVENT → zadania)
     const imp = h('label', { class: 'btn sm ghost', style: 'cursor:pointer;margin-left:auto', title: 'Importuj wydarzenia z pliku .ics' }, icon('download', 'width="12" height="12"') + ' .ics<input type="file" accept=".ics,text/calendar" hidden>');
     $('#tf', body).appendChild(imp);
     $('input[type=file]', imp).onchange = async e => { const f = e.target.files[0]; if (!f) return; const n = J.ics.import(await f.text()); J.toast(n ? 'Zaimportowano ' + n + ' ' + J.pl(n, 'wydarzenie', 'wydarzenia', 'wydarzeń') : 'Brak wydarzeń w pliku'); };
     renderDays(); render();
   },
+  onArg(arg, ctx) { ctx?.setDay?.(arg); },
   state: ctx => ctx?.state?.() || null
 };
 
@@ -676,7 +679,8 @@ J.apps.timer = {
 /* ---------- USTAWIENIA ---------- */
 J.apps.settings = {
   title: 'Ustawienia', icon: 'settings', w: 460, h: 560,
-  mount(body, ctx) {
+  onArg(arg, ctx) { ctx?.goSection?.(arg); },
+  mount(body, ctx, arg) {
     const s = J.state.settings;
     const walls = [['photo', 'Miasto nocą', "url('assets/wallpaper.jpg')"], ['aurora', 'Aurora', 'linear-gradient(135deg,#1b1147,#0b3b5a)'], ['void', 'Pustka', 'radial-gradient(circle,#0a1a30,#01040a)']];
     body.innerHTML = `
@@ -725,7 +729,16 @@ J.apps.settings = {
         <input class="input" id="jvKey" type="password" placeholder="Klucz OpenRouter (sk-or-v1-…)" autocomplete="off">
         <div class="row"><select class="input" id="jvModel">${J.judge.MODELS.map(m => `<option value="${m}">${m}</option>`).join('')}</select><button class="btn primary" id="jvTest">Połącz i testuj</button></div>
         <div class="row" style="font-size:11px"><span style="flex:1">Wykonaj bez pytania od</span><input class="input" id="jvExec" type="number" min="0.5" max="1" step="0.05" style="width:80px"><span style="flex:1;text-align:right">Zapytaj od</span><input class="input" id="jvAsk" type="number" min="0.1" max="1" step="0.05" style="width:80px"></div>
-        <label class="toggle"><div>Tryb prywatny (zalecany)<small>Nie wysyłaj tytułów notatek, widgetów i profilu do sędziego. Wyłączenie poprawia trafność, ale te dane trafiają do firmy zewnętrznej</small></div><span class="switch"><input type="checkbox" id="jvPriv"><i></i></span></label>
+        <div class="row" style="font-size:11px"><span style="flex:1">Co wysyłać do Jeva (prywatność)</span><select class="input" id="jvPrivacy" style="width:210px"><option value="P0">P0 · tylko Twoje zdanie</option><option value="P1">P1 · + aplikacje, okna, dzisiejsze zadania</option><option value="P2">P2 · + tytuły notatek i profil</option></select></div>
+        <div class="row" style="font-size:11px"><span style="flex:1">Samodzielność Jeva</span><select class="input" id="jvAuto" style="width:210px"><option value="auto">odczyty i cofalne zapisy — sam</option><option value="reads">tylko odczyty — sam</option><option value="ask">zawsze pytaj „Chodzi o…?”</option></select></div>
+        <div class="row" style="font-size:11px"><span style="flex:1">Odczyty sam od</span><input class="input" id="jvA3" type="number" min="0.5" max="1" step="0.05" style="width:80px"><span style="flex:1;text-align:right">Zapisy z „Cofnij” od</span><input class="input" id="jvA2" type="number" min="0.5" max="1" step="0.01" style="width:80px"></div>
+        <div class="row" style="font-size:11px"><span style="flex:1">Budżet miesięczny (USD, 0 = bez limitu)</span><input class="input" id="jvBudget" type="number" min="0" max="100" step="0.5" style="width:80px"></div>
+        <div class="row" style="font-size:11px"><span style="flex:1">Lżejszy model dla zwykłej rozmowy<small class="dim" style="display:block;font-size:10px">puste = ten sam co mózg</small></span><input class="input" id="jvLite" placeholder="np. nousresearch/hermes-4-70b" style="width:210px"></div>
+        <label class="toggle"><div>Szybka ścieżka<small>Pewne odczyty i nawigację wykonuje parser bez czekania na Jeva</small></div><span class="switch"><input type="checkbox" id="jvFast"><i></i></span></label>
+        <label class="toggle"><div>Tryb cienia<small>Jev tylko liczy i zapisuje wynik do dziennika; niczego nie zmienia (do porównania z parserem)</small></div><span class="switch"><input type="checkbox" id="jvShadow"><i></i></span></label>
+        <label class="toggle"><div>Zapisuj treść zdań w dzienniku<small>Domyślnie tylko skrót zdania. Dziennik zostaje w tej przeglądarce</small></div><span class="switch"><input type="checkbox" id="jvLogText"><i></i></span></label>
+        <div class="row"><button class="btn sm ghost" id="jvExport">${icon('download', 'width="12" height="12"')} Dziennik decyzji</button><button class="btn sm ghost" id="jvResetAdapt" title="Wyzerowuj podniesione progi po odrzuceniach">Zresetuj uczenie się</button><button class="btn sm ghost danger" id="jvClearLog">Wyczyść dziennik</button></div>
+        <div class="dim" id="jvStats" style="font-size:10.5px;line-height:1.6"></div>
         <div class="dim" id="jvInfo" style="font-size:10.5px;line-height:1.5"></div>
       </div>
       <div class="label">Pamięć Jarvisa</div>
@@ -735,6 +748,11 @@ J.apps.settings = {
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
       <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.0 · skróty: <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>Esc</kbd> zamknij okno</div>`;
+    /* nawigacja po sekcjach (polecenie „otwórz ustawienia Jev”): etykiety dostają identyfikatory, okno przewija się do wybranej */
+    const SEC = [['openrouter', /^openrouter/], ['akcent', /^kolor akcentu/], ['tapeta', /^tapeta/], ['interfejs', /^interfejs/], ['glos', /^glos/], ['uzytkownik', /^uzytkownik/], ['hermes', /^hermes/], ['agent', /^agent i proaktywnosc/], ['jev', /^sedzia jev/], ['pamiec', /^pamiec/], ['pliki', /^folder roboczy/], ['dane', /^dane/]];
+    $$('.label', body).forEach(l => { const hit = SEC.find(([, re]) => re.test(J.norm(l.textContent))); if (hit) l.dataset.sec = hit[0]; });
+    const goSection = sec => { const l = $('[data-sec="' + sec + '"]', body); if (!l) return false; l.scrollIntoView({ block: 'start', behavior: 'smooth' }); l.classList.remove('hl'); void l.offsetWidth; l.classList.add('hl'); setTimeout(() => l.classList.remove('hl'), 2200); return true; };
+    ctx.goSection = goSection; if (arg) setTimeout(() => goSection(arg), 80);
     const sw = $('#sw', body);
     const drawSw = () => { sw.innerHTML = ''; Object.entries(J.THEMES).forEach(([n, [a, b]]) => { const e = h('button', { class: 'swatch' + (s.accent === a ? ' on' : ''), title: n, style: `background:linear-gradient(135deg,${a},${b});color:${a}` }); e.onclick = () => { s.accent = a; s.accent2 = b; J.applyTheme(); J.save(); J.emit('settings'); drawSw(); J.sfx.click(); }; sw.appendChild(e); }); };
     drawSw();
@@ -804,13 +822,26 @@ J.apps.settings = {
     };
     sub(ctx, 'judge', orHelp); sub(ctx, 'hermes', orHelp);
     /* Jev */
-    const jvOn = $('#jvOn', body), jvKey = $('#jvKey', body), jvModel = $('#jvModel', body), jvExec = $('#jvExec', body), jvAsk = $('#jvAsk', body), jvPriv = $('#jvPriv', body), jvInfo = $('#jvInfo', body);
-    const jvFill = () => { jvOn.checked = !!s.jevOn; jvKey.value = s.jevKey || ''; jvModel.value = s.jevModel || J.judge.MODELS[0]; jvExec.value = s.jevExecute ?? .85; jvAsk.value = s.jevAsk ?? .5; jvPriv.checked = !!s.jevPrivate; };
-    const jvHelp = () => { const st = J.judge.status; jvInfo.textContent = !s.jevKey ? 'Podaj klucz OpenRouter (openrouter.ai/keys) — model typesafe/jev-1.13. Bez klucza decyzje podejmuje rejestr i Hermes.' : (s.jevOn ? 'Aktywny' : 'Wyłączony') + ' · wywołania: ' + (J.state.stats.jevCalls || 0) + ' · koszt: $' + (J.state.stats.jevCost || 0).toFixed(5) + (st.state === 'up' ? ' · ostatnio ' + st.latency + ' ms' : st.state === 'down' ? ' · błąd: ' + st.lastError : ''); };
-    const jvSave = () => { s.jevOn = jvOn.checked; s.jevKey = jvKey.value.trim(); s.jevModel = jvModel.value; s.jevExecute = J.clamp(+jvExec.value || .85, .5, 1); s.jevAsk = J.clamp(+jvAsk.value || .5, .1, s.jevExecute); s.jevPrivate = jvPriv.checked; J.save(); J.emit('settings'); jvHelp(); };
+    const jvOn = $('#jvOn', body), jvKey = $('#jvKey', body), jvModel = $('#jvModel', body), jvExec = $('#jvExec', body), jvAsk = $('#jvAsk', body), jvInfo = $('#jvInfo', body), jvStats = $('#jvStats', body);
+    const jvPrivacy = $('#jvPrivacy', body), jvAuto = $('#jvAuto', body), jvA3 = $('#jvA3', body), jvA2 = $('#jvA2', body), jvBudget = $('#jvBudget', body), jvLite = $('#jvLite', body), jvFast = $('#jvFast', body), jvShadow = $('#jvShadow', body), jvLogText = $('#jvLogText', body);
+    const jvFill = () => { jvOn.checked = !!s.jevOn; jvKey.value = s.jevKey || ''; jvModel.value = s.jevModel || J.judge.MODELS[0]; jvExec.value = s.jevExecute ?? .85; jvAsk.value = s.jevAsk ?? .5; jvPrivacy.value = s.jevPrivacy || 'P1'; jvAuto.value = s.jevAutonomy || 'auto'; jvA3.value = s.jevA3 ?? .8; jvA2.value = s.jevA2 ?? .92; jvBudget.value = s.jevBudget ?? 5; jvLite.value = s.hermesModelLite || ''; jvFast.checked = s.jevFast !== false; jvShadow.checked = !!s.jevShadow; jvLogText.checked = !!s.jevLogText; };
+    const jvHelp = () => {
+      const st = J.judge.status, bg = J.judge.budget, m = { limit: bg.limit(), cost: bg.used() };
+      jvInfo.textContent = !s.jevKey ? 'Podaj klucz OpenRouter (openrouter.ai/keys) — model typesafe/jev-1.13. Bez klucza decyzje podejmuje rejestr i Hermes.' : (s.jevOn ? 'Aktywny' : 'Wyłączony') + (s.jevShadow ? ' (tryb cienia)' : '') + ' · wywołania: ' + (J.state.stats.jevCalls || 0) + ' · koszt łącznie: $' + (J.state.stats.jevCost || 0).toFixed(5) + (m.limit ? ' · ten miesiąc: $' + (+m.cost || 0).toFixed(4) + ' z $' + m.limit : '') + (st.state === 'up' ? ' · ostatnio ' + st.latency + ' ms' : st.state === 'down' ? ' · błąd: ' + st.lastError : '');
+      const x = J.judge.log.stats(), ad = J.policy.adaptInfo();
+      jvStats.textContent = x.decisions ? 'Ostatnie 30 dni: ' + x.decisions + ' decyzji · sam wykonał ' + x.executed + ' · pytał ' + (x.askedYes + x.askedNo) + ' (tak ' + x.askedYes + ') · cofnięte ' + x.undone + ' · szybka ścieżka ' + x.fast + ' · do Hermesa ' + x.hermes + ' · średnio ' + x.avgMs + ' ms · odrzucone ' + Math.round(x.rejectRate * 100) + '%' + (ad.length ? '\nPodniesione progi: ' + ad.map(a => a.id + ' +' + a.bump).join(', ') : '') : 'Dziennik decyzji jest pusty — statystyki pojawią się po pierwszych poleceniach.';
+    };
+    const jvSave = () => {
+      s.jevOn = jvOn.checked; s.jevKey = jvKey.value.trim(); s.jevModel = jvModel.value; s.jevExecute = J.clamp(+jvExec.value || .85, .5, 1); s.jevAsk = J.clamp(+jvAsk.value || .5, .1, s.jevExecute);
+      s.jevPrivacy = jvPrivacy.value; s.jevAutonomy = jvAuto.value; s.jevA3 = J.clamp(+jvA3.value || .8, .5, 1); s.jevA2 = J.clamp(+jvA2.value || .92, .5, 1); s.jevBudget = J.clamp(+jvBudget.value || 0, 0, 100);
+      s.hermesModelLite = jvLite.value.trim(); s.jevFast = jvFast.checked; s.jevShadow = jvShadow.checked; s.jevLogText = jvLogText.checked; J.save(); J.emit('settings'); jvHelp();
+    };
     jvFill(); jvHelp();
-    [jvOn, jvKey, jvModel, jvExec, jvAsk, jvPriv].forEach(el => el.onchange = jvSave);
+    [jvOn, jvKey, jvModel, jvExec, jvAsk, jvPrivacy, jvAuto, jvA3, jvA2, jvBudget, jvLite, jvFast, jvShadow, jvLogText].forEach(el => el.onchange = jvSave);
     $('#jvTest', body).onclick = async () => { jvSave(); jvInfo.textContent = 'Łączę z OpenRouter…'; try { jvInfo.textContent = '✓ ' + await J.judge.test(); jvOn.checked = true; jvSave(); J.sfx.notify(); } catch (e) { jvInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
+    $('#jvExport', body).onclick = () => { const a = h('a', { href: URL.createObjectURL(new Blob([J.judge.log.export()], { type: 'application/json' })), download: 'jev-dziennik-' + J.today() + '.json' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
+    $('#jvResetAdapt', body).onclick = () => { J.policy.resetAdapt(); jvHelp(); J.toast('Progi Jeva wróciły do ustawień.'); };
+    $('#jvClearLog', body).onclick = () => { J.judge.log.clear(); jvHelp(); };
     sub(ctx, 'judge', jvHelp);
     /* pamięć */
     const drawMem = async () => { const l = await J.memory.all(); const box = $('#memList', body); box.innerHTML = l.length ? '' : '<div class="dim" style="font-size:11px">Brak zapamiętanych faktów.</div>'; l.slice().reverse().forEach(f => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><span class="dim" style="font-size:9.5px"></span><button class="btn sm ghost danger" title="Zapomnij">×</button>'); r.children[0].textContent = f.fact; r.children[1].textContent = f.scope; r.children[2].onclick = async () => { await J.memory.forget(f.id); drawMem(); }; box.appendChild(r); }); };

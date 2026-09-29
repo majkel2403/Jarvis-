@@ -13,7 +13,7 @@ Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, s
 | **Core** | żywa kula z orbitami, wiązką i odbiciem w jeziorze; pierścienie HUD reagujące na stan (czuwam / słucham / analizuję / działam / czekam na zgodę / pauza / błąd); wokół Core **10 kart** zasilanych wyłącznie zdarzeniami Event Busa |
 | **Dashboard agenta** | pasek górny: segmentowy wskaźnik trybu wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS, zegar; **Telemetria** (zwijana, `Alt+3`): pogoda, zegar, wykres aktywności agenta, FPS, pamięć, sieć, bateria, zadania, akcje, czas pracy, okna |
 | **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **58 narzędzi** z Command Registry; wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
-| **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, środek = pytanie „Chodzi o…?”, reszta = Hermes z podpowiedzią `<judge>`. Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, tryb prywatny, progi pewności; bez klucza wszystko działa jak dotąd |
+| **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, środek = pytanie „Chodzi o…?”, reszta = Hermes z podpowiedzią `<judge>`. Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, poziomy prywatności, autonomia z przyciskiem „Cofnij”, budżet, tryb cienia; bez klucza wszystko działa jak dotąd |
 | **Command Registry** | jedno źródło prawdy: każde polecenie ma schemat, poziom ryzyka, przykłady PL i z tego samego wpisu powstają narzędzie dla modelu, wzorce silnika lokalnego, pozycja palety `Ctrl+K` i opis „co potrafisz” |
 | **Silnik lokalny** | działa bez modelu: dopasowanie do przykładów z rejestru z rozumieniem czasu („za 20 minut”, „w piątek o 9”, „o osiemnastej trzydzieści”), łańcuchy („otwórz notatnik i ustaw minutnik 5 minut”), procenty, jednostki |
 | **Narzędzia** | notatki (lista/odczyt/szukaj/dopisz/zmień/usuń), zadania (lista/dodaj/odhacz/przełóż/odłóż/usuń), okna (lista/aktywuj/minimalizuj/przyciągnij/kafelkuj/układy), widgety (lista/zmień/usuń), minutnik (start/stop/przedłuż/status), pogoda, kursy krypto i **alerty kursów**, kalkulator, strony WWW, schowek, ustawienia, terminal, pamięć, pliki, wskazywanie elementów, pytania do użytkownika |
@@ -89,12 +89,25 @@ W **Ustawienia → OpenRouter** (także w onboardingu) wklej klucz z [openrouter
 
 ### Jev (OpenRouter)
 
-1. Klucz z [openrouter.ai/keys](https://openrouter.ai/keys) wklej w **Ustawienia → Sędzia Jev**, kliknij **Połącz i testuj** (prawdziwe wywołanie z polskim zdaniem, pokazuje latencję i koszt).
-2. Sonda z terminala mierzy trafność intencji na 80 polskich wypowiedziach i sprawdza, czy próg „wykonaj bez pytania” jest bezpieczny:
+Jev to szybki „sędzia”: przy każdym zdaniu w ~200 ms decyduje, co zrobić. Pełny opis i decyzje: [docs/JEV-PLAN.md](docs/JEV-PLAN.md).
+
+1. Klucz z [openrouter.ai/keys](https://openrouter.ai/keys) wklej w **Ustawienia → Sędzia Jev**, kliknij **Połącz i testuj**.
+2. **Jak działa (zasady w skrócie):**
+   - Odczyty i nawigacja (otwórz, pokaż, wróć) — pewne zdania wykonuje parser od razu; niepewne rozstrzyga Jev.
+   - Zapisy, które da się cofnąć (dodaj zadanie, notatka, minutnik…) — Jev wykonuje sam od pewności 0,92 i pokazuje przycisk **Cofnij** (8 s; „cofnij” działa też głosem i z klawiatury).
+   - Niepewne — pytanie „Chodzi o…?”. Nieodwracalne (usuwanie, terminal, schowek) — zawsze zgoda, jeśli polecenie pochodzi od modelu lub głosu.
+   - Jev sprawdza też, czy to, co robi Hermes, jest zgodne z Twoją prośbą (strażnik), czy treść z notatek nie zawiera podszytych instrukcji, czy fakt do zapamiętania nie jest poufny i jak rozumieć odpowiedź „no dobra”.
+3. **Ustawienia:** poziom prywatności (P0 tylko zdanie · P1 + okna i dzisiejsze zadania · P2 + tytuły i profil), samodzielność (odczyty i zapisy / tylko odczyty / zawsze pytaj), progi, budżet miesięczny (domyślnie 5 USD), tryb cienia (Jev tylko liczy i zapisuje), dziennik decyzji (eksport, lokalnie), reset uczenia się (dwa odrzucenia w dobie podnoszą próg polecenia o 0,05), lżejszy model do zwykłej rozmowy.
+4. **Awarie:** trzy błędy z rzędu wstrzymują Jeva (bezpiecznik), polecenia działają dalej przez parser i Hermesa. Zły klucz — długa pauza z powodem.
+5. **Pomiar (do zrobienia z kluczem):** sonda mierzy trafność na 447 zdaniach, krzywą zaufania i koszt, i pisze raport do `tests/reports/`:
    ```bash
-   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js
+   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js            # pomiar
+   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js --e1       # dwa etapy zamiast płaskiego wyboru
+   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js --e3       # bez kontekstu pulpitu
+   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js --contract # czy format odpowiedzi się nie zmienił
    ```
-3. Endpoint: `POST https://openrouter.ai/api/v1/systemone`, model `typesafe/jev-1.13`; pytania typu `choice` / `noul` / `score`, stan = zwięzły obraz pulpitu (bez treści notatek). Koszt: tokeny wyjściowe darmowe, wejściowe ok. 0,04 $ za milion.
+   To samo robi workflow **Jev — test kontraktowy i sonda** (nocny test kontraktowy, ręcznie pełna sonda) — wymaga sekretu `OPENROUTER_API_KEY` w repozytorium. Progi w Ustawieniach są na razie ostrożnymi hipotezami, dopóki sonda nie zostanie uruchomiona z prawdziwym kluczem.
+6. Endpoint: `POST https://openrouter.ai/api/v1/systemone`, model `typesafe/jev-1.13`; pytania `choice` / `noul` / `score`. Koszt: tokeny wyjściowe darmowe, wejściowe ok. 0,04 $ za milion (jedna decyzja ≈ 0,0001 $).
 
 ## Skróty klawiszowe
 
@@ -129,7 +142,10 @@ js/store.js           IndexedDB (historia, pamięć, sygnały, uchwyty plików)
 js/registry.js        Command Registry: schematy, koercja, uprawnienia, dopasowanie PL, NLP czasu
 js/commands.js        wszystkie polecenia / narzędzia modelu
 js/context.js         Context Packet, sygnały, proaktywność, rutyny, przypomnienia, pamięć
-js/judge.js           sędzia Jev (OpenRouter): intencja, ryzyko, dwuznaczność, weryfikacja, pilność
+js/judge.js           sędzia Jev (OpenRouter): pytania, prywatność P0–P2, bezpiecznik, budżet, dziennik
+js/jev-policy.js      czysta logika Jeva: poziomy autonomii, tabela routingu R1–R14, progi adaptacyjne, heurystyki
+js/jev-flow.js        ścieżka polecenia: parser → Jev → dopytanie → wykonanie (wartości z listy, brakujące argumenty)
+js/undo.js            stos „Cofnij” i historia nawigacji („wróć”)
 js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty, plan, pytania, budżety, streszczenia)
 js/process.js         Process Log (kroki, plan, historia, replay)
 js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje
@@ -146,6 +162,6 @@ docs/ROADMAP.md       plan rozwoju i stan realizacji
 
 - **Klucze API** zostają tylko w tej przeglądarce (`localStorage`). Model nigdy ich nie dostaje (narzędzie ustawień je pomija), a eksport kopii zapasowej je usuwa.
 - **Klucz w adresie:** używaj `index.html#jevKey=sk-or-…&jevOn=1` (po znaku `#`). Ta część adresu nie jest wysyłana do serwera strony. Wariant z `?` nadal działa, ale adres z `?` trafia do serwera hostingu, więc program ostrzeże, że warto wygenerować nowy klucz. Najbezpieczniejszy jest lokalny plik `config.local.js`.
-- **Sędzia Jev** działa domyślnie w trybie prywatnym: nie dostaje tytułów notatek, widgetów ani profilu. Nadal widzi zadania z dnia i to, co powiesz. Tryb wyłączysz w Ustawieniach.
+- **Sędzia Jev** działa domyślnie na poziomie prywatności P1: nie dostaje tytułów notatek, widgetów ani profilu (to dopiero P2), widzi zdanie, aktywną aplikację, otwarte okna i dzisiejsze zadania. Poziom zmienisz w Ustawieniach.
 - **Ryzykowne działania** (usuwanie, zamykanie wszystkich okien, obce adresy, schowek) wymagają zgody, gdy prosi o nie model albo gdy wydajesz polecenie **głosem**. Wpisane ręcznie polecenie jest wykonywane od razu.
 - **Zapis danych:** gdy przeglądarka odmówi zapisu (brak miejsca, tryb prywatny), Jarvis ostrzega jednorazowo zamiast milczeć.
