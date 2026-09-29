@@ -1163,6 +1163,16 @@ J.apps.settings = {
         <div class="row" style="font-size:11.5px"><span style="flex:1">Koszt odpowiedzi<small class="dim" style="display:block;font-size:10px">tani = lżejszy model zawsze · zrównoważony = lżejszy tylko do rozmowy · najlepszy = zawsze główny</small></span><select class="input" id="hPreset" style="width:150px"><option value="cheap">tani</option><option value="balanced">zrównoważony</option><option value="max">najlepszy</option></select></div>
         <div class="row" style="font-size:11.5px"><span style="flex:1">Dzienny limit (USD, OpenRouter; 0 = bez)<small class="dim" id="hDayUsed" style="display:block;font-size:10px"></small></span><input class="input" id="hDaily" type="number" min="0" max="50" step="0.1" style="width:80px"></div>
       </div>
+      <div class="label">Most pulpitu dla Hermesa (MCP)</div>
+      <div class="card col">
+        <label class="toggle" style="padding-top:0"><div>Most włączony<small>Hermes steruje pulpitem natywnymi narzędziami MCP z Command Registry (bez parsowania tekstu)</small></div><span class="switch"><input type="checkbox" id="bOn"><i></i></span></label>
+        <input class="input" id="bUrl" placeholder="Adres mostu, np. http://127.0.0.1:8651" spellcheck="false">
+        <input class="input" id="bTok" type="password" placeholder="Token mostu (pobierany automatycznie po uruchomieniu mostu)" autocomplete="off">
+        <select class="input" id="hMode"><option value="auto">Tryb Hermesa: automatyczny (MCP, gdy profil używa mostu)</option><option value="mcp">Zawsze MCP (natywne narzędzia)</option><option value="prompt">Zawsze prompt (narzędzia w treści zapytania)</option></select>
+        <div class="row"><button class="btn primary" id="bConn">Połącz / odśwież</button></div>
+        <div class="dim" id="bInfo" style="font-size:10.5px;line-height:1.5"></div>
+        <div class="muted" style="font-size:10.5px;line-height:1.55">Most: <code>bridge\\start-bridge.bat</code>. Profil Hermesa <code>jarvis-desktop</code>: <code>hermes\\install-profile.ps1</code>, gateway: <code>hermes\\start-desktop-gateway.bat</code> (opis w README).</div>
+      </div>
       <div class="label">Agent i proaktywność</div>
       <div class="card col">
         <label class="toggle" style="padding-top:0"><div>Czuwanie ze słowem „Jarvis”<small>Nasłuch ciągły: powiedz „Jarvis, …” (Chrome / Edge)</small></div><span class="switch"><input type="checkbox" id="aWake"><i></i></span></label>
@@ -1286,7 +1296,9 @@ J.apps.settings = {
     const fillH = () => { hOn.checked = !!s.hermesOn; hProv.value = s.hermesProvider; hUrl.value = s.hermesUrl; hModel.value = s.hermesModel; hKey.value = s.hermesKey; };
     const help = () => {
       hInfo.textContent = s.hermesOn ? 'Aktywne: ' + s.hermesModel + ' @ ' + s.hermesUrl + (s.hermesKey ? ' · klucz zapisany' : ' · bez klucza') : 'Wyłączone — działa lokalny silnik poleceń.';
-      hHelp.innerHTML = s.hermesProvider === 'agent'
+      hHelp.innerHTML = s.hermesProvider === 'desktop'
+        ? 'Lekki profil Hermesa <code>jarvis-desktop</code> (bez skilli, terminala i plików) z narzędziami pulpitu przez most MCP. Instalacja: <code>hermes\\install-profile.ps1</code>, potem <code>hermes\\start-desktop-gateway.bat</code>. Wpisz klucz <code>API_SERVER_KEY</code> tego profilu.'
+        : s.hermesProvider === 'agent'
         ? `Uruchom Hermes Agent z włączonym serwerem API. W <code>~/.hermes/.env</code>:<br><code>API_SERVER_ENABLED=true</code><br><code>API_SERVER_KEY=twój-klucz</code><br><code>API_SERVER_CORS_ORIGINS=${esc(location.origin)}</code><br>potem <code>hermes gateway</code> i wpisz ten sam klucz powyżej.`
         : s.hermesProvider === 'portal' ? 'Klucz API z <b>portal.nousresearch.com</b>. Modele Hermes: Hermes-4-405B, Hermes-4-70B.'
         : 'Dowolny serwer zgodny z OpenAI z modelem Hermes, np. Ollama: <code>ollama pull hermes3</code>, uruchom z <code>OLLAMA_ORIGINS=' + esc(location.origin) + '</code>.';
@@ -1298,6 +1310,18 @@ J.apps.settings = {
     $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
+    const bOn = $('#bOn', body), bUrl = $('#bUrl', body), bTok = $('#bTok', body), hMode = $('#hMode', body), bInfo = $('#bInfo', body);
+    bOn.checked = !!s.bridgeOn; bUrl.value = s.bridgeUrl || ''; bTok.value = s.bridgeToken || ''; hMode.value = s.hermesMode || 'auto';
+    const drawB = () => {
+      const b = J.bridge, names = Object.keys(b.hermes || {});
+      bInfo.textContent = !s.bridgeOn ? 'Most wyłączony — Hermes dostaje narzędzia w treści zapytania (tryb prompt).'
+        : b.status === 'up' ? '✓ Most połączony · ' + b.tools.length + ' narzędzi MCP · ' + (names.length ? 'Hermes używa mostu (profile: ' + names.join(', ') + ')' + (J.brain.mcp ? ' — tryb MCP aktywny dla „' + s.hermesModel + '”' : ' — ale wybrany model „' + s.hermesModel + '” nie korzysta z mostu') : 'Hermes jeszcze się nie zgłosił (uruchom gateway profilu jarvis-desktop)')
+        : b.status === 'connecting' ? 'Łączę z mostem…' : '✗ Most niedostępny — uruchom bridge\\start-bridge.bat (połączenie wznawia się samo).';
+    };
+    drawB(); sub(ctx, 'bridge', drawB);
+    const saveB = () => { s.bridgeOn = bOn.checked; s.bridgeUrl = bUrl.value.trim(); s.bridgeToken = bTok.value.trim(); s.hermesMode = hMode.value; J.save(); J.emit('settings'); drawB(); };
+    bOn.onchange = bUrl.onchange = bTok.onchange = hMode.onchange = saveB;
+    $('#bConn', body).onclick = () => { saveB(); J.bridge.connect(); J.bridge.refresh(); };
     $('#exp', body).onclick = async () => { const data = await J.backup.export(); const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: 'jarvis-os-kopia-' + J.today() + '.json' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); J.toast('Kopia zapisana (bez kluczy API)'); };
     $('#imp', body).onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const d = JSON.parse(await f.text()); const pv = J.backup.preview(d); const mode = await J.ask('Plik zawiera: ' + pv.text + '. Co zrobić?', [{ label: 'Scal z moimi danymi', value: 'merge', primary: true }, { label: 'Zastąp wszystko', value: 'replace', danger: true }, { label: 'Anuluj', value: 'no' }], { speak: false }); if (mode !== 'merge' && mode !== 'replace') return; await J.backup.import(d, mode); J.toast('Zaimportowano — przeładowuję…'); setTimeout(() => location.reload(), 900); } catch (err) { J.toast('Nie udało się zaimportować: ' + err.message); } };
     $('#rst', body).onclick = async () => { const v = await J.ask('Co wyczyścić?', [{ label: 'Tylko rozmowy', value: 'chat' }, { label: 'Tylko dziennik Jeva', value: 'jevlog' }, { label: 'Pozycje okien', value: 'windows' }, { label: 'Wszystko', value: 'all', danger: true }, { label: 'Anuluj', value: 'no' }], { speak: false }); if (!v || v === 'no') return; if (v === 'all') { const ok2 = await J.ask('Na pewno usunąć WSZYSTKIE dane Jarvis OS (notatki, zadania, ustawienia, rozmowy)? Tego nie da się cofnąć — zrób wcześniej eksport.', [{ label: 'Usuń wszystko', value: 'yes', danger: true }, { label: 'Anuluj', value: 'no', primary: true }], { speak: false }); if (ok2 === 'yes') J.store.clear().finally(() => J.resetAll()); return; } J.toast(await J.backup.clear(v)); drawSto(); };
