@@ -22,7 +22,7 @@ test('patchEnv: gwiazdka lub już obecny origin = brak zmian', () => {
   assert.deepEqual(patchEnv('API_SERVER_ENABLED=1\nAPI_SERVER_CORS_ORIGINS=*\n', 'http://localhost:4000').changes, []);
 });
 test('diagnose: wykrywa brak CORS, zły klucz i poprawną konfigurację (atrapa gateway)', async () => {
-  const jarvis = await new Promise(res => { const s = require('http').createServer((q, r) => { r.end('ok'); }); s.listen(0, '127.0.0.1', () => res(s)); });
+  const jarvis = await new Promise(res => { const s = require('http').createServer((q, r) => { r.end(q.url === '/js/ai.js' ? '// hermes-doctor' : 'ok'); }); s.listen(0, '127.0.0.1', () => res(s)); });
   const J = 'http://127.0.0.1:' + jarvis.address().port;
   const gw = await mock.start({ port: 0, key: 'k', cors: [] });
   try {
@@ -35,5 +35,5 @@ test('diagnose: wykrywa brak CORS, zły klucz i poprawną konfigurację (atrapa 
     r = await diagnose({ jarvis: J, url: gw2.url, key: 'k' });
     assert.equal(r.ok, true, JSON.stringify(r.checks.filter(c => !c.ok)));
     await gw2.close();
-  } finally { await gw.close(); jarvis.close(); }
+  } finally { await gw.close(); jarvis.closeAllConnections?.(); jarvis.close(); }
 });

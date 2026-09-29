@@ -1,6 +1,7 @@
 /* Diagnostyka połączenia Jarvis OS ↔ lokalny Hermes Agent (Node ≥ 18, Windows / macOS / Linux).
    Sprawdza dokładnie to, co robi przeglądarka: czy gateway odpowiada, czy zna klucz i — najczęstsza przyczyna — czy
    przepuszcza origin Jarvisa (CORS). Z --fix dopisuje brakujące ustawienia do pliku .env Hermesa (z kopią .env.bak).
+   Klucz API_SERVER_KEY jest czytany automatycznie z .env (--key nadpisuje).
    Użycie: node tools/hermes-doctor.js [--jarvis http://localhost:4000] [--url http://localhost:8642/v1] [--key KLUCZ] [--fix] [--env ŚCIEŻKA] */
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path');
@@ -35,6 +36,11 @@ async function diagnose({ jarvis = 'http://localhost:4000', url = 'http://localh
 
   const j = await probe(origin + '/');
   add('Serwer Jarvisa ' + origin, j.ok && j.status === 200, j.ok ? 'HTTP ' + j.status : 'brak odpowiedzi (' + j.error + ')', j.ok ? '' : 'Uruchom: node tools/serve.js   (albo start-jarvis.bat)');
+
+  if (j.ok && j.status === 200) {   // czy pod tym adresem działa wersja z diagnostyką (starsza pokazuje ogólny błąd bez wskazania CORS)
+    const a = await probe(origin + '/js/ai.js'); const src = a.ok && a.status === 200 ? await a.res.text().catch(() => '') : '';
+    if (src) add('Wersja Jarvisa', /hermes-doctor/.test(src), /hermes-doctor/.test(src) ? 'aktualna (z diagnostyką połączenia)' : 'STARA — serwer na ' + origin + ' serwuje przestarzałe pliki', 'W folderze Jarvisa: git fetch origin && git checkout claude/serene-johnson-ukl2ft && git pull, potem uruchom ponownie node tools/serve.js i odśwież stronę (Ctrl+F5). Sprawdź też, czy serwer na porcie nie startuje z innego folderu.');
+  }
 
   /* 1. czy gateway w ogóle słucha — i pod którym wariantem „localhost” */
   const hosts = [...new Set([gw.hostname, ...(gw.hostname === 'localhost' ? ['127.0.0.1', '[::1]'] : [])])];
@@ -82,8 +88,10 @@ module.exports = { diagnose, parseEnv, patchEnv, applyFix, probe };
 
 if (require.main === module) (async () => {
   const a = process.argv.slice(2), get = (f, d) => { const i = a.indexOf(f); return i >= 0 ? a[i + 1] : d; };
-  const opts = { jarvis: get('--jarvis', 'http://localhost:4000'), url: get('--url', 'http://localhost:8642/v1'), key: get('--key', process.env.API_SERVER_KEY || '') };
-  console.log('Jarvis OS ↔ Hermes — diagnostyka\n  Jarvis: ' + opts.jarvis + '\n  Hermes: ' + opts.url + '\n');
+  const envFile = get('--env') || envCandidates().find(p => fs.existsSync(p));
+  let envKey = ''; try { envKey = envFile ? parseEnv(fs.readFileSync(envFile, 'utf8')).API_SERVER_KEY || '' : ''; } catch (e) { }
+  const opts = { jarvis: get('--jarvis', 'http://localhost:4000'), url: get('--url', 'http://localhost:8642/v1'), key: get('--key', process.env.API_SERVER_KEY || envKey) };
+  console.log('Jarvis OS ↔ Hermes — diagnostyka\n  Jarvis: ' + opts.jarvis + '\n  Hermes: ' + opts.url + '\n  .env:   ' + (envFile || 'nie znaleziono (' + envCandidates().pop() + ')') + '\n  Klucz:  ' + (opts.key ? 'znaleziony (' + opts.key.length + ' znaków) — wpisz go też w Ustawieniach Jarvisa' : 'brak (gateway bez klucza)') + '\n');
   let r = await diagnose(opts);
   const show = r => r.checks.forEach(c => console.log((c.ok ? ' ✔ ' : ' ✘ ') + c.name + ' — ' + c.detail + (c.ok || !c.fix ? '' : '\n     → ' + c.fix)));
   show(r);

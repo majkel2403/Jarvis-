@@ -68,8 +68,8 @@ Jarvis wysyła nagłówek `X-Hermes-Session-Key`, więc pamięć długoterminowa
 ### Diagnostyka i naprawa połączenia (Windows / macOS / Linux)
 
 ```bash
-node tools/hermes-doctor.js --key TWÓJ_KLUCZ            # sprawdza serwer Jarvisa, gateway, klucz, CORS i czat
-node tools/hermes-doctor.js --key TWÓJ_KLUCZ --fix      # dopisuje brakujące API_SERVER_* do ~/.hermes/.env (kopia .env.bak)
+node tools/hermes-doctor.js                             # klucz czyta sam z .env (albo --key);  sprawdza serwer Jarvisa, gateway, klucz, CORS i czat
+node tools/hermes-doctor.js --fix                       # dopisuje brakujące API_SERVER_* do ~/.hermes/.env (kopia .env.bak)
 ```
 
 Opcje: `--jarvis http://localhost:4000` (origin Jarvisa), `--url http://localhost:8642/v1` (gateway), `--env ŚCIEŻKA` (inny plik `.env`). Po `--fix` zrestartuj `hermes gateway`.
