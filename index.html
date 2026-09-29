@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jarvis OS</title>
+<meta name="description" content="Jarvis OS — wirtualne środowisko AI w przeglądarce: asystent głosowy, okna, notatki, rynek, pogoda, terminal.">
+<meta name="theme-color" content="#050d1a">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/jarvis.css">
+</head>
+<body>
+
+<!-- ============ BOOT ============ -->
+<div id="boot" role="dialog" aria-label="Uruchamianie Jarvis OS">
+  <div class="boot-inner">
+    <div class="reactor">
+      <svg viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="r r1" cx="110" cy="110" r="100"/>
+        <circle class="r r2" cx="110" cy="110" r="80"/>
+        <circle class="r r3" cx="110" cy="110" r="62"/>
+        <circle class="core-dot" cx="110" cy="110" r="26"/>
+      </svg>
+    </div>
+    <div class="boot-title" id="bootTitle"></div>
+    <div class="boot-log" id="bootLog"></div>
+    <div class="boot-bar"><i id="bootBar"></i></div>
+    <button class="boot-enter" id="bootEnter">Kliknij, aby wejść</button>
+  </div>
+</div>
+
+<!-- ============ APLIKACJA ============ -->
+<div class="app" id="app" data-wall="photo">
+  <div class="wallpaper" id="wallpaper"></div>
+  <canvas id="fx"></canvas>
+  <div class="grid-overlay"></div>
+  <div class="scan"></div>
+  <div class="vignette"></div>
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-orb"></span><span class="name">Jarvis</span></div>
+    <div class="divider"></div>
+    <div class="tagline">Twoje własne środowisko AI</div>
+    <button class="search-pill" id="searchPill" title="Paleta poleceń">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="txt">Szukaj aplikacji i poleceń…</span><kbd>Ctrl K</kbd>
+    </button>
+    <div class="top-actions">
+      <button class="top-btn" id="btnVoice" title="Mów do Jarvisa (Ctrl+Spacja)"></button>
+      <button class="top-btn" id="btnFocus" title="Tryb skupienia"></button>
+      <button class="top-btn" id="btnSound" title="Dźwięki"></button>
+      <button class="top-btn" id="btnLog" title="Dziennik procesów"><span class="badge hidden" id="logBadge">0</span></button>
+      <button class="avatar" id="btnAvatar" title="Ustawienia">JD</button>
+    </div>
+  </header>
+
+  <main class="desktop" id="desktop">
+    <div class="icon-rail" id="iconRail"></div>
+    <div class="task-banner" id="task"><span class="live"></span><b>Jarvis</b><span id="taskText">gotowy</span></div>
+
+    <section class="center-stage">
+      <div class="core-wrap" id="coreWrap" data-state="idle">
+        <canvas id="orbCanvas"></canvas>
+        <div class="core-glow"></div>
+        <div class="orbit a"><span class="orbit-dot"></span></div>
+        <div class="orbit b"><span class="orbit-dot"></span></div>
+        <button class="core" id="core" aria-label="Jarvis — kliknij, aby mówić">
+          <span class="core-inner"><span class="core-label">JARVIS</span></span>
+          <span class="core-state" id="coreState">centrum środowiska</span>
+          <span class="core-hint" id="coreHint">kliknij, aby mówić · Shift+klik: panel</span>
+        </button>
+        <div class="node n1"><b>Model / Reasoning <em id="nModel">LOKAL</em></b><span id="nModelS">Silnik poleceń offline</span><div class="bar"><i id="bModel" style="--w:40%"></i></div></div>
+        <div class="node n2"><b>Tool Calls <em id="nTools">0</em></b><span>Akcje wykonane w sesji</span><div class="bar"><i id="bTools" style="--w:10%"></i></div></div>
+        <div class="node n3"><b>System <em id="nFps">60</em></b><span id="nSysS">FPS · wszystko działa</span><div class="bar"><i id="bFps" style="--w:100%"></i></div></div>
+        <div class="node n4"><b>Task Engine <em id="nTasks">0/0</em></b><span>Zadania na dziś</span><div class="bar"><i id="bTasks" style="--w:0%"></i></div></div>
+        <div class="node n5"><b>Workspace <em id="nWins">0</em></b><span>Otwarte okna · skróty</span><div class="bar"><i id="bWins" style="--w:20%"></i></div></div>
+        <div class="node n6"><b>Internet <em id="nNet">ON</em></b><span id="nNetS">Połączenie aktywne</span><div class="bar"><i id="bNet" style="--w:80%"></i></div></div>
+      </div>
+    </section>
+
+    <div class="sys">
+      <div class="sysline click" id="sysWeather" title="Pogoda"><span class="weather-ico" id="wxIco">☁</span><div><strong id="wxTemp">--°C</strong><div class="muted" id="wxCity">Wrocław</div></div></div>
+      <div class="sysline click" id="sysClock" title="Harmonogram"><div><strong id="clockBig">--:--:--</strong><div class="muted" id="dateLine"></div></div></div>
+    </div>
+
+    <nav class="dock" id="dock" aria-label="Dok"></nav>
+  </main>
+
+  <aside class="float-panel" id="logPanel" aria-label="Dziennik procesów">
+    <div class="panel-head"><span style="color:var(--accent)">◈</span> Process Log <span class="status"></span>
+      <button class="btn sm ghost" id="logClear" style="margin-left:auto">Wyczyść</button>
+      <button class="close" id="logClose" style="margin-left:4px">×</button></div>
+    <div class="log" id="log"></div>
+  </aside>
+
+  <div class="palette-bg" id="paletteBg">
+    <div class="palette" role="dialog" aria-label="Paleta poleceń">
+      <div class="palette-in">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="paletteInput" placeholder="Wpisz aplikację, polecenie lub zapytaj Jarvisa…" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </div>
+      <div class="palette-list" id="paletteList"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/apps.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
