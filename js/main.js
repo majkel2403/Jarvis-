@@ -772,6 +772,8 @@ const onboarding = () => {
     const c = $('#obCity').value.trim();
     if (c && c !== S.city) { try { const g = await J.weather.geocode(c); Object.assign(S, { city: g.city, lat: g.lat, lon: g.lon }); J.weather.ts = 0; loadWeather(); } catch (e) { J.toast(e.message); } }
     if ($('#obWake').checked && J.ear.supported) J.ear.setStandby(true);
+    const k = $('#obKey').value.trim();
+    if (k) { const p = J.HERMES_PRESETS.openrouter; Object.assign(S, { openrouterKey: k, jevOn: true, hermesOn: true, hermesProvider: 'openrouter', hermesUrl: p.url, hermesModel: p.model, hermesKey: '' }); J.save(); J.emit('settings'); setTimeout(() => { J.judge.test().then(t => J.notice({ title: 'Jev działa', body: t, kind: 'agent' })).catch(e => J.notice({ title: 'Jev: błąd', body: e.message, kind: 'hermes' })); J.hermesPing(); }, 800); }
     J.state.ui.onboarded = true; J.save(); el.classList.remove('show'); J.sfx.success();
     J.toast('Gotowe. Ctrl+K otwiera paletę, Ctrl+Spacja uruchamia mikrofon.', 6000);
   };

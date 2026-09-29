@@ -20,7 +20,8 @@ const MODELS = ['typesafe/jev-1.13', '~typesafe/jev-latest'];
 const TH = () => ({ execute: +S().jevExecute || .85, ask: +S().jevAsk || .5, destructive: +S().jevDestructive || .8, interrupt: +S().jevInterrupt || .6, verify: +S().jevVerify || .4 });
 
 const status = { state: 'unknown', latency: 0, calls: 0, cost: 0, lastError: '', last: null };
-const enabled = () => !!(S().jevOn && S().jevKey);
+const key = () => S().jevKey || S().openrouterKey || '';
+const enabled = () => !!(S().jevOn && key());
 const setState = st => { if (status.state !== st) { status.state = st; J.emit('judge'); } };
 
 /* stan dla sędziego: zwięzły obraz środowiska (bez treści notatek, bez sygnałów drenowanych) */
@@ -48,7 +49,7 @@ const call = async (questions, state, opts = {}) => {
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), opts.timeout || 2500);
   let r;
   try {
-    r = await fetch(S().jevUrl || ENDPOINT, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S().jevKey, 'HTTP-Referer': location.origin, 'X-Title': 'Jarvis OS' }, body: JSON.stringify({ model: S().jevModel || MODELS[0], questions, state }) });
+    r = await fetch(S().jevUrl || ENDPOINT, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key(), 'HTTP-Referer': location.origin, 'X-Title': 'Jarvis OS' }, body: JSON.stringify({ model: S().jevModel || MODELS[0], questions, state }) });
   } catch (e) { clearTimeout(to); status.lastError = e.name === 'AbortError' ? 'timeout' : 'network'; setState('down'); throw Object.assign(new Error(e.name === 'AbortError' ? 'Jev: przekroczono czas (' + (opts.timeout || 2500) + ' ms)' : 'Jev: brak połączenia z OpenRouter (sieć lub CORS)'), { code: 'OFFLINE' }); }
   clearTimeout(to);
   if (!r.ok) { let msg = ''; try { const j = await r.json(); msg = j.error?.message || j.message || JSON.stringify(j); } catch (e) { } status.lastError = r.status + ' ' + msg; setState(r.status === 401 || r.status === 403 ? 'down' : 'down'); throw Object.assign(new Error('Jev: HTTP ' + r.status + (msg ? ' — ' + msg.slice(0, 160) : '')), { code: r.status === 401 || r.status === 403 ? 'DENIED' : 'INTERNAL' }); }
@@ -129,7 +130,7 @@ const judge = J.judge = {
   },
   /* test połączenia z Ustawień: prawdziwe wywołanie z polskim zdaniem */
   async test() {
-    if (!S().jevKey) throw new Error('Podaj klucz OpenRouter.');
+    if (!key()) throw new Error('Podaj klucz OpenRouter.');
     const t0 = performance.now();
     const { answers, usage, model, ms } = await call({ intent: intentQuestion(), lang: { type: 'noul', instructions: 'Is the utterance in Polish?', criteria: { true: 'Polish', false: 'Another language' } } }, stateFor({ utterance: 'otwórz notatnik i ustaw minutnik na 5 minut' }), { timeout: 8000 });
     const it = answers.intent || {};

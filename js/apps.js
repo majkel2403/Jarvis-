@@ -693,6 +693,14 @@ J.apps.settings = {
     const s = J.state.settings;
     const walls = [['photo', 'Miasto nocą', "url('assets/wallpaper.jpg')"], ['aurora', 'Aurora', 'linear-gradient(135deg,#1b1147,#0b3b5a)'], ['void', 'Pustka', 'radial-gradient(circle,#0a1a30,#01040a)']];
     body.innerHTML = `
+      <div class="label">OpenRouter · jeden klucz dla mózgu i sędziego ${icon('key', 'width="11" height="11" style="vertical-align:-1px"')}</div>
+      <div class="card col or-card">
+        <div class="row"><input class="input" id="orKey" type="password" placeholder="Wklej klucz OpenRouter (sk-or-v1-…)" autocomplete="off" spellcheck="false"><button class="btn sm ghost" id="orEye" title="Pokaż / ukryj">👁</button></div>
+        <label class="toggle" style="padding-top:2px"><div>Mózg: Hermes 4 przez OpenRouter<small>Model <code>nousresearch/hermes-4-70b</code> (natywne tool_calls), zamiast lokalnego Hermes Agent</small></div><span class="switch"><input type="checkbox" id="orBrain"><i></i></span></label>
+        <label class="toggle"><div>Sędzia: Jev (TypeSafe „System One”)<small>Intencja, ryzyko, dwuznaczność, weryfikacja w ~200 ms</small></div><span class="switch"><input type="checkbox" id="orJudge"><i></i></span></label>
+        <div class="row"><button class="btn primary" id="orTest">Zapisz i testuj</button><a class="btn ghost" href="https://openrouter.ai/keys" target="_blank" rel="noopener">Pobierz klucz</a><button class="btn ghost danger" id="orDel" style="margin-left:auto">Usuń</button></div>
+        <div class="dim" id="orInfo" style="font-size:10.5px;line-height:1.55"></div>
+      </div>
       <div class="label">Kolor akcentu</div><div class="swatches" id="sw"></div>
       <div class="label">Tapeta</div><div class="walls" id="wl"></div>
       <div class="label">Interfejs</div>
@@ -708,7 +716,7 @@ J.apps.settings = {
         <select class="input" id="hProv">${Object.entries(J.HERMES_PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('')}</select>
         <input class="input" id="hUrl" placeholder="Adres API, np. http://localhost:8642/v1" spellcheck="false">
         <div class="row"><input class="input" id="hModel" placeholder="Model" list="hModels" spellcheck="false"><datalist id="hModels"></datalist><button class="btn ghost" id="hList" title="Pobierz listę modeli">${icon('refresh', 'width="12" height="12"')}</button></div>
-        <input class="input" id="hKey" type="password" placeholder="Klucz API (API_SERVER_KEY / klucz Nous Portal)" autocomplete="off">
+        <input class="input" id="hKey" type="password" placeholder="Klucz API (API_SERVER_KEY / Nous Portal; dla OpenRouter zostaw puste — użyty będzie klucz z sekcji OpenRouter)" autocomplete="off">
         <div class="row"><button class="btn primary" id="hTest">Połącz i testuj</button><button class="btn ghost danger" id="hDel">Usuń klucz</button></div>
         <div class="dim" id="hInfo" style="font-size:10.5px;line-height:1.5"></div>
         <div class="muted" id="hHelp" style="font-size:10.5px;line-height:1.55"></div>
@@ -770,8 +778,8 @@ J.apps.settings = {
     $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
-    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', jevKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
+    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', jevKey: '', openrouterKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey, ok = s.openrouterKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.state.settings.openrouterKey = ok; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
     $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) { J.store.clear().finally(() => J.resetAll()); } };
     /* agent */
     const aWake = $('#aWake', body); aWake.checked = !!s.wakeWord && J.ear.supported; aWake.disabled = !J.ear.supported; aWake.onchange = () => J.ear.setStandby(aWake.checked);
@@ -784,6 +792,30 @@ J.apps.settings = {
     const aFmt = $('#aFmt', body); aFmt.value = s.toolFormat || 'auto'; aFmt.onchange = () => { s.toolFormat = aFmt.value; J.hermes.format = null; J.save(); J.brain.reset(); };
     const drawAllow = () => { const l = J.state.ui.allowAlways || []; $('#aAllow', body).textContent = l.length ? l.map(id => J.registry.get(id)?.label || id).join(', ') : 'brak — ryzykowne narzędzia zawsze pytają'; };
     drawAllow(); $('#aAllowClr', body).onclick = () => { J.state.ui.allowAlways = []; J.save(); drawAllow(); J.sfx.click(); };
+    /* OpenRouter: wspólny klucz */
+    const orKey = $('#orKey', body), orBrain = $('#orBrain', body), orJudge = $('#orJudge', body), orInfo = $('#orInfo', body);
+    const orFill = () => { orKey.value = s.openrouterKey || ''; orBrain.checked = s.hermesOn && s.hermesProvider === 'openrouter'; orJudge.checked = !!s.jevOn && !!(s.jevKey || s.openrouterKey); };
+    const orHelp = () => { orInfo.textContent = !s.openrouterKey ? 'Klucz z openrouter.ai/keys. Jeden klucz uruchamia sędziego Jev i (opcjonalnie) mózg na modelach Hermes 4 w chmurze. Klucz zostaje tylko w tej przeglądarce.' : 'Klucz zapisany · mózg: ' + (orBrain.checked ? 'Hermes 4 przez OpenRouter' : (s.hermesOn ? J.HERMES_PRESETS[s.hermesProvider]?.label || s.hermesProvider : 'lokalny silnik')) + ' · sędzia Jev: ' + (J.judge.enabled() ? 'włączony' : 'wyłączony') + (J.judge.status.state === 'up' ? ' (' + J.judge.status.latency + ' ms)' : ''); };
+    const orSave = () => {
+      s.openrouterKey = orKey.value.trim();
+      if (orBrain.checked) { const p = J.HERMES_PRESETS.openrouter; s.hermesOn = true; s.hermesProvider = 'openrouter'; s.hermesUrl = p.url; if (!/^nousresearch\//.test(s.hermesModel || '')) s.hermesModel = p.model; s.hermesKey = ''; J.hermes.format = null; J.brain.reset(); }
+      else if (s.hermesProvider === 'openrouter') { s.hermesProvider = 'agent'; s.hermesUrl = J.HERMES_PRESETS.agent.url; s.hermesModel = J.HERMES_PRESETS.agent.model; }
+      s.jevOn = orJudge.checked && !!(s.jevKey || s.openrouterKey);
+      J.save(); J.emit('settings'); J.hermesPing(); orHelp(); fillH?.(); help?.(); jvFill?.(); jvHelp?.();
+    };
+    orFill(); orHelp();
+    [orKey, orBrain, orJudge].forEach(el => el.onchange = orSave);
+    $('#orEye', body).onclick = () => { orKey.type = orKey.type === 'password' ? 'text' : 'password'; };
+    $('#orDel', body).onclick = () => { orKey.value = ''; orBrain.checked = false; orJudge.checked = false; orSave(); };
+    $('#orTest', body).onclick = async () => {
+      orSave(); if (!s.openrouterKey) { orInfo.textContent = '✗ Wklej klucz.'; return; }
+      const out = [];
+      if (orJudge.checked) { orInfo.textContent = 'Testuję Jeva…'; try { out.push('Jev: ✓ ' + await J.judge.test()); } catch (e) { out.push('Jev: ✗ ' + e.message); } }
+      if (orBrain.checked) { orInfo.textContent = 'Testuję Hermesa 4…'; try { out.push('Hermes: ✓ ' + await J.brain.test()); } catch (e) { out.push('Hermes: ✗ ' + e.message); } }
+      if (!out.length) out.push('Zaznacz, do czego użyć klucza (mózg i/lub sędzia).');
+      orInfo.textContent = out.join('\n'); J.sfx[out.some(o => /✗/.test(o)) ? 'error' : 'notify']();
+    };
+    sub(ctx, 'judge', orHelp); sub(ctx, 'hermes', orHelp);
     /* Jev */
     const jvOn = $('#jvOn', body), jvKey = $('#jvKey', body), jvModel = $('#jvModel', body), jvExec = $('#jvExec', body), jvAsk = $('#jvAsk', body), jvPriv = $('#jvPriv', body), jvInfo = $('#jvInfo', body);
     const jvFill = () => { jvOn.checked = !!s.jevOn; jvKey.value = s.jevKey || ''; jvModel.value = s.jevModel || J.judge.MODELS[0]; jvExec.value = s.jevExecute ?? .85; jvAsk.value = s.jevAsk ?? .5; jvPriv.checked = !!s.jevPrivate; };

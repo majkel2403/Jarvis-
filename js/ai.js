@@ -23,15 +23,16 @@ const JOKES = [
 J.HERMES_PRESETS = {
   agent: { label: 'Hermes Agent (lokalny gateway)', url: 'http://localhost:8642/v1', model: 'hermes-agent', format: 'hermes' },
   portal: { label: 'Nous Portal (chmura)', url: 'https://inference-api.nousresearch.com/v1', model: 'Hermes-4-405B', format: 'hermes' },
+  openrouter: { label: 'OpenRouter (chmura: Hermes 4)', url: 'https://openrouter.ai/api/v1', model: 'nousresearch/hermes-4-70b', format: 'openai' },
   custom: { label: 'Własny serwer (Ollama / LM Studio / vLLM)', url: 'http://localhost:11434/v1', model: 'hermes3', format: 'auto' }
 };
-const cfg = () => { const s = J.state.settings; return { url: (s.hermesUrl || '').replace(/\/+$/, ''), key: s.hermesKey || '', model: s.hermesModel || 'hermes-agent', provider: s.hermesProvider || 'agent' }; };
+const cfg = () => { const s = J.state.settings; const provider = s.hermesProvider || 'agent'; return { url: (s.hermesUrl || '').replace(/\/+$/, ''), key: s.hermesKey || (provider === 'openrouter' || /openrouter\.ai/.test(s.hermesUrl || '') ? s.openrouterKey || '' : ''), model: s.hermesModel || 'hermes-agent', provider }; };
 J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url);
 /* format narzędzi: 'hermes' (tekstowy <tool_call>) | 'openai' (natywne tool_calls); 'auto' rozstrzyga test połączenia */
 const toolFormat = () => { const s = J.state.settings; const f = s.toolFormat && s.toolFormat !== 'auto' ? s.toolFormat : (J.hermes.format || J.HERMES_PRESETS[s.hermesProvider]?.format || 'hermes'); return f === 'auto' ? 'hermes' : f; };
 J.hermes = { status: 'unknown', checked: 0, tools: [], format: null, latency: 0, lastError: '' };
 const setStatus = st => { const ch = J.hermes.status !== st; J.hermes.status = st; J.hermes.checked = Date.now(); if (ch) J.emit('hermes'); };
-const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (c.key) h.Authorization = 'Bearer ' + c.key; if (c.provider === 'agent') h['X-Hermes-Session-Key'] = sessionKey; return h; };
+const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (c.key) h.Authorization = 'Bearer ' + c.key; if (c.provider === 'agent') h['X-Hermes-Session-Key'] = sessionKey; if (/openrouter\.ai/.test(c.url)) { h['HTTP-Referer'] = location.origin; h['X-Title'] = 'Jarvis OS'; } return h; };
 const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
 
 /* ping z wykładniczym backoffem: 20 s po błędzie → do 3 min; 90 s gdy stabilnie; od razu po online / powrocie do karty */

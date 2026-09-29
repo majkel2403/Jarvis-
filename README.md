@@ -78,6 +78,15 @@ Klucz jest przechowywany wyłącznie w `localStorage` tej przeglądarki (eksport
 
 Każda wiadomość użytkownika jest poprzedzona blokiem `<environment>{…}</environment>` — zwięzłym JSON-em ze stanem środowiska, wysyłanym jako różnica względem poprzedniej tury. Wyniki narzędzi wracają jako `{name, ok, code, data, text}` z kodami `OK · NOT_FOUND · AMBIGUOUS · INVALID_ARGS · DENIED · DUPLICATE · OFFLINE · TIMEOUT · UNSUPPORTED · INTERNAL`, a prompt systemowy zawiera reguły groundingu (nie twierdź, że coś zrobiłeś, bez `ok=true`; odczytaj przed zmianą; pytaj przy dwuznaczności). Szczegóły i schematy: [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### OpenRouter — jeden klucz dla mózgu i sędziego
+
+W **Ustawienia → OpenRouter** (także w onboardingu) wklej klucz z [openrouter.ai/keys](https://openrouter.ai/keys) i zaznacz, do czego go użyć:
+
+- **Mózg: Hermes 4 przez OpenRouter** — model `nousresearch/hermes-4-70b` w chmurze (natywne `tool_calls`), bez lokalnego gatewaya;
+- **Sędzia: Jev** — model decyzyjny TypeSafe.
+
+„Zapisz i testuj” wykonuje prawdziwe wywołania obu usług i pokazuje wynik. Klucz zostaje wyłącznie w tej przeglądarce (eksport kopii go pomija).
+
 ### Jev (OpenRouter)
 
 1. Klucz z [openrouter.ai/keys](https://openrouter.ai/keys) wklej w **Ustawienia → Sędzia Jev**, kliknij **Połącz i testuj** (prawdziwe wywołanie z polskim zdaniem, pokazuje latencję i koszt).
