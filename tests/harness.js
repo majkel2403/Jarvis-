@@ -38,7 +38,7 @@ function load(opts = {}) {
   ctx.Event = class { constructor(t) { this.type = t; } };
   ctx.alert = () => { }; ctx.confirm = () => true; ctx.prompt = () => '';
   vm.createContext(ctx);
-  const files = opts.files || ['core.js', 'events.js', 'store.js', 'registry.js', 'process.js', 'apps.js', 'widgets.js', 'commands.js', 'context.js', 'ai.js'];
+  const files = opts.files || ['core.js', 'events.js', 'store.js', 'registry.js', 'process.js', 'apps.js', 'widgets.js', 'commands.js', 'context.js', 'judge.js', 'ai.js'];
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
   return ctx.J;
 }

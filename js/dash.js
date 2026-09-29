@@ -10,8 +10,8 @@ const eg = J.engine;
 J.bootTime = J.bootTime || Date.now();
 
 /* ---------- tryb agenta (segmentowy wskaźnik w pasku górnym) ---------- */
-const MODE_LABEL = { IDLE: 'GOTOWY', STANDBY: 'CZUWAM', LISTENING: 'SŁUCHAM', THINKING: 'ANALIZA', EXECUTING: 'DZIAŁANIE', APPROVAL_REQUIRED: 'ZGODA?', PAUSED: 'PAUZA', RECOVERING: 'AWARYJNIE', COMPLETED: 'GOTOWE', ERROR: 'BŁĄD', SPEAKING: 'MÓWIĘ' };
-const SEG_OF = { APPROVAL_REQUIRED: 'EXECUTING', PAUSED: 'EXECUTING', RECOVERING: 'EXECUTING', ERROR: 'COMPLETED', STANDBY: 'IDLE' };
+const MODE_LABEL = { IDLE: 'GOTOWY', STANDBY: 'CZUWAM', LISTENING: 'SŁUCHAM', THINKING: 'ANALIZA', EXECUTING: 'DZIAŁANIE', APPROVAL_REQUIRED: 'ZGODA?', PAUSED: 'PAUZA', RECOVERING: 'AWARYJNIE', VERIFYING: 'WERYFIKACJA', COMPLETED: 'GOTOWE', ERROR: 'BŁĄD', SPEAKING: 'MÓWIĘ' };
+const SEG_OF = { APPROVAL_REQUIRED: 'EXECUTING', PAUSED: 'EXECUTING', RECOVERING: 'EXECUTING', VERIFYING: 'EXECUTING', ERROR: 'COMPLETED', STANDBY: 'IDLE' };
 const modeHud = $('#modeHud'), segs = $$('.mh-seg', modeHud), dkMode = $('#dkMode');
 let lastMode = '', lastFine = '';
 const syncMode = () => {
@@ -36,6 +36,10 @@ const syncAi = () => {
   tsAi.dataset.s = s; $('em', tsAi).textContent = t;
 };
 J.on('hermes', syncAi); J.on('settings', syncAi);
+/* Jev (sędzia): widoczny w pasku tylko gdy włączony */
+const tsJev = $('#tsJev');
+const syncJev = () => { const on = J.judge?.enabled(); tsJev.classList.toggle('hidden', !on); if (!on) return; const st = J.judge.status; tsJev.dataset.s = st.state === 'up' ? 'up' : st.state === 'down' ? 'down' : 'unknown'; $('em', tsJev).textContent = st.state === 'up' ? st.latency + ' ms · ' + st.calls : st.state === 'down' ? 'błąd' : 'gotowy'; tsJev.title = 'Jev (sędzia) · wywołania: ' + st.calls + ' · koszt: $' + st.cost.toFixed(5) + (st.lastError ? ' · ' + st.lastError : ''); };
+J.on('judge', syncJev); J.on('settings', syncJev); syncJev();
 const syncTools = () => {
   const busy = !!eg.taskId;
   $('em', tsTools).textContent = busy ? eg.toolsFinished + '/' + eg.toolsStarted : String(J.state.stats.actions || 0);

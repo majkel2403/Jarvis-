@@ -724,6 +724,15 @@ J.apps.settings = {
         <div class="row"><div style="flex:1;font-size:12px">Format narzędzi Hermesa<small class="dim" style="display:block;font-size:10px">auto wykrywa przy „Połącz i testuj”</small></div><select class="input" id="aFmt" style="width:130px"><option value="auto">auto</option><option value="hermes">&lt;tool_call&gt;</option><option value="openai">tool_calls</option></select></div>
         <div class="row"><div style="flex:1;font-size:12px">Zawsze dozwolone bez pytania<small class="dim" id="aAllow" style="display:block;font-size:10px"></small></div><button class="btn sm ghost" id="aAllowClr">Wyczyść</button></div>
       </div>
+      <div class="label">Sędzia Jev · OpenRouter ${icon('bolt', 'width="11" height="11" style="vertical-align:-1px"')}</div>
+      <div class="card col">
+        <label class="toggle" style="padding-top:0"><div>Decyzje przez Jev (TypeSafe „System One”)<small>Intencja, ryzyko, dwuznaczność, weryfikacja odpowiedzi, pilność sygnałów — w ~200 ms, ułamki centa</small></div><span class="switch"><input type="checkbox" id="jvOn"><i></i></span></label>
+        <input class="input" id="jvKey" type="password" placeholder="Klucz OpenRouter (sk-or-v1-…)" autocomplete="off">
+        <div class="row"><select class="input" id="jvModel">${J.judge.MODELS.map(m => `<option value="${m}">${m}</option>`).join('')}</select><button class="btn primary" id="jvTest">Połącz i testuj</button></div>
+        <div class="row" style="font-size:11px"><span style="flex:1">Wykonaj bez pytania od</span><input class="input" id="jvExec" type="number" min="0.5" max="1" step="0.05" style="width:80px"><span style="flex:1;text-align:right">Zapytaj od</span><input class="input" id="jvAsk" type="number" min="0.1" max="1" step="0.05" style="width:80px"></div>
+        <label class="toggle"><div>Tryb prywatny<small>Nie wysyłaj tytułów notatek, widgetów i profilu do sędziego</small></div><span class="switch"><input type="checkbox" id="jvPriv"><i></i></span></label>
+        <div class="dim" id="jvInfo" style="font-size:10.5px;line-height:1.5"></div>
+      </div>
       <div class="label">Pamięć Jarvisa</div>
       <div class="card col" id="memBox"><div class="dim" style="font-size:10.5px">Fakty zapamiętane poleceniem „zapamiętaj, że…” trafiają do kontekstu każdej rozmowy.</div><div id="memList" class="col"></div></div>
       <div class="label">Folder roboczy (pliki)</div>
@@ -761,8 +770,8 @@ J.apps.settings = {
     $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
-    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
+    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', jevKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
     $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) { J.store.clear().finally(() => J.resetAll()); } };
     /* agent */
     const aWake = $('#aWake', body); aWake.checked = !!s.wakeWord && J.ear.supported; aWake.disabled = !J.ear.supported; aWake.onchange = () => J.ear.setStandby(aWake.checked);
@@ -775,6 +784,15 @@ J.apps.settings = {
     const aFmt = $('#aFmt', body); aFmt.value = s.toolFormat || 'auto'; aFmt.onchange = () => { s.toolFormat = aFmt.value; J.hermes.format = null; J.save(); J.brain.reset(); };
     const drawAllow = () => { const l = J.state.ui.allowAlways || []; $('#aAllow', body).textContent = l.length ? l.map(id => J.registry.get(id)?.label || id).join(', ') : 'brak — ryzykowne narzędzia zawsze pytają'; };
     drawAllow(); $('#aAllowClr', body).onclick = () => { J.state.ui.allowAlways = []; J.save(); drawAllow(); J.sfx.click(); };
+    /* Jev */
+    const jvOn = $('#jvOn', body), jvKey = $('#jvKey', body), jvModel = $('#jvModel', body), jvExec = $('#jvExec', body), jvAsk = $('#jvAsk', body), jvPriv = $('#jvPriv', body), jvInfo = $('#jvInfo', body);
+    const jvFill = () => { jvOn.checked = !!s.jevOn; jvKey.value = s.jevKey || ''; jvModel.value = s.jevModel || J.judge.MODELS[0]; jvExec.value = s.jevExecute ?? .85; jvAsk.value = s.jevAsk ?? .5; jvPriv.checked = !!s.jevPrivate; };
+    const jvHelp = () => { const st = J.judge.status; jvInfo.textContent = !s.jevKey ? 'Podaj klucz OpenRouter (openrouter.ai/keys) — model typesafe/jev-1.13. Bez klucza decyzje podejmuje rejestr i Hermes.' : (s.jevOn ? 'Aktywny' : 'Wyłączony') + ' · wywołania: ' + (J.state.stats.jevCalls || 0) + ' · koszt: $' + (J.state.stats.jevCost || 0).toFixed(5) + (st.state === 'up' ? ' · ostatnio ' + st.latency + ' ms' : st.state === 'down' ? ' · błąd: ' + st.lastError : ''); };
+    const jvSave = () => { s.jevOn = jvOn.checked; s.jevKey = jvKey.value.trim(); s.jevModel = jvModel.value; s.jevExecute = J.clamp(+jvExec.value || .85, .5, 1); s.jevAsk = J.clamp(+jvAsk.value || .5, .1, s.jevExecute); s.jevPrivate = jvPriv.checked; J.save(); J.emit('settings'); jvHelp(); };
+    jvFill(); jvHelp();
+    [jvOn, jvKey, jvModel, jvExec, jvAsk, jvPriv].forEach(el => el.onchange = jvSave);
+    $('#jvTest', body).onclick = async () => { jvSave(); jvInfo.textContent = 'Łączę z OpenRouter…'; try { jvInfo.textContent = '✓ ' + await J.judge.test(); jvOn.checked = true; jvSave(); J.sfx.notify(); } catch (e) { jvInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
+    sub(ctx, 'judge', jvHelp);
     /* pamięć */
     const drawMem = async () => { const l = await J.memory.all(); const box = $('#memList', body); box.innerHTML = l.length ? '' : '<div class="dim" style="font-size:11px">Brak zapamiętanych faktów.</div>'; l.slice().reverse().forEach(f => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><span class="dim" style="font-size:9.5px"></span><button class="btn sm ghost danger" title="Zapomnij">×</button>'); r.children[0].textContent = f.fact; r.children[1].textContent = f.scope; r.children[2].onclick = async () => { await J.memory.forget(f.id); drawMem(); }; box.appendChild(r); }); };
     drawMem(); sub(ctx, 'memory', drawMem);

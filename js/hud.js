@@ -115,6 +115,7 @@ const STATE = {
   },
   logic() {
     const n = eg.nodes.model;
+    const jv = eg.judge; if (jv && Date.now() - jv.t < 20000 && !(eg.plan && eg.plan.steps.length)) return { s: jv.route === 'execute' ? 'done' : 'active', sub: 'Jev: ' + jv.intent.id + ' → ' + ({ execute: 'wykonaj', ask: 'zapytaj', hermes: 'Hermes' })[jv.route], pct: jv.intent.confidence, r: Math.round(jv.intent.confidence * 100) + '%' };
     if (eg.plan && eg.plan.steps.length) { const d = eg.plan.done, t = eg.plan.steps.length; return { s: d >= t ? 'done' : 'active', sub: d < t ? 'Plan: ' + cut(eg.plan.steps[d], 30) : 'Plan wykonany (' + t + ' kroków)', pct: d / t, r: d + ' / ' + t }; }
     if (!eg.turns) return { s: 'idle', sub: 'Bez udziału modelu', pct: 0, r: '' };
     if (n?.status === 'active') return { s: 'active', sub: eg.thinkChars ? 'Rozumowanie: ' + eg.thinkChars + ' zn.' : 'Tura modelu ' + eg.turns, pct: null, r: '' };

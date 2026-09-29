@@ -173,9 +173,10 @@ const api = J.registry = {
     if (c.risk === 'blocked' && ctx.source !== 'ui') return fail('DENIED', 'To działanie jest dostępne tylko ręcznie w interfejsie.');
     const trusted = ctx.source === 'ui' || ctx.source === 'local' || ctx.confirmed === true;
     const pre = typeof c.prepare === 'function' ? (c.prepare(args) || {}) : {};
-    if (c.risk === 'confirm' && !trusted && !api.allowed(id) && !pre.trusted) {
+    const dynRisk = c.risk === 'safe' && c.writes.length && !trusted && ctx.judge && ctx.judge.destructive >= (J.judge?.thresholds().destructive ?? .8);   // Jev ocenił wypowiedź jako destrukcyjną
+    if ((c.risk === 'confirm' || dynRisk) && !trusted && !api.allowed(id) && !pre.trusted) {
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
-      const q = typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?'));
+      const q = typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
       const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source });
       if (dec === 'always') api.allowAlways(id);
       else if (dec !== 'yes') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');

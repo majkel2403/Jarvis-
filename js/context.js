@@ -57,7 +57,9 @@ J.signals = {
     const inp = document.activeElement; if (inp && /INPUT|TEXTAREA/.test(inp.tagName) && inp.value) return false;
     activeCount = activeCount.filter(t => Date.now() - t < 3600e3); return activeCount.length < (s.proactiveMax || 4);
   },
-  maybeActive(sig) {
+  async maybeActive(sig) {
+    if (!J.signals.canActive()) return false;
+    if (J.judge?.enabled()) { const u = await J.judge.urgency(sig); if (u != null && u < J.judge.thresholds().interrupt) { J.proc.active || J.log('Sygnał odłożony', sig.text + ' · pilność ' + Math.round(u * 100) + '%'); return false; } }
     if (!J.signals.canActive()) return false;
     activeCount.push(Date.now()); sig.delivered = true;
     J.sfx.signal();

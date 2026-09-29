@@ -13,6 +13,7 @@ Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, s
 | **Core** | żywa kula z orbitami, wiązką i odbiciem w jeziorze; pierścienie HUD reagujące na stan (czuwam / słucham / analizuję / działam / czekam na zgodę / pauza / błąd); wokół Core **10 kart** zasilanych wyłącznie zdarzeniami Event Busa |
 | **Dashboard agenta** | pasek górny: segmentowy wskaźnik trybu wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS, zegar; **Telemetria** (zwijana, `Alt+3`): pogoda, zegar, wykres aktywności agenta, FPS, pamięć, sieć, bateria, zadania, akcje, czas pracy, okna |
 | **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **58 narzędzi** z Command Registry; wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
+| **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, środek = pytanie „Chodzi o…?”, reszta = Hermes z podpowiedzią `<judge>`. Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, tryb prywatny, progi pewności; bez klucza wszystko działa jak dotąd |
 | **Command Registry** | jedno źródło prawdy: każde polecenie ma schemat, poziom ryzyka, przykłady PL i z tego samego wpisu powstają narzędzie dla modelu, wzorce silnika lokalnego, pozycja palety `Ctrl+K` i opis „co potrafisz” |
 | **Silnik lokalny** | działa bez modelu: dopasowanie do przykładów z rejestru z rozumieniem czasu („za 20 minut”, „w piątek o 9”, „o osiemnastej trzydzieści”), łańcuchy („otwórz notatnik i ustaw minutnik 5 minut”), procenty, jednostki |
 | **Narzędzia** | notatki (lista/odczyt/szukaj/dopisz/zmień/usuń), zadania (lista/dodaj/odhacz/przełóż/odłóż/usuń), okna (lista/aktywuj/minimalizuj/przyciągnij/kafelkuj/układy), widgety (lista/zmień/usuń), minutnik (start/stop/przedłuż/status), pogoda, kursy krypto i **alerty kursów**, kalkulator, strony WWW, schowek, ustawienia, terminal, pamięć, pliki, wskazywanie elementów, pytania do użytkownika |
@@ -77,6 +78,15 @@ Klucz jest przechowywany wyłącznie w `localStorage` tej przeglądarki (eksport
 
 Każda wiadomość użytkownika jest poprzedzona blokiem `<environment>{…}</environment>` — zwięzłym JSON-em ze stanem środowiska, wysyłanym jako różnica względem poprzedniej tury. Wyniki narzędzi wracają jako `{name, ok, code, data, text}` z kodami `OK · NOT_FOUND · AMBIGUOUS · INVALID_ARGS · DENIED · DUPLICATE · OFFLINE · TIMEOUT · UNSUPPORTED · INTERNAL`, a prompt systemowy zawiera reguły groundingu (nie twierdź, że coś zrobiłeś, bez `ok=true`; odczytaj przed zmianą; pytaj przy dwuznaczności). Szczegóły i schematy: [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Jev (OpenRouter)
+
+1. Klucz z [openrouter.ai/keys](https://openrouter.ai/keys) wklej w **Ustawienia → Sędzia Jev**, kliknij **Połącz i testuj** (prawdziwe wywołanie z polskim zdaniem, pokazuje latencję i koszt).
+2. Sonda z terminala mierzy trafność intencji na 80 polskich wypowiedziach i sprawdza, czy próg „wykonaj bez pytania” jest bezpieczny:
+   ```bash
+   OPENROUTER_API_KEY=sk-or-... node tests/jev-probe.js
+   ```
+3. Endpoint: `POST https://openrouter.ai/api/v1/systemone`, model `typesafe/jev-1.13`; pytania typu `choice` / `noul` / `score`, stan = zwięzły obraz pulpitu (bez treści notatek). Koszt: tokeny wyjściowe darmowe, wejściowe ok. 0,04 $ za milion.
+
 ## Skróty klawiszowe
 
 | Skrót | Akcja |
@@ -110,6 +120,7 @@ js/store.js           IndexedDB (historia, pamięć, sygnały, uchwyty plików)
 js/registry.js        Command Registry: schematy, koercja, uprawnienia, dopasowanie PL, NLP czasu
 js/commands.js        wszystkie polecenia / narzędzia modelu
 js/context.js         Context Packet, sygnały, proaktywność, rutyny, przypomnienia, pamięć
+js/judge.js           sędzia Jev (OpenRouter): intencja, ryzyko, dwuznaczność, weryfikacja, pilność
 js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty, plan, pytania, budżety, streszczenia)
 js/process.js         Process Log (kroki, plan, historia, replay)
 js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje

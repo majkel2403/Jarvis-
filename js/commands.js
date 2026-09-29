@@ -20,19 +20,25 @@ const findApp = t => { const n = norm(t); for (const [id, re] of R.aliases.app) 
 const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
 /* ---------- wyszukiwanie obiektów po id / tytule (z wykrywaniem dwuznaczności) ---------- */
-const findNote = q => {
+/* dwuznaczność: Jev (jeśli włączony) wybiera kandydata z wysoką pewnością; inaczej AMBIGUOUS → model/użytkownik pyta */
+const disambiguate = async (question, cands, label) => {
+  if (!J.judge?.enabled() || cands.length < 2) return null;
+  const r = await J.judge.pick(question, cands.map(c => ({ id: c.id, label: label(c) })), J.brain?.currentText || '');
+  return r && r.confidence >= J.judge.thresholds().execute ? cands.find(c => c.id === r.id) || null : null;
+};
+const findNote = async q => {
   if (!q) return { err: fail('INVALID_ARGS', 'Podaj tytuł lub id notatki.') };
   const notes = J.state.notes, n = norm(q);
   let hit = notes.find(x => x.id === q); if (hit) return { note: hit };
   const byTitle = notes.filter(x => norm(x.title) === n); if (byTitle.length === 1) return { note: byTitle[0] };
   const inc = notes.filter(x => norm(x.title).includes(n) || n.includes(norm(x.title)) && x.title);
   if (inc.length === 1) return { note: inc[0] };
-  if (inc.length > 1) return { err: fail('AMBIGUOUS', 'Kilka notatek pasuje: ' + inc.slice(0, 5).map(x => '„' + x.title + '” (' + x.id + ')').join(', ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, title: x.title })) }) };
+  if (inc.length > 1) { const j = await disambiguate('Which note does the user mean?', inc.slice(0, 8), x => x.title); if (j) return { note: j }; return { err: fail('AMBIGUOUS', 'Kilka notatek pasuje: ' + inc.slice(0, 5).map(x => '„' + x.title + '” (' + x.id + ')').join(', ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, title: x.title })) }) }; }
   const body = notes.filter(x => norm(x.body).includes(n));
   if (body.length === 1) return { note: body[0] };
   return { err: fail('NOT_FOUND', 'Nie znalazłem notatki „' + q + '”. Dostępne: ' + (notes.slice(0, 8).map(x => '„' + x.title + '”').join(', ') || 'brak') + '.') };
 };
-const findTask = q => {
+const findTask = async q => {
   if (!q) return { err: fail('INVALID_ARGS', 'Podaj treść lub id zadania.') };
   const tasks = J.state.tasks, n = norm(q);
   let hit = tasks.find(x => x.id === q); if (hit) return { task: hit };
@@ -40,7 +46,7 @@ const findTask = q => {
   const pool = [...today, ...tasks.filter(t => t.date !== J.today())];
   const inc = pool.filter(x => norm(x.text).includes(n) || n.includes(norm(x.text)));
   if (inc.length === 1) return { task: inc[0] };
-  if (inc.length > 1) { const open = inc.filter(t => !t.done); if (open.length === 1) return { task: open[0] }; return { err: fail('AMBIGUOUS', 'Kilka zadań pasuje: ' + inc.slice(0, 5).map(x => (x.time || '--:--') + ' ' + x.text + ' (' + x.id + ')').join('; ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, text: x.text, time: x.time, date: x.date })) }) }; }
+  if (inc.length > 1) { const open = inc.filter(t => !t.done); if (open.length === 1) return { task: open[0] }; const j = await disambiguate('Which task does the user mean?', inc.slice(0, 8), t => (t.time || '--:--') + ' ' + t.text + ' (' + t.date + ')'); if (j) return { task: j }; return { err: fail('AMBIGUOUS', 'Kilka zadań pasuje: ' + inc.slice(0, 5).map(x => (x.time || '--:--') + ' ' + x.text + ' (' + x.id + ')').join('; ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, text: x.text, time: x.time, date: x.date })) }) }; }
   return { err: fail('NOT_FOUND', 'Nie znalazłem zadania „' + q + '”.') };
 };
 const taskRow = t => ({ id: t.id, date: t.date, time: t.time, text: t.text, done: t.done });
@@ -103,7 +109,7 @@ R.add({ id: 'notes_list', group: 'Notatki', label: 'Lista notatek', description:
 R.add({ id: 'notes_read', group: 'Notatki', label: 'Przeczytaj notatkę', description: 'Zwraca pełną treść notatki (po id lub fragmencie tytułu). show=true otwiera ją w Notatniku.', idempotent: true, reads: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string', description: 'id lub tytuł' }, show: { type: 'boolean' } }, required: ['note'] },
   examples: ['przeczytaj notatke {note}', 'pokaz notatke {note}', 'co jest w notatce {note}', 'otworz notatke {note}'],
-  run({ note, show }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; showIf(show, 'notes', n.id); return ok({ id: n.id, title: n.title, body: n.body, updated: new Date(n.ts).toISOString() }, '„' + n.title + '”: ' + cut(n.body.replace(/\s+/g, ' '), 400)); } });
+  async run({ note, show }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note; showIf(show, 'notes', n.id); return ok({ id: n.id, title: n.title, body: n.body, updated: new Date(n.ts).toISOString() }, '„' + n.title + '”: ' + cut(n.body.replace(/\s+/g, ' '), 400)); } });
 R.add({ id: 'notes_search', group: 'Notatki', label: 'Szukaj w notatkach', description: 'Przeszukuje tytuły i treść notatek; zwraca dopasowania z fragmentem.', idempotent: true, reads: ['notes'],
   args: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
   examples: ['szukaj w notatkach {query}', 'znajdz w notatkach {query}', 'wyszukaj notatke {query}', 'ktora notatka zawiera {query}'],
@@ -115,15 +121,15 @@ R.add({ id: 'create_note', group: 'Notatki', label: 'Nowa notatka', description:
 R.add({ id: 'notes_append', group: 'Notatki', label: 'Dopisz do notatki', description: 'Dopisuje tekst na końcu istniejącej notatki (po id lub tytule).', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' }, text: { type: 'string' }, show: { type: 'boolean' } }, required: ['note', 'text'] },
   examples: ['dopisz do notatki {note}: {text}', 'dodaj do notatki {note}: {text}', 'dopisz do {note}: {text}', 'dodaj do listy {note} {text}', 'dopisz do notatki {note} {text}'],
-  run({ note, text, show }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; n.body = (n.body ? n.body.replace(/\s+$/, '') + '\n' : '') + text; n.ts = Date.now(); J.save(); J.emit('notes', n.id); showIf(show, 'notes', n.id); return ok(noteRow(n), 'Dopisałem do „' + n.title + '”.', { highlight: 'notes' }); } });
+  async run({ note, text, show }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note; n.body = (n.body ? n.body.replace(/\s+$/, '') + '\n' : '') + text; n.ts = Date.now(); J.save(); J.emit('notes', n.id); showIf(show, 'notes', n.id); return ok(noteRow(n), 'Dopisałem do „' + n.title + '”.', { highlight: 'notes' }); } });
 R.add({ id: 'notes_update', group: 'Notatki', label: 'Zmień notatkę', description: 'Zmienia tytuł i/lub zastępuje całą treść notatki.', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' }, title: { type: 'string', maxLength: 80 }, content: { type: 'string' } }, required: ['note'] },
   examples: ['zmien tytul notatki {note} na {title}', 'przemianuj notatke {note} na {title}'],
-  run({ note, title, content }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; if (title) n.title = title; if (content != null) n.body = content; n.ts = Date.now(); J.save(); J.emit('notes', n.id); return ok(noteRow(n), 'Zmieniłem notatkę „' + n.title + '”.'); } });
+  async run({ note, title, content }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note; if (title) n.title = title; if (content != null) n.body = content; n.ts = Date.now(); J.save(); J.emit('notes', n.id); return ok(noteRow(n), 'Zmieniłem notatkę „' + n.title + '”.'); } });
 R.add({ id: 'notes_delete', group: 'Notatki', label: 'Usuń notatkę', description: 'Usuwa notatkę (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć notatkę „' + a.note + '”?', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] },
   examples: ['usun notatke {note}', 'skasuj notatke {note}', 'wyrzuc notatke {note}'],
-  run({ note }) { const f = findNote(note); if (f.err) return f.err; J.notes.remove(f.note.id); return ok({ id: f.note.id }, 'Usunąłem notatkę „' + f.note.title + '”.'); } });
+  async run({ note }) { const f = await findNote(note); if (f.err) return f.err; J.notes.remove(f.note.id); return ok({ id: f.note.id }, 'Usunąłem notatkę „' + f.note.title + '”.'); } });
 
 /* =================== ZADANIA I CZAS =================== */
 R.add({ id: 'tasks_list', group: 'Zadania i czas', label: 'Lista zadań', description: 'Zwraca zadania: range=today (domyślnie), tomorrow, week, all, overdue.', idempotent: true, reads: ['tasks'],
@@ -156,16 +162,16 @@ R.add({ id: 'add_task', group: 'Zadania i czas', label: 'Dodaj zadanie / przypom
 R.add({ id: 'tasks_complete', group: 'Zadania i czas', label: 'Odhacz zadanie', description: 'Oznacza zadanie jako wykonane (done=false cofa).', writes: ['tasks'],
   args: { type: 'object', properties: { task: { type: 'string', description: 'id lub treść' }, done: { type: 'boolean' } }, required: ['task'] },
   examples: ['odhacz {task}', 'zrobione {task}', 'oznacz {task} jako (zrobione|wykonane|ukonczone)', 'ukonczylem {task}', 'zaliczone {task}'],
-  run({ task, done = true }) { const f = findTask(task); if (f.err) return f.err; f.task.done = done; J.save(); J.emit('tasks'); if (done) J.sfx.success(); return ok(taskRow(f.task), (done ? 'Odhaczyłem: ' : 'Przywróciłem: ') + f.task.text + '.'); } });
+  async run({ task, done = true }) { const f = await findTask(task); if (f.err) return f.err; f.task.done = done; J.save(); J.emit('tasks'); if (done) J.sfx.success(); return ok(taskRow(f.task), (done ? 'Odhaczyłem: ' : 'Przywróciłem: ') + f.task.text + '.'); } });
 R.add({ id: 'tasks_update', group: 'Zadania i czas', label: 'Zmień zadanie', description: 'Zmienia treść, godzinę lub datę zadania. Do przesunięcia o czas użyj snooze_minutes.', writes: ['tasks'],
   args: { type: 'object', properties: { task: { type: 'string' }, text: { type: 'string' }, time: { type: 'string', format: 'time' }, date: { type: 'string', format: 'date' }, snooze_minutes: { type: 'integer', minimum: 1 } }, required: ['task'] },
   examples: ['przesun {task} na {time}', 'przeloz {task} na {date}', 'odloz {task} o {snooze_minutes} minut'],
   parse(raw, n) { let m; if ((m = /^(?:przesun|przeloz|odloz)\s+(.+?)\s+(?:o|na)\s+(.+)$/.exec(n))) { const rest = raw.slice(n.indexOf(m[2])), rn = m[2]; const args = { task: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length) }; const dur = /^(\d+(?:[.,]\d+)?|pol|poltorej|kwadrans)\s*(minut|min|godzin|godzine|h|kwadrans)?$/.test(rn) && !/^\d{1,2}[:.]\d{2}$/.test(rn) ? J.nlp.duration(rest) : null; if (dur) args.snooze_minutes = Math.max(1, Math.round(dur / 60)); else { const time = J.nlp.time(rest) || J.nlp.time('o ' + rest); const date = J.nlp.date(rest); if (time) args.time = time; if (date) args.date = date; } return (args.snooze_minutes || args.time || args.date) ? { args, score: 5 } : null; } return null; },
-  run({ task, text, time, date, snooze_minutes }) { const f = findTask(task); if (f.err) return f.err; const t = f.task; if (text) t.text = text; if (time) t.time = time; if (date) t.date = date; if (snooze_minutes) { const base = new Date((t.date || J.today()) + 'T' + (t.time || J.hhmm()) + ':00'); base.setMinutes(base.getMinutes() + snooze_minutes); t.time = J.pad(base.getHours()) + ':' + J.pad(base.getMinutes()); t.date = base.getFullYear() + '-' + J.pad(base.getMonth() + 1) + '-' + J.pad(base.getDate()); } t.fired = false; t.done = false; J.state.tasks.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); J.save(); J.emit('tasks'); return ok(taskRow(t), 'Zadanie „' + t.text + '”: ' + t.date + ' ' + (t.time || 'bez godziny') + '.'); } });
+  async run({ task, text, time, date, snooze_minutes }) { const f = await findTask(task); if (f.err) return f.err; const t = f.task; if (text) t.text = text; if (time) t.time = time; if (date) t.date = date; if (snooze_minutes) { const base = new Date((t.date || J.today()) + 'T' + (t.time || J.hhmm()) + ':00'); base.setMinutes(base.getMinutes() + snooze_minutes); t.time = J.pad(base.getHours()) + ':' + J.pad(base.getMinutes()); t.date = base.getFullYear() + '-' + J.pad(base.getMonth() + 1) + '-' + J.pad(base.getDate()); } t.fired = false; t.done = false; J.state.tasks.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); J.save(); J.emit('tasks'); return ok(taskRow(t), 'Zadanie „' + t.text + '”: ' + t.date + ' ' + (t.time || 'bez godziny') + '.'); } });
 R.add({ id: 'tasks_remove', group: 'Zadania i czas', label: 'Usuń zadanie', description: 'Usuwa zadanie z Harmonogramu (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć zadanie „' + a.task + '”?', writes: ['tasks'],
   args: { type: 'object', properties: { task: { type: 'string' } }, required: ['task'] },
   examples: ['usun zadanie {task}', 'skasuj zadanie {task}', 'usun przypomnienie {task}'],
-  run({ task }) { const f = findTask(task); if (f.err) return f.err; J.state.tasks = J.state.tasks.filter(x => x !== f.task); J.save(); J.emit('tasks'); return ok({ id: f.task.id }, 'Usunąłem zadanie „' + f.task.text + '”.'); } });
+  async run({ task }) { const f = await findTask(task); if (f.err) return f.err; J.state.tasks = J.state.tasks.filter(x => x !== f.task); J.save(); J.emit('tasks'); return ok({ id: f.task.id }, 'Usunąłem zadanie „' + f.task.text + '”.'); } });
 R.add({ id: 'start_timer', group: 'Zadania i czas', label: 'Minutnik', description: 'Uruchamia minutnik na podaną liczbę sekund.', writes: ['timer'],
   args: { type: 'object', properties: { seconds: { type: 'number', minimum: 1, maximum: 86400 }, label: { type: 'string', maxLength: 40 }, show: { type: 'boolean' } }, required: ['seconds'] },
   examples: ['minutnik {seconds}', 'ustaw minutnik na {seconds}', 'odliczaj {seconds}', 'pomodoro', 'budzik za {seconds}'],
@@ -350,7 +356,7 @@ R.add({ id: 'files_write', group: 'Pliki', label: 'Zapisz plik', description: 'Z
   async run({ name, text, append }) { await FS.write(name, text, append); return ok({ name, bytes: text.length }, (append ? 'Dopisałem do ' : 'Zapisałem ') + name + '.'); } });
 R.add({ id: 'files_export_note', group: 'Pliki', label: 'Eksportuj notatkę do pliku', description: 'Zapisuje notatkę jako plik .md w folderze roboczym.', writes: ['files'],
   args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] }, examples: ['eksportuj notatke {note} [do pliku]', 'zapisz notatke {note} jako plik'],
-  async run({ note }) { const f = findNote(note); if (f.err) return f.err; const name = (f.note.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '').trim() + '.md'; await FS.write(name, '# ' + f.note.title + '\n\n' + f.note.body); return ok({ name }, 'Zapisałem „' + f.note.title + '” jako ' + name + '.'); } });
+  async run({ note }) { const f = await findNote(note); if (f.err) return f.err; const name = (f.note.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '').trim() + '.md'; await FS.write(name, '# ' + f.note.title + '\n\n' + f.note.body); return ok({ name }, 'Zapisałem „' + f.note.title + '” jako ' + name + '.'); } });
 
 /* =================== ZGODNOŚĆ: J.actions (stare wywołania) =================== */
 J.actions = new Proxy({}, { get: (_, name) => typeof name === 'string' && R.has(name) ? (args) => R.run(name, args, { source: 'ui' }) : undefined });

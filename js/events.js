@@ -112,6 +112,8 @@ const reduce = e => {
     case 'task.paused': engine.hold = 'PAUSED'; setMode('PAUSED'); engine.activity = .15; break;
     case 'task.resumed': engine.hold = null; recompute(); break;
     case 'task.recovering': engine.hold = null; setMode('RECOVERING'); engine.activity = .3; break;
+    case 'task.verifying': if (engine.taskId) { engine.hold = 'VERIFYING'; setMode('VERIFYING'); engine.activity = .3; } break;
+    case 'task.verified': if (engine.hold === 'VERIFYING') { engine.hold = null; recompute(); } break;
     case 'signal': if (!engine.taskId) engine.activity = Math.max(engine.activity, .35); break;
     case 'task.created':
       if (!p.replay) J.ev.stopReplay();

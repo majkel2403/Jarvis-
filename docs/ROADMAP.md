@@ -15,6 +15,8 @@ Zrealizowane w kodzie i pokryte testami (`tests/unit`, `tests/e2e`):
 - **Faza 6** — File System Access (lista/odczyt/zapis/eksport notatek), import `.ics`, natywne `tool_calls` (Ollama/vLLM) z autodetekcją, lista narzędzi gatewaya w pakiecie, alerty kursów.
 - **Faza 7 (część)** — pauza rysowania w tle, adaptacyjna jakość, backoff pingu, pauza WebSocketu, centrum powiadomień, onboarding, paleta z dopasowaniem rozmytym i „Ostatnie”, przyciąganie i kafelkowanie okien, układy, klikalne karty HUD.
 
+- **Sędzia Jev** (`js/judge.js`) — model decyzyjny TypeSafe przez OpenRouter jako trzecia warstwa obok rejestru i Hermesa: fan-out intencja/ryzyko/dwuznaczność/deixis w jednym wywołaniu, trasy wykonaj/zapytaj/Hermes według progów, dynamiczne potwierdzenia, rozstrzyganie kandydatów w `findNote/findTask`, weryfikacja odpowiedzi (stan `VERIFYING`), pilność sygnałów w trybie aktywnym, test w Ustawieniach, sonda `tests/jev-probe.js` na polskich wypowiedziach, testy z zamockowanym API.
+
 Nie zrealizowane (świadomie odłożone): i18n PL/EN, motyw jasny i wysokiego kontrastu, wirtualne pulpity, RSS i kursy walut, pełny tryb mobilny z dolnym paskiem, audyt a11y (pułapka fokusu w palecie). Wymagają decyzji z sekcji 11 albo osobnej iteracji.
 
 ---
