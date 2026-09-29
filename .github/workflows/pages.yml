@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sprawdzenie składni JS
         run: for f in js/*.js sw.js; do node --check "$f"; done
+      - name: Sprawdzenie składni Pythona (most i instalator Hermesa)
+        run: python3 -m py_compile bridge/*.py hermes/*.py
       - uses: actions/configure-pages@v5
         with:
           enablement: true

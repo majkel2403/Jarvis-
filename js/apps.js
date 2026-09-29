@@ -663,6 +663,16 @@ J.apps.settings = {
         <div class="dim" id="hInfo" style="font-size:10.5px;line-height:1.5"></div>
         <div class="muted" id="hHelp" style="font-size:10.5px;line-height:1.55"></div>
       </div>
+      <div class="label">Most pulpitu dla Hermesa (MCP)</div>
+      <div class="card col">
+        <label class="toggle" style="padding-top:0"><div>Most włączony<small>Hermes steruje pulpitem natywnymi narzędziami (bez parsowania tekstu z odpowiedzi)</small></div><span class="switch"><input type="checkbox" id="bOn"><i></i></span></label>
+        <input class="input" id="bUrl" placeholder="Adres mostu, np. http://127.0.0.1:8651" spellcheck="false">
+        <input class="input" id="bTok" type="password" placeholder="Token mostu (pobierany automatycznie po uruchomieniu mostu)" autocomplete="off">
+        <select class="input" id="hMode"><option value="auto">Tryb Hermesa: automatyczny (MCP, gdy profil używa mostu)</option><option value="mcp">Zawsze MCP (natywne narzędzia)</option><option value="prompt">Zawsze prompt (parsowanie tekstu — awaryjnie)</option></select>
+        <div class="row"><button class="btn primary" id="bConn">Połącz / odśwież</button></div>
+        <div class="dim" id="bInfo" style="font-size:10.5px;line-height:1.5"></div>
+        <div class="muted" id="bHelp" style="font-size:10.5px;line-height:1.55">Uruchom most: <code>bridge\\start-bridge.bat</code>. Konfigurację profilu Hermesa <code>jarvis-desktop</code> instaluje <code>hermes\\install-profile.ps1</code> (opis w README).</div>
+      </div>
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
       <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.0 · skróty: <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>Esc</kbd> zamknij okno</div>`;
@@ -684,7 +694,9 @@ J.apps.settings = {
     const fillH = () => { hOn.checked = !!s.hermesOn; hProv.value = s.hermesProvider; hUrl.value = s.hermesUrl; hModel.value = s.hermesModel; hKey.value = s.hermesKey; };
     const help = () => {
       hInfo.textContent = s.hermesOn ? 'Aktywne: ' + s.hermesModel + ' @ ' + s.hermesUrl + (s.hermesKey ? ' · klucz zapisany' : ' · bez klucza') : 'Wyłączone — działa lokalny silnik poleceń.';
-      hHelp.innerHTML = s.hermesProvider === 'agent'
+      hHelp.innerHTML = s.hermesProvider === 'desktop'
+        ? 'Dedykowany lekki profil Hermesa <code>jarvis-desktop</code> (bez skilli, terminala i plików) z narzędziami pulpitu przez most MCP. Instalacja: <code>hermes\\install-profile.ps1</code>, potem <code>hermes -p jarvis-desktop gateway</code>. Wpisz klucz <code>API_SERVER_KEY</code> tego profilu.'
+        : s.hermesProvider === 'agent'
         ? `Uruchom Hermes Agent z włączonym serwerem API. W <code>~/.hermes/.env</code>:<br><code>API_SERVER_ENABLED=true</code><br><code>API_SERVER_KEY=twój-klucz</code><br><code>API_SERVER_CORS_ORIGINS=${esc(location.origin)}</code><br>potem <code>hermes gateway</code> i wpisz ten sam klucz powyżej.`
         : s.hermesProvider === 'portal' ? 'Klucz API z <b>portal.nousresearch.com</b>. Modele Hermes: Hermes-4-405B, Hermes-4-70B.'
         : 'Dowolny serwer zgodny z OpenAI z modelem Hermes, np. Ollama: <code>ollama pull hermes3</code>, uruchom z <code>OLLAMA_ORIGINS=' + esc(location.origin) + '</code>.';
@@ -696,8 +708,20 @@ J.apps.settings = {
     $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
-    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
+    const bOn = $('#bOn', body), bUrl = $('#bUrl', body), bTok = $('#bTok', body), hMode = $('#hMode', body), bInfo = $('#bInfo', body);
+    bOn.checked = !!s.bridgeOn; bUrl.value = s.bridgeUrl || ''; bTok.value = s.bridgeToken || ''; hMode.value = s.hermesMode || 'auto';
+    const drawB = () => {
+      const b = J.bridge, uses = b.hermesUses?.(s.hermesModel), names = Object.keys(b.hermes || {});
+      bInfo.textContent = !s.bridgeOn ? 'Most wyłączony — Hermes może sterować pulpitem tylko przez parsowanie tekstu (awaryjnie).'
+        : b.status === 'up' ? '✓ Most połączony · ' + b.tools.length + ' narzędzi MCP · ' + (names.length ? 'Hermes używa mostu (profile: ' + names.join(', ') + ')' + (uses ? ' — aktualny profil „' + s.hermesModel + '” korzysta z niego: tryb MCP aktywny' : ' — ale aktualny profil „' + s.hermesModel + '” jeszcze nie') : 'Hermes jeszcze się nie zgłosił (zainstaluj profil jarvis-desktop)')
+        : b.status === 'connecting' ? 'Łączę z mostem…' : '✗ Most niedostępny — uruchom bridge\\start-bridge.bat (odświeża się automatycznie).';
+    };
+    drawB(); sub(ctx, 'bridge', drawB);
+    const saveB = () => { s.bridgeOn = bOn.checked; s.bridgeUrl = bUrl.value.trim(); s.bridgeToken = bTok.value.trim(); s.hermesMode = hMode.value; J.save(); J.emit('settings'); drawB(); };
+    bOn.onchange = bUrl.onchange = bTok.onchange = hMode.onchange = saveB;
+    $('#bConn', body).onclick = () => { saveB(); J.bridge.connect(); J.bridge.refresh(); };
+    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', bridgeToken: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, btok = s.bridgeToken; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.bridgeToken = btok; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
     $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) J.resetAll(); };
   }
 };

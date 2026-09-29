@@ -69,17 +69,39 @@ Jarvis wysyła nagłówek `X-Hermes-Session-Id`, więc pamięć długoterminowa 
 
 Klucz **nigdy nie jest częścią kodu ani repozytorium** — wpisujesz go w Ustawieniach, trafia wyłącznie do `localStorage` tej przeglądarki (eksport kopii zapasowej go pomija). Hermes Agent uruchamiaj natywnie w Windows (nie przez WSL). Gdy Hermes nie odpowiada lub odrzuca klucz, polecenie wykonuje lokalny silnik, a w czacie pojawia się ostrzeżenie. `Esc` przerywa generowanie odpowiedzi.
 
-## Jak Jarvis steruje sobą (zasady działania)
+## Jak Jarvis steruje pulpitem (architektura)
 
 Każde polecenie przechodzi przez trzy warstwy (`js/ai.js`):
 
 1. **Szybka ścieżka lokalna** — jednoznaczne polecenia sterowania pulpitem („stwórz widget listy zakupów: mleko, chleb”, „ułóż okna obok siebie”, „zminimalizuj notatnik”, „otwórz kalkulator”, „zanotuj…”, „minutnik 5 minut”) wykonuje od razu silnik lokalny (~30 ms), bez pytania Hermesa. Pytania (kończące się `?`), rozmowa, wiedza, pogoda i kursy idą do Hermesa. Wyłączysz to w *Ustawienia → Szybkie polecenia pulpitu*.
-2. **Hermes** — dostaje w promptcie: tożsamość, 10 zasad działania (działaj zamiast opisywać, weryfikuj wynik z `ok`, nie kłam o wykonaniu, nic nieodwracalnego bez prośby…), katalog „co gdzie”, przepisy na typowe zadania, obsługę błędów oraz **16 przykładowych wiadomości** pokazujących dokładny format `<tool_call>`. Model widzi też pełne sygnatury 18 narzędzi; `skills_list()` zwraca mu podręcznik.
-3. **Zabezpieczenia** — parser rozumie `<tool_call>`, niezamknięty tag, gołe JSON-y i pseudo-format Hermesa (`invoke create_widget with type is list …`); gdy model opisze wywołanie słowami, dostaje jedną korektę, a potem polecenie wykonuje silnik lokalny. Pętla identycznych wywołań (3×), zawieszony strumień (120 s bez danych) i agent mielący własne narzędzia serwerowe (>14 wywołań w turze) są przerywane z przejściem na silnik lokalny.
+2. **Hermes z natywnymi narzędziami (MCP) — zalecane.** Most `bridge/jarvis_bridge.py` udostępnia Hermesowi **19 prawdziwych narzędzi** `mcp__jarvis_desktop__*` (okna, widgety z edycją, notatki z CRUD, zadania, minutniki, motyw, `get_desktop_state`). Hermes woła je natywnym function calling, a wynik (albo błąd z podpowiedzią) wraca do agenta — bez parsowania tekstu.
+3. **Tryb awaryjny „prompt”** — gdy most nie działa lub profil Hermesa go nie używa, klient dostaje długi prompt z zasadami i przykładami, a wywołania `<tool_call>` są parsowane z tekstu (obsługuje też pseudo-format `invoke create_widget with type is list …`; agent mielący własne narzędzia >14 razy w turze jest przerywany).
 
-Narzędzia (18): `open_app`, `close_app`, `window_control`, `arrange_windows`, `get_status`, `focus_mode`, `create_widget` (note · list · result · calc), `create_note`, `add_task`, `start_timer`, `add_shortcut`, `set_theme`, `set_wallpaper`, `get_weather`, `get_crypto_prices`, `open_url`, `calculate`, `get_datetime`.
+```
+Jarvis OS (przeglądarka) ──SSE /bridge/events──┐
+   ▲   wynik POST /bridge/result               │
+   │                                   bridge/jarvis_bridge.py  (127.0.0.1:8651)
+   │                                    ▲ MCP streamable HTTP /mcp  (Bearer token)
+   └── chat ──► Hermes gateway (profil jarvis-desktop, :8643) ─┘
+```
 
-> **Uwaga o Hermes Agent.** To pełny agent inżynieryjny z własnymi skillami (np. `jarvis-os-*`). Na polecenia o „Jarvis OS” potrafi zacząć od czytania skilli zamiast wywołać `<tool_call>`. Dlatego proste polecenia obsługuje szybka ścieżka, a do trybu pulpitu najlepiej użyć osobnego, lekkiego profilu Hermesa bez skilli programistycznych.
+### Dlaczego nie „prompt”, tylko MCP (wnioski z kodu Hermes Agent 0.21.3)
+- Serwer API **ignoruje** `tools` z żądania klienta — nie ma narzędzi klienckich; `system` jest tylko doklejany do rdzenia.
+- Rdzeń zawiera regułę *„MUST load skill_view”*; agent z pełnym zestawem (terminal, pliki, skille) traktuje „zrób widget” jak zadanie inżynierskie i w kółko czyta skille (`jarvis-os-*`).
+- Z nagłówkiem `X-Hermes-Session-Id` historia pochodzi **z bazy serwera**, więc przykłady w body nigdy nie docierają, a sesja zbiera własne pomyłki.
+- Rozwiązanie natywne dla Hermesa: własny serwer **MCP** + dedykowany, lekki profil (`platform_toolsets.api_server` = `memory`, `web`, `session_search`, `jarvis_desktop`; wyłączone: skills, terminal, file, browser, code_execution, computer_use, delegation, cronjob, kanban) + `SOUL.md` z zasadami pracy.
+
+### Instalacja (Windows, Hermes natywnie — bez WSL)
+1. **Most:** `bridge\start-bridge.bat` (zostaw uruchomiony). Token jest w `%USERPROFILE%\.jarvis-os\bridge-token`; strona Jarvis OS pobiera go sama (parowanie tylko dla dozwolonego Origin).
+2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, a potem bez `-DryRun` (dodaj `-CopyAuth`, by skopiować logowanie do dostawcy modelu). Klonuje Twój aktywny profil **bez kanałów** (Telegram zostaje w starym profilu), konfiguruje MCP, toolsety, `.env` i `SOUL.md`, robi kopię `config.yaml`. Twój obecny gateway nie jest zmieniany.
+3. **Gateway:** `hermes\start-desktop-gateway.bat` (profil `jarvis-desktop`, API na `:8643`).
+4. **Jarvis OS:** *Ustawienia → Hermes → „Hermes Desktop (profil jarvis-desktop + most MCP)”*, wpisz `API_SERVER_KEY` wypisany przez instalator. Tryb MCP włącza się sam, gdy profil zgłosi się do mostu (*Ustawienia → Most pulpitu dla Hermesa* pokazuje status).
+
+Testy: `bridge\test_bridge.py` (symulowana przeglądarka + prawdziwy klient MCP), `bridge\demo_e2e.py` (steruje prawdziwym pulpitem), `bridge\mock_hermes.py` (atrapa gatewaya do testów klienta). Uruchamiaj Pythonem z `%USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe`.
+
+Narzędzia po stronie pulpitu (24, `js/ai.js`): `open_app`, `close_app`, `window_control`, `arrange_windows`, `focus_mode`, `get_desktop_state`, `get_status`, `create_widget`, `update_widget`, `create_note`, `read_note`, `update_note`, `delete_note`, `add_task`, `update_task`, `start_timer`, `add_shortcut`, `set_theme`, `set_wallpaper`, `get_weather`, `get_crypto_prices`, `open_url`, `calculate`, `get_datetime`.
+
+> **Bezpieczeństwo mostu:** nasłuchuje tylko na `127.0.0.1`; `/mcp` wymaga tokenu Bearer, kanał przeglądarki tokenu i dozwolonego Origin (CORS + Private Network Access); profil `jarvis-desktop` nie ma terminala ani dostępu do plików.
 
 ## Skróty klawiszowe
 
@@ -99,11 +121,14 @@ css/jarvis.css        wygląd i animacje
 js/core.js            stan, dźwięk, głos, menedżer okien
 js/events.js          Event Bus i maszyna stanów Visual Engine
 js/process.js         Process Log (kroki zadania, historia, eksport)
-js/ai.js              akcje systemowe (18 narzędzi), silnik lokalny, integracja z Hermesem
+js/ai.js              akcje systemowe (24 narzędzia), szybka ścieżka lokalna, integracja z Hermesem (tryby MCP / prompt)
+js/bridge.js          klient mostu: odbiera polecenia Hermesa (SSE) i wykonuje je na pulpicie
 js/apps.js            usługi (pogoda, rynek, zadania) i aplikacje
 js/widgets.js         widgety pulpitu (notatka, lista, wynik, kalkulator)
 js/hud.js             karty HUD i geometria sceny
 js/main.js            start, efekty, pulpit, dok, paleta, skróty
+bridge/               most MCP (Python), start-bridge.bat, testy i atrapa gatewaya
+hermes/               SOUL.md, apply_profile.py, install-profile.ps1, start-desktop-gateway.bat (profil jarvis-desktop)
 sw.js                 service worker (offline)
 assets/               tapeta i ikona
 ```

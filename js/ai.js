@@ -108,7 +108,7 @@ const A = J.actions = {
       if (action === 'close' || action === 'minimize') { J.wm.close('chat'); return { ok: true, text: 'Czat schowany' }; }
       J.wm.open('chat'); return { ok: true, text: 'Czat pokazany' };
     }
-    if (!J.apps[app]) return { ok: false, text: 'Nieznane okno: ' + app + '. Identyfikatory otwartych okien zwraca get_status.' };
+    if (!J.apps[app]) return { ok: false, text: 'Nieznane okno: ' + app + '. Identyfikatory otwartych okien zwraca get_desktop_state (lub get_status).' };
     if (!J.wm.isOpen(app)) {
       if (action === 'close' || action === 'minimize') return { ok: false, text: 'Okno „' + title + '” nie jest otwarte' };
       J.wm.open(app);
@@ -124,6 +124,49 @@ const A = J.actions = {
     if (layout === 'minimize_all') { J.wm.minimizeAll(); return { ok: true, text: 'Wszystkie okna zminimalizowane' }; }
     const n = J.wm.arrange(layout === 'cascade' ? 'cascade' : 'tile');
     return n ? { ok: true, text: 'Ułożono ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + ' (' + (layout === 'cascade' ? 'kaskada' : 'kafelki') + ')' } : { ok: false, text: 'Brak otwartych okien do ułożenia' };
+  },
+  get_desktop_state() {
+    const S = J.state, cut = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, n) + '…' : t; };
+    const wins = J.wm.list().filter(i => J.apps[i]).map(i => ({ id: i, title: J.apps[i].title, state: J.wm.isMin(i) ? 'minimized' : J.wm.isMax(i) ? 'maximized' : 'normal', focused: J.wm.isFocused(i) }));
+    const st = {
+      windows: wins,
+      chat_panel_open: !!J.chatPanel?.isOpen,
+      widgets: S.widgets.map(w => ({ id: w.id, window_id: 'w:' + w.id, type: w.type, title: w.title, ...(w.type === 'list' ? { items: w.data.items.map((it, n) => (n + 1) + '. ' + (it.done ? '[x] ' : '[ ] ') + it.text) } : { content: cut(w.data.text, 400) }) })),
+      notes: S.notes.slice(0, 30).map(n => ({ id: n.id, title: n.title, preview: cut(n.body, 120) })),
+      tasks_today: J.tasks.today().map(t => ({ id: t.id, time: t.time || null, text: t.text, done: t.done })),
+      tasks_upcoming: S.tasks.filter(t => t.date > J.today()).slice(0, 15).map(t => ({ id: t.id, date: t.date, time: t.time || null, text: t.text, done: t.done })),
+      timer: J.timer.running ? { label: J.timer.label, left: J.timer.fmt(J.timer.left()) } : null,
+      shortcuts: S.shortcuts.map(s => ({ id: s.id, name: s.name, target: s.url || s.app })),
+      theme: { accent: S.settings.accent, wallpaper: S.settings.wall, focus_mode: J.$('#app').classList.contains('focus') },
+      available_apps: Object.keys(J.apps).filter(k => !J.apps[k].widget),
+      now: new Date().toLocaleString('pl-PL', { dateStyle: 'full', timeStyle: 'short' })
+    };
+    return { ok: true, text: JSON.stringify(st) };
+  },
+  update_widget({ id, title, content, items, add_items, toggle, remove_item }) {
+    const wid = String(id || '').replace(/^w:/, '');
+    try { const w = J.widgets.update(wid, { title, content, items, add_items, toggle, remove_item }); return { ok: true, text: 'Zaktualizowano widget „' + w.title + '”' }; }
+    catch (e) { return { ok: false, text: e.message + '. Ids widgetów: ' + (J.state.widgets.map(w => w.id + ' (' + w.title + ')').join(', ') || 'brak widgetów') }; }
+  },
+  read_note({ id }) {
+    const n = J.state.notes.find(x => x.id === id); if (!n) return { ok: false, text: 'Nie ma notatki o id ' + id + '. Ids: ' + J.state.notes.map(x => x.id + ' („' + x.title + '”)').join(', ') };
+    return { ok: true, text: JSON.stringify({ id: n.id, title: n.title, body: n.body }) };
+  },
+  update_note({ id, title, body, append }) {
+    const n = J.state.notes.find(x => x.id === id); if (!n) return { ok: false, text: 'Nie ma notatki o id ' + id };
+    if (title != null) n.title = String(title).slice(0, 80);
+    if (body != null) n.body = append ? (n.body ? n.body + '\n' : '') + String(body) : String(body);
+    n.ts = Date.now(); J.save(); J.emit('notes', n.id); return { ok: true, text: 'Zaktualizowano notatkę „' + n.title + '”' };
+  },
+  delete_note({ id }) {
+    const n = J.state.notes.find(x => x.id === id); if (!n) return { ok: false, text: 'Nie ma notatki o id ' + id };
+    J.notes.remove(id); return { ok: true, text: 'Usunięto notatkę „' + n.title + '”' };
+  },
+  update_task({ id, done, text, time, delete: del }) {
+    const t = J.state.tasks.find(x => x.id === id); if (!t) return { ok: false, text: 'Nie ma zadania o id ' + id };
+    if (del) { J.state.tasks = J.state.tasks.filter(x => x !== t); J.save(); J.emit('tasks'); return { ok: true, text: 'Usunięto zadanie: ' + t.text }; }
+    if (done != null) t.done = !!done; if (text != null) t.text = String(text); if (time != null) { t.time = time; t.fired = false; }
+    J.save(); J.emit('tasks'); return { ok: true, text: 'Zaktualizowano zadanie: ' + t.text + (t.done ? ' ✓' : '') };
   }
 };
 
@@ -147,6 +190,12 @@ const TOOLS = [
   { name: 'create_widget', description: 'Tworzy widget na pulpicie. UWAGA: NIE używaj dla interaktywnych aplikacji — do kalkulatora ZAWSZE open_app({app:"calc"}). Typy: note=edytowalna notatka (content), list=lista checkboxów (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator na pulpicie z polem wyrażenia. Używaj TYLKO gdy użytkownik wprost prosi o "widget", "listę na pulpicie" lub "zachowaj wynik".', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result', 'calc'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
   { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } },
   { name: 'window_control', description: 'Steruje jednym oknem: focus (przenieś na wierzch/otwórz), minimize, maximize, restore (przywróć rozmiar), close. app = id aplikacji (np. notes) albo id widgetu (w:xxxx) — listę otwartych okien z id podaje get_status.', input_schema: { type: 'object', properties: { app: { type: 'string' }, action: { type: 'string', enum: ['focus', 'minimize', 'maximize', 'restore', 'close'] } }, required: ['app', 'action'] } },
+  { name: 'get_desktop_state', description: 'Zwraca pełny stan pulpitu jako JSON: otwarte okna (id, stan), widgety (id + zawartość), notatki (id), zadania (id), minutnik, skróty, motyw, dostępne aplikacje. Wywołaj ZAWSZE przed edycją/usuwaniem czegokolwiek, żeby poznać id.', input_schema: { type: 'object', properties: {} } },
+  { name: 'update_widget', description: 'Edytuje istniejący widget (id z get_desktop_state). Dla note/result: content. Dla list: items (zastąp całość), add_items (dopisz), toggle (odhacz/odznacz pozycję po tekście lub numerze 1..n), remove_item (usuń pozycję). title zmienia tytuł.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, add_items: { type: 'array', items: { type: 'string' } }, toggle: { type: 'string' }, remove_item: { type: 'string' } }, required: ['id'] } },
+  { name: 'read_note', description: 'Czyta pełną treść notatki po id (id z get_desktop_state).', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  { name: 'update_note', description: 'Zmienia tytuł i/lub treść notatki. append=true dopisuje body na końcu zamiast zastępować.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, append: { type: 'boolean' } }, required: ['id'] } },
+  { name: 'delete_note', description: 'Usuwa notatkę po id. Tylko na wyraźną prośbę użytkownika.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  { name: 'update_task', description: 'Zmienia zadanie z harmonogramu po id: done (ukończ/odznacz), text, time (HH:MM) albo delete=true (usuń).', input_schema: { type: 'object', properties: { id: { type: 'string' }, done: { type: 'boolean' }, text: { type: 'string' }, time: { type: 'string' }, delete: { type: 'boolean' } }, required: ['id'] } },
   { name: 'arrange_windows', description: 'Układa otwarte okna na pulpicie: tile (kafelki obok siebie), cascade (kaskada) albo minimize_all (pokaż pulpit).', input_schema: { type: 'object', properties: { layout: { type: 'string', enum: ['tile', 'cascade', 'minimize_all'] } }, required: ['layout'] } }
 ];
 
@@ -280,6 +329,7 @@ const local = async (raw, fast = false) => {
    albo dowolny serwer OpenAI-compatible z modelem Hermes (Ollama, LM Studio, vLLM…).
    Akcje systemu Jarvis OS wywoływane są natywnym formatem Hermes: <tool_call>{…}</tool_call>. */
 J.HERMES_PRESETS = {
+  desktop: { label: 'Hermes Desktop (profil jarvis-desktop + most MCP) — zalecane', url: 'http://localhost:8643/v1', model: 'jarvis-desktop' },
   agent: { label: 'Hermes Agent (lokalny gateway)', url: 'http://localhost:8642/v1', model: 'hermes-agent' },
   portal: { label: 'Nous Portal (chmura)', url: 'https://inference-api.nousresearch.com/v1', model: 'Hermes-4-405B' },
   custom: { label: 'Własny serwer (Ollama / LM Studio / vLLM)', url: 'http://localhost:11434/v1', model: 'hermes3' }
@@ -366,6 +416,11 @@ Rozmawiasz z użytkownikiem PRZEZ działający pulpit Jarvis OS w przeglądarce.
 • Sieć/pogoda/kursy nie działają → powiedz, że usługa jest chwilowo niedostępna; nie zmyślaj danych.
 • Prośba spoza możliwości Jarvis OS → powiedz to szczerze i zaproponuj najbliższą alternatywę.`;
 
+/* krótki prompt trybu MCP — reguły pracy siedzą w SOUL.md profilu, tu tylko kontekst chwili */
+const SYSTEM_MCP = () => `Rozmawiasz z użytkownikiem przez działający pulpit „Jarvis OS” w jego przeglądarce (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Teraz: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.
+Pulpitem sterujesz WYŁĄCZNIE natywnymi narzędziami mcp__jarvis_desktop__* — od razu, bez opisywania planu. Przed edycją lub usunięciem czegokolwiek wywołaj get_desktop_state (id okien, widgetów, notatek, zadań). Sukces potwierdzaj dopiero wynikiem narzędzia. Nie zamykaj wszystkiego i nie usuwaj bez wyraźnej prośby. Do sterowania pulpitem nie używaj plików, terminala ani skilli.
+Odpowiedzi są czytane na głos: po polsku, 1–3 zdania, bez tabel i nagłówków.`;
+
 const TC = (name, args) => '<tool_call>\n' + JSON.stringify({ name, arguments: args }) + '\n</tool_call>';
 const TR = (name, content, ok = true) => '<tool_response>\n' + JSON.stringify({ name, ok, content }) + '\n</tool_response>';
 /* przykładowa rozmowa dołączana do każdego zapytania — pokazuje modelowi dokładny format w akcji */
@@ -392,17 +447,26 @@ const fmtMs = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) 
 const history = [];
 const MAX_TURNS = 6, STALL_MS = 120000, SERVER_TOOL_CAP = 14;
 let controller = null;
-const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
+let sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
+const newSession = () => { sessionKey = 'jarvis-os:' + J.uid(); try { localStorage.setItem('jarvis-os:sid', sessionKey); } catch (e) { } };
+const isAgent = p => p === 'agent' || p === 'desktop';
+/* tryb MCP: Hermes ma prawdziwe narzędzia pulpitu (most), więc nie parsujemy tekstu — jedna tura, agent sam robi pętlę.
+   „auto” = most połączony ORAZ ten profil Hermesa faktycznie z niego korzysta (widać po nagłówku X-Jarvis-Profile). */
+const mcpMode = () => {
+  const c = cfg(), m = J.state.settings.hermesMode || 'auto';
+  if (!isAgent(c.provider) || m === 'prompt') return false;
+  return m === 'mcp' || (J.bridge?.hermesUses(c.model) ?? false);
+};
 
 const headers = () => {
   const c = cfg(), h = { 'Content-Type': 'application/json' };
   if (c.key) h.Authorization = 'Bearer ' + c.key;
-  if (c.provider === 'agent') h['X-Hermes-Session-Id'] = sessionKey;
+  if (isAgent(c.provider)) h['X-Hermes-Session-Id'] = sessionKey;
   return h;
 };
 const netError = () => {
   const c = cfg();
-  if (c.provider === 'agent') return `Nie mogę połączyć się z Hermes Agent pod ${c.url}. Sprawdź, czy działa \`hermes gateway\` z API_SERVER_ENABLED=true oraz czy w ~/.hermes/.env jest API_SERVER_CORS_ORIGINS=${location.origin}`;
+  if (isAgent(c.provider)) return `Nie mogę połączyć się z Hermes Agent pod ${c.url}. Sprawdź, czy działa \`hermes gateway\` z API_SERVER_ENABLED=true oraz czy w ~/.hermes/.env jest API_SERVER_CORS_ORIGINS=${location.origin}`;
   return `Brak połączenia z ${c.url} (serwer wyłączony albo blokada CORS).`;
 };
 const httpError = async r => {
@@ -553,6 +617,7 @@ const hermes = async (text, bubble) => {
   let reply = '';
   const callSigs = new Map();
   let nudged = false;
+  const mcp = mcpMode(), capN = mcp ? 40 : SERVER_TOOL_CAP;
   const t0 = Date.now();
   const progressTimer = setInterval(() => {
     const el = Math.round((Date.now() - t0) / 1000);
@@ -560,10 +625,10 @@ const hermes = async (text, bubble) => {
   }, 10000);
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const msgs = [{ role: 'system', content: SYSTEM() }, ...FEWSHOT, ...history.slice(-30)];
+      const msgs = mcp ? [{ role: 'system', content: SYSTEM_MCP() }, { role: 'user', content: text }] : [{ role: 'system', content: SYSTEM() }, ...FEWSHOT, ...history.slice(-30)];
       const prefix = reply ? reply + '\n\n' : '';
       const c = cfg();
-      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + FEWSHOT.length + ' przykładowych + ' + (msgs.length - 1 - FEWSHOT.length) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
+      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Tryb', mcp ? 'MCP — Hermes ma natywne narzędzia pulpitu (most), historia po stronie serwera' : 'prompt — wywołania <tool_call> parsowane z tekstu'], ['Wiadomości', mcp ? '2 (krótki system + polecenie)' : msgs.length + ' (system + ' + FEWSHOT.length + ' przykładowych + ' + (msgs.length - 1 - FEWSHOT.length) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
       let thought = null, firstTok = 0, lastLen = 0;
       let raw;
       const serverTools = [];   // narzędzia Hermesa zgłoszone w tej turze (SSE hermes.tool.progress)
@@ -572,10 +637,10 @@ const hermes = async (text, bubble) => {
       try {
         raw = await streamChat(msgs,
           acc => { if (!firstTok) firstTok = Date.now(); J.engine.feed(acc.length - lastLen); lastLen = acc.length; const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
-          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); if (serverTools.length > SERVER_TOOL_CAP && controller) { runaway = true; controller.abort(); } J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
+          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); if (serverTools.length > capN && controller) { runaway = true; controller.abort(); } J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
           r => { J.engine.feed(r.length); J.engine.thinkChars += r.length; if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
       } catch (e) {
-        if (runaway) e = Object.assign(new Error('Agent Hermesa wykonał ponad ' + SERVER_TOOL_CAP + ' własnych wywołań narzędzi w jednej turze bez odpowiedzi (np. w kółko czytał skille) — przerwano.'), { net: true, runaway: true });
+        if (runaway) e = Object.assign(new Error('Agent Hermesa wykonał ponad ' + capN + ' własnych wywołań narzędzi w jednej turze bez odpowiedzi (np. w kółko czytał skille) — przerwano.'), { net: true, runaway: true });
         thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message);
         serverTools.forEach(t => J.ev.emit('tool.failed', { tool: t, source: 'hermes' }, 'hermes'));
         J.ev.emit('model.failed', { model: c.model, error: e.message }, 'hermes'); throw e;
@@ -586,6 +651,7 @@ const hermes = async (text, bubble) => {
       J.ev.emit('model.completed', { model: c.model, chars: raw.length }, 'hermes');
       if (!thought) { const tm = /<think>([\s\S]*?)<\/think>/.exec(raw); if (tm && tm[1].trim()) J.proc.step('thought', 'Rozumowanie modelu', [['Myśli', tm[1].trim()]]); }
       ms.done([['Surowa odpowiedź', raw], ['Do pierwszego tokenu', firstTok ? fmtMs(firstTok - ms.step.ts) : '—']], raw.length + ' znaków');
+      if (mcp) { reply = visible(raw) || reply; break; }   // narzędzia wykonał sam Hermes przez most — nic do parsowania
       history.push({ role: 'assistant', content: raw });
       const v = visible(raw); if (v) reply = prefix + v;
       const calls = parseCalls(raw);
@@ -637,7 +703,8 @@ const hermes = async (text, bubble) => {
 let busy = false;
 J.brain = {
   get busy() { return busy; },
-  reset() { history.length = 0; },
+  reset() { history.length = 0; newSession(); },
+  get mcp() { return mcpMode(); },
   abort() { if (controller) { controller.abort(); return true; } return false; },
   async models() {
     const c = cfg(); let r;
@@ -703,6 +770,6 @@ J.brain = {
   }
 };
 J.brain.local = local;
-J.brain.system = SYSTEM; J.brain.parse = parseCalls; J.brain.visible = visible; J.brain.exec = exec;
+J.brain.run = run; J.brain.system = SYSTEM; J.brain.systemMcp = SYSTEM_MCP; J.brain.parse = parseCalls; J.brain.visible = visible; J.brain.exec = exec;
 setInterval(() => { if (J.aiReady() && !J.brain.busy) J.hermesPing(); }, 45000);
 })();

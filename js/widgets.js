@@ -95,6 +95,23 @@ J.widgets = {
     const key = J.widgets.register(w); J.wm.open(key); J.wm.remember(key);
     return w;
   },
+  /* edycja istniejącego widgetu: title / content / items (zastąp), add_items, toggle (tekst lub numer 1..n), remove_item */
+  update(id, patch = {}) {
+    const w = J.state.widgets.find(x => x.id === id); if (!w) throw new Error('Nie ma widgetu o id ' + id);
+    if (patch.title != null) w.title = String(patch.title).slice(0, 60);
+    if (w.type === 'list') {
+      const mk = a => (Array.isArray(a) ? a : String(a).split('\n')).map(x => String(x).replace(/^[-•*\s]+/, '').trim()).filter(Boolean).map(text => ({ text, done: false }));
+      const find = k => typeof k === 'number' || /^\d+$/.test(String(k)) ? w.data.items[+k - 1] : w.data.items.find(i => i.text.toLowerCase() === String(k).toLowerCase());
+      if (patch.items != null) w.data.items = mk(patch.items);
+      if (patch.add_items != null) w.data.items.push(...mk(patch.add_items));
+      if (patch.toggle != null) { const it = find(patch.toggle); if (!it) throw new Error('Nie ma pozycji: ' + patch.toggle); it.done = !it.done; }
+      if (patch.remove_item != null) { const it = find(patch.remove_item); if (!it) throw new Error('Nie ma pozycji: ' + patch.remove_item); w.data.items.splice(w.data.items.indexOf(it), 1); }
+    } else if (patch.content != null) w.data.text = String(patch.content);
+    J.save();
+    const ctx = J.wm.ctx('w:' + id);
+    if (ctx) { ctx.setTitle(w.title); if (J.apps['w:' + id]) J.apps['w:' + id].title = w.title; mounts[w.type](ctx.body, w); }
+    return w;
+  },
   /* po starcie: odtwórz widgety z poprzedniej sesji w ich pozycjach */
   restore() {
     J.state.widgets = J.state.widgets.filter(w => TYPES[w.type] && w.data);

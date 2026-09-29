@@ -80,6 +80,7 @@ const DEFAULTS = () => ({
   settings: {
     accent: '#3d8bff', accent2: '#a25cff', look: 3, wall: 'photo', particles: true, sound: true,
     speech: true, voiceName: '', fastLocal: true,
+    bridgeOn: true, bridgeUrl: 'http://127.0.0.1:8651', bridgeToken: '', hermesMode: 'auto',
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false
   },
