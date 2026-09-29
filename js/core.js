@@ -63,7 +63,10 @@ const P = {
   spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
-  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  pin: '<path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/>',
+  list: '<path d="M9 6h12M9 12h12M9 18h12M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'
 };
 J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${P[name] || P.star}</svg>`;
 
@@ -87,6 +90,7 @@ const DEFAULTS = () => ({
   ],
   shortcuts: [],
   log: [],
+  history: [],
   winPos: {},
   stats: { actions: 0 }
 });
@@ -97,7 +101,7 @@ J.state = (() => {
   if (!s) return d;
   s.settings = Object.assign(d.settings, s.settings || {});
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
-  for (const k of ['notes', 'tasks', 'shortcuts', 'log']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
   return s;
 })();
@@ -221,27 +225,6 @@ J.toast = (text, ms = 2600) => {
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, ms);
 };
 
-/* ---------- dziennik procesów ---------- */
-J.log = (() => {
-  let unread = 0;
-  const render = item => {
-    const d = new Date(item.ts);
-    const el = J.h('div', { class: 'logitem' }, `<span class="logdot ${item.level || ''}"></span><div><b></b><p></p></div><time>${J.hhmm(d)}</time>`);
-    el.querySelector('b').textContent = item.title; el.querySelector('p').textContent = item.text || '';
-    return el;
-  };
-  const api = (title, text = '', level = '') => {
-    const item = { title, text, level, ts: Date.now() };
-    J.state.log.unshift(item); J.state.log.length = Math.min(J.state.log.length, 60); J.save();
-    const box = J.$('#log'); if (box) { box.querySelector('.empty')?.remove(); box.prepend(render(item)); }
-    if (!J.$('#logPanel')?.classList.contains('open')) { unread++; api.badge(); }
-  };
-  api.badge = () => { const b = J.$('#logBadge'); if (!b) return; b.textContent = unread > 9 ? '9+' : unread; b.classList.toggle('hidden', !unread); };
-  api.read = () => { unread = 0; api.badge(); };
-  api.renderAll = () => { const box = J.$('#log'); box.innerHTML = ''; J.state.log.forEach(i => box.appendChild(render(i))); if (!J.state.log.length) box.innerHTML = '<div class="empty">Brak wpisów</div>'; };
-  return api;
-})();
-
 /* ---------- orb / stan asystenta ---------- */
 J.orb = (() => {
   let state = 'idle', bannerTimer;
@@ -286,7 +269,7 @@ J.wm = (() => {
   const isMobile = () => innerWidth <= 640;
 
   const savePos = (id, el) => {
-    if (el.classList.contains('max') || isMobile()) return;
+    if (el.classList.contains('max') || isMobile() || id.startsWith('w:')) return;
     J.state.winPos[id] = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }; J.save();
   };
   const focus = id => {
@@ -335,6 +318,7 @@ J.wm = (() => {
 
   const api = {
     open(id, arg) {
+      if (id === 'chat') { J.chatPanel?.show(arg); return true; }   // czat = stały lewy panel
       const app = J.apps[id]; if (!app) return false;
       if (open[id]) {
         const w = open[id];
@@ -370,6 +354,7 @@ J.wm = (() => {
       return true;
     },
     close(id) {
+      if (id === 'chat') { J.chatPanel?.hide(); return; }
       const w = open[id]; if (!w) return;
       savePos(id, w.el);
       w.cleanups.forEach(fn => { try { fn(); } catch (e) { } });
@@ -388,13 +373,14 @@ J.wm = (() => {
     minimizeAll() { Object.keys(open).forEach(api.minimize); },
     toggleMax(id) { const w = open[id]; if (w) { w.el.classList.toggle('max'); J.emit('wm-resize', id); } },
     toggle(id) {
+      if (id === 'chat') { J.chatPanel?.toggle(); return true; }
       const w = open[id];
       if (!w) return api.open(id);
       if (w.minimized) return api.open(id);
       if (w.el.classList.contains('focused')) return api.minimize(id);
       focus(id);
     },
-    isOpen: id => !!open[id],
+    isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,
     isFocused: id => !!open[id]?.el.classList.contains('focused'),
     ctx: id => open[id]?.ctx,

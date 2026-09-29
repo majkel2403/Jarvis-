@@ -96,6 +96,11 @@ const A = J.actions = {
         `Minutnik: ${J.timer.running ? J.timer.label + ', zostało ' + J.timer.fmt(J.timer.left()) : 'nieaktywny'}. Skróty na pulpicie: ${J.state.shortcuts.map(s => s.name).join(', ') || 'brak'}.`
     };
   },
+  create_widget({ type, title, content, items }) {
+    if (!J.widgets) return { ok: false, text: 'Widgety niedostępne' };
+    const w = J.widgets.create(type, { title, content, items });
+    return { ok: true, text: 'Utworzono widget „' + w.title + '” (' + ({ note: 'notatka', list: 'lista', result: 'wynik' })[type] + ') na pulpicie' };
+  },
   focus_mode({ on }) { J.setFocus?.(on !== false); return { ok: true, text: on === false ? 'Tryb skupienia wyłączony' : 'Tryb skupienia włączony — okna zminimalizowane' }; }
 };
 
@@ -116,17 +121,25 @@ const TOOLS = [
   { name: 'calculate', description: 'Dokładnie oblicza wyrażenie matematyczne (+ - * / ^ % nawiasy sqrt sin cos log ln pi).', input_schema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
   { name: 'get_datetime', description: 'Zwraca aktualną datę i godzinę użytkownika.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_status', description: 'Zwraca stan środowiska: otwarte okna, notatki, zadania na dziś, minutnik, skróty.', input_schema: { type: 'object', properties: {} } },
+  { name: 'create_widget', description: 'Tworzy widget na głównym pulpicie: note=notatka z tekstem (content), list=lista z pozycjami do odhaczania (items), result=karta z wynikiem/podsumowaniem zadania (content). Użyj, gdy użytkownik prosi o widget, listę albo chce zachować wynik na pulpicie.', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
   { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } }
 ];
 
 /* wykonanie akcji z walidacją wejścia */
-const run = async (name, input) => {
+const exec = async (name, input) => {
   const def = TOOLS.find(t => t.name === name), fn = A[name];
   if (!def || !fn) return { ok: false, text: 'Nieznane narzędzie: ' + name };
   if (!input || typeof input !== 'object') return { ok: false, text: 'INVALID_JSON: nieprawidłowe wejście narzędzia' };
   for (const r of def.input_schema.required || []) if (input[r] === undefined || input[r] === '') return { ok: false, text: 'Brak wymaganego pola: ' + r };
   for (const [k, p] of Object.entries(def.input_schema.properties)) if (p.enum && input[k] !== undefined && !p.enum.includes(input[k])) return { ok: false, text: `Nieprawidłowa wartość ${k}: ${input[k]}` };
   try { const r = await fn(input); J.action(name); return r; } catch (e) { return { ok: false, text: 'Błąd: ' + e.message }; }
+};
+
+const run = async (name, input) => {
+  const st = J.proc.step('tool', name, [['Argumenty', input == null ? '(brak)' : input]], { running: true });
+  const r = await exec(name, input);
+  if (r.ok) st.done([['Wynik', r.text]], String(r.text).slice(0, 80)); else st.fail(r.text);
+  return r;
 };
 
 /* =================== SILNIK LOKALNY =================== */
@@ -245,12 +258,13 @@ Sterujesz interfejsem Jarvis OS za pomocą funkcji wykonywanych w przeglądarce 
 <tools>
 ${TOOL_SPEC.map(t => JSON.stringify(t)).join('\n')}
 </tools>
-Gdy użytkownik prosi o działanie w Jarvis OS (otwarcie/zamknięcie aplikacji, notatkę, zadanie lub przypomnienie, minutnik, motyw, tapetę, skrót na pulpicie, pogodę, kursy krypto, obliczenia, otwarcie strony), wywołaj funkcję, zamiast opisywać, jak to zrobić. Każde wywołanie zapisz jako obiekt JSON w znacznikach:
+Gdy użytkownik prosi o działanie w Jarvis OS (otwarcie/zamknięcie aplikacji, notatkę, zadanie lub przypomnienie, minutnik, motyw, tapetę, skrót na pulpicie, widget na pulpicie, pogodę, kursy krypto, obliczenia, otwarcie strony), wywołaj funkcję, zamiast opisywać, jak to zrobić. Każde wywołanie zapisz jako obiekt JSON w znacznikach:
 <tool_call>
 {"name": "nazwa_funkcji", "arguments": {"argument": "wartość"}}
 </tool_call>
 Możesz podać kilka wywołań naraz. Wyniki otrzymasz w znacznikach <tool_response></tool_response> — wtedy krótko potwierdź, co zrobiłeś. Nie wymyślaj wyników funkcji. Jeśli masz też własne narzędzia serwerowe (wyszukiwanie w sieci, pliki, terminal, pamięć), możesz z nich korzystać normalnie.`;
 
+const fmtMs = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
 const history = [];
 const MAX_TURNS = 6;
 let controller = null;
@@ -341,10 +355,19 @@ const hermes = async (text, bubble) => {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const msgs = [{ role: 'system', content: SYSTEM() }, ...history.slice(-30)];
       const prefix = reply ? reply + '\n\n' : '';
-      const raw = await streamChat(msgs,
-        acc => { const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
-        tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
-        () => J.orb.set('thinking', 'Hermes myśli…'));
+      const c = cfg();
+      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
+      let thought = null, firstTok = 0;
+      let raw;
+      try {
+        raw = await streamChat(msgs,
+          acc => { if (!firstTok) firstTok = Date.now(); const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
+          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
+          r => { if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
+      } catch (e) { thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message); throw e; }
+      thought?.done();
+      if (!thought) { const tm = /<think>([\s\S]*?)<\/think>/.exec(raw); if (tm && tm[1].trim()) J.proc.step('thought', 'Rozumowanie modelu', [['Myśli', tm[1].trim()]]); }
+      ms.done([['Surowa odpowiedź', raw], ['Do pierwszego tokenu', firstTok ? fmtMs(firstTok - ms.step.ts) : '—']], raw.length + ' znaków');
       history.push({ role: 'assistant', content: raw });
       const v = visible(raw); if (v) reply = prefix + v;
       const calls = parseCalls(raw);
@@ -352,6 +375,7 @@ const hermes = async (text, bubble) => {
       J.orb.set('thinking', 'wykonuję: ' + calls.map(c => c.name).join(', '));
       const results = [];
       for (const c of calls) {
+        if (!c.ok) J.proc.step('error', 'Nieprawidłowe wywołanie narzędzia', [['Surowy tekst', c.raw]], { status: 'err', preview: 'INVALID_JSON' });
         const r = c.ok ? await run(c.name, c.args) : { ok: false, text: 'INVALID_JSON: nie udało się odczytać argumentów wywołania' };
         J.chat.add('action', (r.ok ? '⚙ ' : '⚠ ') + c.name + ' → ' + r.text);
         results.push('<tool_response>\n' + JSON.stringify({ name: c.name, ok: r.ok, content: r.text }) + '\n</tool_response>');
@@ -394,31 +418,35 @@ J.brain = {
     J.chat.add('user', text);
     const bubble = J.chat.add('jarvis', '');
     J.orb.set('thinking', 'analizuję: „' + text.slice(0, 60) + '”');
-    J.log('Polecenie', text, 'info');
-    let reply;
+    J.proc.start(text);
+    let reply, status = 'ok';
     try {
       if (J.aiReady()) {
         try { reply = await hermes(text, bubble); }
         catch (e) {
           if (!e.net) throw e;
           // Hermes nieosiągalny — wykonaj lokalnie, żeby polecenie nie przepadło
-          J.log('Hermes offline', e.message, 'warn');
+          J.proc.step('error', 'Hermes nieosiągalny — przełączam na silnik lokalny', [['Błąd', e.message]], { status: 'err', preview: 'fallback' });
           const loc = await local(text);
           reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ ' + e.message;
         }
       } else {
+        J.proc.step('system', 'Silnik lokalny (bez modelu)', [['Tryb', 'Hermes wyłączony — dopasowanie poleceń regułami']]);
         await new Promise(r => setTimeout(r, 300 + Math.random() * 250));
         reply = await local(text);
         if (reply == null) reply = 'Nie rozpoznałem tego polecenia. Wpisz „pomoc”, aby zobaczyć, co potrafię offline — albo podłącz Hermesa w Ustawieniach, a odpowiem na wszystko.';
       }
       bubble.set(reply);
+      if (/⏹ przerwano\.$/.test(reply)) status = 'abort';
+      J.proc.step('reply', 'Odpowiedź Jarvisa', [['Treść', reply]], { preview: reply.replace(/\s+/g, ' ').slice(0, 70) });
       J.orb.set('idle', 'zadanie zakończone');
       if (opts.voice || J.state.settings.speech) J.voice.speak(reply.split('\n\n⚠')[0]);
     } catch (e) {
       bubble.set('⚠ ' + e.message); J.sfx.error(); J.orb.set('alert', e.message.slice(0, 90));
-      J.log('Błąd asystenta', e.message, 'err');
+      J.proc.step('error', 'Błąd asystenta', [['Komunikat', e.message], ['Stos', e.stack]], { status: 'err', preview: e.message.slice(0, 70) });
+      status = 'err'; reply = '⚠ ' + e.message;
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 3000);
-    } finally { busy = false; }
+    } finally { busy = false; J.proc.end(status, reply); }
   }
 };
 J.brain.local = local;

@@ -159,24 +159,24 @@ const nodes = () => {
 };
 
 /* =================== PULPIT: ikony i dok =================== */
-const BUILTIN = [['chat', 'Czat'], ['notes', 'Notatnik'], ['market', 'Tokeny'], ['schedule', 'Harmonogram'], ['monitor', 'Wynik'], ['weather', 'Pogoda']];
+const BUILTIN = [['notes', 'Notatnik'], ['market', 'Tokeny'], ['schedule', 'Harmonogram'], ['monitor', 'Wynik'], ['weather', 'Pogoda']];
 const renderIcons = () => {
   const rail = $('#iconRail'); rail.innerHTML = '';
   BUILTIN.forEach(([id, name], i) => {
-    const b = h('button', { class: 'desktop-icon', 'data-app': id, style: `animation-delay:${i * .05}s` }, `<span class="ico">${icon(J.apps[id].icon)}</span><span class="lbl">${esc(name)}</span>${id === 'chat' ? '<span class="dot"></span>' : ''}`);
+    const b = h('button', { class: 'desktop-icon', 'data-app': id, style: `animation-delay:${i * .05}s` }, `<span class="ico">${icon(J.apps[id].icon)}</span><span class="lbl">${esc(name)}</span>`);
     b.onclick = () => J.wm.open(id); rail.appendChild(b);
   });
   J.state.shortcuts.forEach((s, i) => {
-    const b = h('button', { class: 'desktop-icon', 'data-sc': s.id, style: `animation-delay:${(i + 6) * .05}s`, title: s.url || '' }, `<span class="ico">${icon(s.icon || 'star')}</span><span class="lbl"></span>`);
+    const b = h('button', { class: 'desktop-icon', 'data-sc': s.id, style: `animation-delay:${(i + 5) * .05}s`, title: s.url || '' }, `<span class="ico">${icon(s.icon || 'star')}</span><span class="lbl"></span>`);
     b.querySelector('.lbl').textContent = s.name;
     b.onclick = () => J.shortcuts.run(s); rail.appendChild(b);
   });
-  const add = h('button', { class: 'desktop-icon' }, `<span class="ico">${icon('plus')}</span><span class="lbl">Nowa ikona</span>`);
-  add.onclick = () => J.wm.open('library'); rail.appendChild(add);
+  const add = h('button', { class: 'desktop-icon' }, `<span class="ico">${icon('plus')}</span><span class="lbl">Widget</span>`);
+  add.onclick = e => { const r = add.getBoundingClientRect(); widgetMenu(r.right + 6, r.top); }; rail.appendChild(add);
 };
 J.on('shortcuts', renderIcons);
 
-const PINNED = ['chat', 'notes', 'market', 'schedule', 'weather', 'terminal', 'monitor'];
+const PINNED = ['notes', 'market', 'schedule', 'weather', 'terminal', 'monitor'];
 const LABEL = { chat: 'Czat', notes: 'Notatnik', market: 'Tokeny', schedule: 'Plan', weather: 'Pogoda', terminal: 'Terminal', monitor: 'Wynik', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Menu' };
 const renderDock = () => {
   const d = $('#dock'); d.innerHTML = '';
@@ -186,15 +186,19 @@ const renderDock = () => {
     b.classList.toggle('running', J.wm.isOpen(id)); b.classList.toggle('focused', J.wm.isFocused(id) && !J.wm.isMin(id));
     return b;
   };
-  d.appendChild(btn('library')); d.appendChild(h('span', { class: 'sep' }));
+  const chatBtn = h('button', { title: 'Czat z Jarvisem' }, `${icon('chat')}<span>Czat</span>`); chatBtn.onclick = () => J.chatPanel.toggle(); chatBtn.classList.add('only-narrow-flex');
+  d.appendChild(btn('library')); d.appendChild(chatBtn); d.appendChild(h('span', { class: 'sep' }));
   PINNED.forEach(id => d.appendChild(btn(id)));
   const extra = J.wm.list().filter(id => !PINNED.includes(id) && id !== 'library' && id !== 'settings');
   if (extra.length) { d.appendChild(h('span', { class: 'sep' })); extra.forEach(id => d.appendChild(btn(id))); }
   d.appendChild(h('span', { class: 'sep' }));
-  const w = h('button', { title: 'Nowy widget / skrót' }, `${icon('plus')}<span>Widget</span>`); w.onclick = () => J.wm.open('library'); d.appendChild(w);
+  const w = h('button', { title: 'Nowy widget na pulpicie' }, `${icon('plus')}<span>Widget</span>`); w.onclick = () => { const r = w.getBoundingClientRect(); widgetMenu(r.left, r.top - 130); }; d.appendChild(w);
   d.appendChild(btn('settings'));
 };
 J.on('wm', () => { renderDock(); nodes(); });
+
+/* =================== WIDGETY: menu tworzenia =================== */
+const widgetMenu = (x, y) => ctxMenu(x, y, Object.entries(J.widgets.TYPES).map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })));
 
 /* =================== PALETA POLECEŃ =================== */
 const palette = (() => {
@@ -202,8 +206,10 @@ const palette = (() => {
   let items = [], sel = 0;
   const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
   const base = () => [
-    ...Object.entries(J.apps).map(([id, a]) => ({ g: 'Aplikacje', ic: a.icon, t: a.title, k: id + ' ' + (LABEL[id] || ''), run: () => J.wm.open(id) })),
+    ...Object.entries(J.apps).filter(([, a]) => !a.widget).map(([id, a]) => ({ g: 'Aplikacje', ic: a.icon, t: a.title, k: id + ' ' + (LABEL[id] || ''), run: () => J.wm.open(id) })),
     { g: 'Akcje', ic: 'mic', t: 'Mów do Jarvisa', s: 'Ctrl Spacja', run: () => J.ear.start() },
+    ...Object.entries(J.widgets.TYPES).map(([k, t]) => ({ g: 'Widgety', ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
+    { g: 'Akcje', ic: 'history', t: 'Pokaż / ukryj Process Log', run: () => J.proc.toggle() },
     { g: 'Akcje', ic: 'notes', t: 'Nowa notatka', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
     { g: 'Akcje', ic: 'timer', t: 'Minutnik 5 minut', run: () => { J.timer.start(300, 'Minutnik 5 min'); J.wm.open('timer'); } },
     { g: 'Akcje', ic: 'timer', t: 'Pomodoro 25 minut', run: () => { J.timer.start(1500, 'Pomodoro'); J.wm.open('timer'); } },
@@ -273,7 +279,7 @@ const ctxMenu = (x, y, entries) => {
 };
 addEventListener('pointerdown', e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); });
 $('#app').addEventListener('contextmenu', e => {
-  if (e.target.closest('input,textarea,.window .win-body')) return;
+  if (e.target.closest('input,textarea,.window .win-body,.chat-panel,.log-panel')) return;
   e.preventDefault();
   const sc = e.target.closest('[data-sc]');
   if (sc) {
@@ -290,6 +296,7 @@ $('#app').addEventListener('contextmenu', e => {
     { ic: 'notes', t: 'Nowa notatka', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
     { ic: 'calendar', t: 'Nowe zadanie', run: () => J.wm.open('schedule') },
     { ic: 'plus', t: 'Nowy skrót na pulpicie', run: () => J.wm.open('library') },
+    ...Object.entries(J.widgets.TYPES).map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
     '-',
     { ic: 'image', t: 'Zmień tapetę', run: () => J.actions.set_wallpaper({}) },
     { ic: 'sun', t: 'Następny motyw', run: nextTheme },
@@ -317,7 +324,7 @@ J.on('voice-command', t => J.brain.handle(t, { voice: true }));
 
 /* =================== PASEK GÓRNY =================== */
 $('#btnVoice').innerHTML = icon('mic'); $('#btnFocus').innerHTML = icon('focus');
-$('#btnLog').insertAdjacentHTML('afterbegin', icon('bell'));
+$('#btnLog').insertAdjacentHTML('afterbegin', icon('history'));
 const soundIcon = () => { $('#btnSound').innerHTML = icon(S.sound ? 'sound' : 'mute'); $('#btnSound').classList.toggle('on', S.sound); };
 soundIcon(); J.on('settings', () => { soundIcon(); $('#btnAvatar').textContent = S.user; nodes(); });
 $('#btnAvatar').textContent = S.user;
@@ -326,12 +333,8 @@ $('#btnSound').onclick = () => { S.sound = !S.sound; J.save(); soundIcon(); J.sf
 $('#btnFocus').onclick = () => J.setFocus(!$('#app').classList.contains('focus'));
 $('#btnAvatar').onclick = () => J.wm.open('settings');
 $('#searchPill').onclick = () => palette.open();
-const toggleLog = force => {
-  const p = $('#logPanel'), open = force ?? !p.classList.contains('open');
-  p.classList.toggle('open', open); $('#btnLog').classList.toggle('on', open); if (open) J.log.read();
-};
-$('#btnLog').onclick = () => toggleLog(); $('#logClose').onclick = () => toggleLog(false);
-$('#logClear').onclick = () => { J.state.log = []; J.save(); J.log.renderAll(); };
+$('#btnLog').onclick = () => J.proc.toggle();
+$('#btnChat').innerHTML = icon('chat'); $('#btnChat').onclick = () => J.chatPanel.toggle();
 $('#sysWeather').onclick = () => J.wm.open('weather');
 $('#sysClock').onclick = () => J.wm.open('schedule');
 
@@ -351,7 +354,7 @@ addEventListener('keydown', e => {
   else if (e.key === 'Escape') {
     if (ctxEl) return closeCtx();
     if (palette.isOpen) return palette.close();
-    if ($('#logPanel').classList.contains('open')) return toggleLog(false);
+    if (J.proc.isOpen && !J.proc.active) return J.proc.close();
     if (J.brain.abort()) return;
     if (J.voice.speaking) return J.voice.stop();
     if (J.ear.active) return J.ear.stop();
@@ -391,10 +394,25 @@ J.matrix = () => {
   f(); J.sfx.boot();
 };
 
+/* =================== PANEL CZATU (lewa kolumna) =================== */
+J.chatPanel = (() => {
+  const panel = $('#chatPanel'), host = $('#chatHost'), narrow = matchMedia('(max-width:900px)');
+  const ctx = { el: panel, body: host, onClose() { }, setTitle() { }, close() { } };
+  J.apps.chat.mount(host, ctx);
+  const focusInput = () => setTimeout(() => $('#chatInput', host)?.focus(), 30);
+  const api = {
+    show(arg) { if (narrow.matches) panel.classList.add('open'); focusInput(); if (arg) J.brain.handle(arg); },
+    hide() { panel.classList.remove('open'); },
+    toggle() { if (narrow.matches) { panel.classList.toggle('open'); if (panel.classList.contains('open')) focusInput(); } else focusInput(); $('#btnChat')?.classList.toggle('on', panel.classList.contains('open')); },
+    get isOpen() { return !narrow.matches || panel.classList.contains('open'); }
+  };
+  return api;
+})();
+
 /* =================== START =================== */
 // kontenery z overflow:hidden potrafią się „przewinąć” przy fokusie — trzymamy je w miejscu
 ['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
-renderIcons(); renderDock(); J.log.renderAll(); nodes();
+J.proc.init(); renderIcons(); renderDock(); nodes();
 clock(); setInterval(clock, 1000);
 setInterval(nodes, 1500);
 setInterval(() => J.tasks.check(), 15e3);
@@ -412,7 +430,6 @@ boot().then(() => {
   const pending = J.tasks.today().filter(t => !t.done && t.time >= J.hhmm());
   const msg = `${greet}. Wszystkie systemy online.` + (pending.length ? ` Następne zadanie: ${pending[0].text} o ${pending[0].time}.` : '');
   J.orb.set('idle', msg);
-  J.log('Środowisko gotowe', 'Jarvis przejął warstwę pulpitu.');
   setTimeout(() => J.voice.speak(msg), 700);
   let seen = '1'; try { seen = localStorage.getItem('jarvis-os:seen'); localStorage.setItem('jarvis-os:seen', '1'); } catch (e) { }
   if (!seen) {

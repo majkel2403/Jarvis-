@@ -1,6 +1,6 @@
 /* Jarvis OS — service worker: działanie offline (powłoka aplikacji) */
-const CACHE = 'jarvis-os-v3';
-const SHELL = ['./', 'index.html', 'css/jarvis.css', 'js/core.js', 'js/ai.js', 'js/apps.js', 'js/main.js', 'assets/wallpaper.jpg', 'assets/icon.svg', 'manifest.webmanifest'];
+const CACHE = 'jarvis-os-v4';
+const SHELL = ['./', 'index.html', 'css/jarvis.css', 'js/core.js', 'js/process.js', 'js/ai.js', 'js/apps.js', 'js/widgets.js', 'js/main.js', 'assets/wallpaper.jpg', 'assets/icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

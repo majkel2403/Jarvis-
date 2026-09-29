@@ -50,13 +50,17 @@
       <span class="txt">Szukaj aplikacji i poleceń…</span><kbd>Ctrl K</kbd>
     </button>
     <div class="top-actions">
+      <button class="top-btn only-narrow" id="btnChat" title="Czat z Jarvisem"></button>
       <button class="top-btn" id="btnVoice" title="Mów do Jarvisa (Ctrl+Spacja)"></button>
       <button class="top-btn" id="btnFocus" title="Tryb skupienia"></button>
       <button class="top-btn" id="btnSound" title="Dźwięki"></button>
-      <button class="top-btn" id="btnLog" title="Dziennik procesów"><span class="badge hidden" id="logBadge">0</span></button>
+      <button class="top-btn" id="btnLog" title="Process Log"><span class="badge hidden" id="logBadge">0</span></button>
       <button class="avatar" id="btnAvatar" title="Ustawienia">JD</button>
     </div>
   </header>
+
+  <div class="workspace" id="workspace">
+  <aside class="chat-panel" id="chatPanel" aria-label="Czat z Jarvisem"><div class="chat-host" id="chatHost"></div></aside>
 
   <main class="desktop" id="desktop">
     <div class="icon-rail" id="iconRail"></div>
@@ -90,12 +94,19 @@
     <nav class="dock" id="dock" aria-label="Dok"></nav>
   </main>
 
-  <aside class="float-panel" id="logPanel" aria-label="Dziennik procesów">
-    <div class="panel-head"><span style="color:var(--accent)">◈</span> Process Log <span class="status"></span>
-      <button class="btn sm ghost" id="logClear" style="margin-left:auto">Wyczyść</button>
-      <button class="close" id="logClose" style="margin-left:4px">×</button></div>
-    <div class="log" id="log"></div>
-  </aside>
+  <aside class="log-panel" id="logPanel" aria-label="Process Log"><div class="lp-in">
+    <div class="lp-head"><span class="lp-glyph">◈</span><b>Process Log</b><span class="lp-state" id="lpState">bezczynny</span>
+      <button class="lp-btn" id="lpPin" title="Przypnij panel (bez automatycznego chowania)"></button>
+      <button class="lp-btn" id="lpClose" title="Zamknij panel"></button></div>
+    <div class="lp-tabs"><button data-t="task" class="on">Zadanie</button><button data-t="hist">Historia <em id="lpHistN">0</em></button></div>
+    <div class="lp-task" id="lpTask">
+      <div class="lp-title" id="lpTitle"></div><div class="lp-meta" id="lpMeta"></div>
+      <div class="lp-steps" id="lpSteps"></div>
+      <div class="lp-foot" id="lpFoot"></div>
+    </div>
+    <div class="lp-hist hidden" id="lpHist"></div>
+  </div></aside>
+  </div>
 
   <div class="palette-bg" id="paletteBg">
     <div class="palette" role="dialog" aria-label="Paleta poleceń">
@@ -112,8 +123,10 @@
 </div>
 
 <script src="js/core.js"></script>
+<script src="js/process.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/apps.js"></script>
+<script src="js/widgets.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
