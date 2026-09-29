@@ -28,7 +28,7 @@ J.calc = (src) => {
     throw new Error('błąd składni');
   };
   const unary = () => { if (peek() === '-') { i++; return -unary(); } if (peek() === '+') { i++; return unary(); } return postfix(); };
-  const postfix = () => { let v = num(); while (peek() === '%' || peek() === '!') { const c = s[i++]; if (c === '%') v /= 100; else { let f = 1; for (let k = 2; k <= v; k++) f *= k; v = f; } } return v; };
+  const postfix = () => { let v = num(); while (peek() === '%' || peek() === '!') { const c = s[i++]; if (c === '%') v /= 100; else { if (!Number.isInteger(v) || v < 0 || v > 170) throw new Error('silnia: liczba całkowita 0–170'); let f = 1; for (let k = 2; k <= v; k++) f *= k; v = f; } } return v; };
   const pow = () => { const b = unary(); if (peek() === '^') { i++; return Math.pow(b, pow()); } return b; };
   const term = () => { let v = pow(); while (peek() === '*' || peek() === '/') { const o = s[i++]; const r = pow(); v = o === '*' ? v * r : v / r; } return v; };
   const expr = () => { let v = term(); while (peek() === '+' || peek() === '-') { const o = s[i++]; const r = term(); v = o === '+' ? v + r : v - r; } return v; };

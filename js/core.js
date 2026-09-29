@@ -399,6 +399,22 @@ J.wm = (() => {
       if (w.el.classList.contains('focused')) return api.minimize(id);
       focus(id);
     },
+    focus,
+    isMax: id => !!open[id]?.el.classList.contains('max'),
+    arrange(mode = 'tile') {
+      const ids = Object.keys(open).filter(i => !open[i].minimized);
+      if (!ids.length) return 0;
+      const d = desk().getBoundingClientRect();
+      if (mode === 'cascade') {
+        ids.forEach((id, i) => { const el = open[id].el; el.classList.remove('max'); Object.assign(el.style, { left: Math.min(30 + i * 34, Math.max(0, d.width - el.offsetWidth)) + 'px', top: Math.min(14 + i * 30, Math.max(0, d.height - el.offsetHeight - 80)) + 'px' }); });
+      } else {
+        const n = ids.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+        const w = Math.max(280, Math.floor((d.width - 8) / cols) - 8), hh = Math.max(180, Math.floor((d.height - 90) / rows) - 8);
+        ids.forEach((id, i) => { const el = open[id].el; el.classList.remove('max'); Object.assign(el.style, { left: (8 + (i % cols) * (w + 8)) + 'px', top: (8 + Math.floor(i / cols) * (hh + 8)) + 'px', width: w + 'px', height: hh + 'px' }); });
+      }
+      ids.forEach(id => savePos(id, open[id].el)); J.emit('wm-resize');
+      return ids.length;
+    },
     remember: id => { if (open[id]) savePos(id, open[id].el); },
     isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,

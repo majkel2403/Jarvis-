@@ -91,7 +91,7 @@ const A = J.actions = {
   get_status() {
     const today = J.tasks.today();
     return {
-      ok: true, text: `Otwarte okna: ${J.wm.list().map(i => J.apps[i].title).join(', ') || 'brak'}. Notatki: ${J.state.notes.length} (${J.state.notes.slice(0, 5).map(n => '„' + n.title + '”').join(', ')}). ` +
+      ok: true, text: `Otwarte okna (id — tytuł): ${J.wm.list().filter(i => J.apps[i]).map(i => i + ' — ' + J.apps[i].title + (J.wm.isMin(i) ? ' [zminimalizowane]' : J.wm.isMax(i) ? ' [maksymalizowane]' : '')).join('; ') || 'brak'}. Notatki: ${J.state.notes.length} (${J.state.notes.slice(0, 5).map(n => '„' + n.title + '”').join(', ')}). ` +
         `Zadania na dziś (${today.filter(t => t.done).length}/${today.length} ukończone): ${today.map(t => (t.time || '--:--') + ' ' + t.text + (t.done ? ' ✓' : '')).join('; ') || 'brak'}. ` +
         `Minutnik: ${J.timer.running ? J.timer.label + ', zostało ' + J.timer.fmt(J.timer.left()) : 'nieaktywny'}. Skróty na pulpicie: ${J.state.shortcuts.map(s => s.name).join(', ') || 'brak'}.`
     };
@@ -99,15 +99,38 @@ const A = J.actions = {
   create_widget({ type, title, content, items }) {
     if (!J.widgets) return { ok: false, text: 'Widgety niedostępne' };
     const w = J.widgets.create(type, { title, content, items });
-    return { ok: true, text: 'Utworzono widget „' + w.title + '” (' + ({ note: 'notatka', list: 'lista', result: 'wynik' })[type] + ') na pulpicie' };
+    return { ok: true, text: 'Utworzono widget „' + w.title + '” (' + ({ note: 'notatka', list: 'lista', result: 'wynik', calc: 'kalkulator' })[type] + ') na pulpicie' };
   },
-  focus_mode({ on }) { J.setFocus?.(on !== false); return { ok: true, text: on === false ? 'Tryb skupienia wyłączony' : 'Tryb skupienia włączony — okna zminimalizowane' }; }
+  focus_mode({ on }) { J.setFocus?.(on !== false); return { ok: true, text: on === false ? 'Tryb skupienia wyłączony' : 'Tryb skupienia włączony — okna zminimalizowane' }; },
+  window_control({ app, action }) {
+    const title = J.apps[app]?.title || app;
+    if (app === 'chat') {
+      if (action === 'close' || action === 'minimize') { J.wm.close('chat'); return { ok: true, text: 'Czat schowany' }; }
+      J.wm.open('chat'); return { ok: true, text: 'Czat pokazany' };
+    }
+    if (!J.apps[app]) return { ok: false, text: 'Nieznane okno: ' + app + '. Identyfikatory otwartych okien zwraca get_status.' };
+    if (!J.wm.isOpen(app)) {
+      if (action === 'close' || action === 'minimize') return { ok: false, text: 'Okno „' + title + '” nie jest otwarte' };
+      J.wm.open(app);
+    }
+    if (action === 'focus' || action === 'restore') { J.wm.open(app); if (action === 'restore' && J.wm.isMax(app)) J.wm.toggleMax(app); }
+    else if (action === 'minimize') J.wm.minimize(app);
+    else if (action === 'maximize') { J.wm.open(app); if (!J.wm.isMax(app)) J.wm.toggleMax(app); }
+    else if (action === 'close') J.wm.close(app);
+    const done = { focus: 'Aktywne', restore: 'Przywrócone', minimize: 'Zminimalizowane', maximize: 'Zmaksymalizowane', close: 'Zamknięte' }[action];
+    return { ok: true, text: done + ': ' + title };
+  },
+  arrange_windows({ layout }) {
+    if (layout === 'minimize_all') { J.wm.minimizeAll(); return { ok: true, text: 'Wszystkie okna zminimalizowane' }; }
+    const n = J.wm.arrange(layout === 'cascade' ? 'cascade' : 'tile');
+    return n ? { ok: true, text: 'Ułożono ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + ' (' + (layout === 'cascade' ? 'kaskada' : 'kafelki') + ')' } : { ok: false, text: 'Brak otwartych okien do ułożenia' };
+  }
 };
 
 /* definicje funkcji dla Hermesa (JSON Schema) */
 const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library'];
 const TOOLS = [
-  { name: 'open_app', description: 'Otwiera aplikację w Jarvis OS. notes=Notatnik, market=Monitor rynku krypto, schedule=Harmonogram zadań, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik/stoper, settings=Ustawienia, library=Biblioteka aplikacji, chat=Czat.', input_schema: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS } }, required: ['app'] } },
+  { name: 'open_app', description: 'Otwiera aplikację w Jarvis OS. calc=Kalkulator interaktywny z klawiaturą (ZAWSZE używaj gdy użytkownik prosi o kalkulator lub chce liczyć), notes=Notatnik, market=Monitor rynku krypto, schedule=Harmonogram zadań, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, timer=Minutnik/stoper, settings=Ustawienia, library=Biblioteka aplikacji, chat=Czat.', input_schema: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS } }, required: ['app'] } },
   { name: 'close_app', description: 'Zamyka okno aplikacji. Użyj app="all", aby zamknąć wszystkie.', input_schema: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'all'] } }, required: ['app'] } },
   { name: 'create_note', description: 'Tworzy nową notatkę w Notatniku i ją pokazuje.', input_schema: { type: 'object', properties: { title: { type: 'string', description: 'Krótki tytuł' }, content: { type: 'string', description: 'Treść notatki' } }, required: ['title', 'content'] } },
   { name: 'add_task', description: 'Dodaje zadanie/przypomnienie do Harmonogramu. O podanej godzinie Jarvis przypomni głosem.', input_schema: { type: 'object', properties: { text: { type: 'string' }, time: { type: 'string', description: 'Godzina HH:MM (opcjonalnie)' }, date: { type: 'string', description: 'Data YYYY-MM-DD, domyślnie dziś' } }, required: ['text'] } },
@@ -121,14 +144,17 @@ const TOOLS = [
   { name: 'calculate', description: 'Dokładnie oblicza wyrażenie matematyczne (+ - * / ^ % nawiasy sqrt sin cos log ln pi).', input_schema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
   { name: 'get_datetime', description: 'Zwraca aktualną datę i godzinę użytkownika.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_status', description: 'Zwraca stan środowiska: otwarte okna, notatki, zadania na dziś, minutnik, skróty.', input_schema: { type: 'object', properties: {} } },
-  { name: 'create_widget', description: 'Tworzy widget na głównym pulpicie: note=notatka z tekstem (content), list=lista z pozycjami do odhaczania (items), result=karta z wynikiem/podsumowaniem zadania (content). Użyj, gdy użytkownik prosi o widget, listę albo chce zachować wynik na pulpicie.', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
-  { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } }
+  { name: 'create_widget', description: 'Tworzy widget na pulpicie. UWAGA: NIE używaj dla interaktywnych aplikacji — do kalkulatora ZAWSZE open_app({app:"calc"}). Typy: note=edytowalna notatka (content), list=lista checkboxów (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator na pulpicie z polem wyrażenia. Używaj TYLKO gdy użytkownik wprost prosi o "widget", "listę na pulpicie" lub "zachowaj wynik".', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result', 'calc'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
+  { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } },
+  { name: 'window_control', description: 'Steruje jednym oknem: focus (przenieś na wierzch/otwórz), minimize, maximize, restore (przywróć rozmiar), close. app = id aplikacji (np. notes) albo id widgetu (w:xxxx) — listę otwartych okien z id podaje get_status.', input_schema: { type: 'object', properties: { app: { type: 'string' }, action: { type: 'string', enum: ['focus', 'minimize', 'maximize', 'restore', 'close'] } }, required: ['app', 'action'] } },
+  { name: 'arrange_windows', description: 'Układa otwarte okna na pulpicie: tile (kafelki obok siebie), cascade (kaskada) albo minimize_all (pokaż pulpit).', input_schema: { type: 'object', properties: { layout: { type: 'string', enum: ['tile', 'cascade', 'minimize_all'] } }, required: ['layout'] } }
 ];
 
 /* wykonanie akcji z walidacją wejścia */
 const exec = async (name, input) => {
+  if (name === 'skills_list') return { ok: true, text: 'Dostępne narzędzia w Jarvis OS: ' + TOOLS.map(t => t.name).join(', ') + '. To wszystkie funkcje sterowania Jarvis OS (własnych narzędzi serwerowych używasz normalnie, poza tą listą).' };
   const def = TOOLS.find(t => t.name === name), fn = A[name];
-  if (!def || !fn) return { ok: false, text: 'Nieznane narzędzie: ' + name };
+  if (!def || !fn) return { ok: false, text: 'Nieznane narzędzie: ' + name + '. Dostępne: ' + TOOLS.map(t => t.name).join(', ') };
   if (!input || typeof input !== 'object') return { ok: false, text: 'INVALID_JSON: nieprawidłowe wejście narzędzia' };
   for (const r of def.input_schema.required || []) if (input[r] === undefined || input[r] === '') return { ok: false, text: 'Brak wymaganego pola: ' + r };
   for (const [k, p] of Object.entries(def.input_schema.properties)) if (p.enum && input[k] !== undefined && !p.enum.includes(input[k])) return { ok: false, text: `Nieprawidłowa wartość ${k}: ${input[k]}` };
@@ -178,7 +204,7 @@ const local = async (raw) => {
     return act('add_task', { time, text: text || 'Przypomnienie', date });
   }
 
-  if (/(minutnik|timer|odlicz|budzik|zegar)/.test(n) || /ustaw .*na \d/.test(n)) {
+  if (/(minutnik|timer|odlicz|budzik)/.test(n) || /ustaw .*na \d/.test(n)) {
     const tm = /(\d+(?:[.,]\d+)?)\s*(sek|s\b|sekund|min|m\b|minut|godz|h\b|godzin)?/.exec(n);
     if (!tm) { J.wm.open('timer'); return 'Otworzyłem minutnik. Na ile ustawić?'; }
     const v = parseFloat(tm[1].replace(',', '.')), u = tm[2] || 'min';
@@ -193,7 +219,7 @@ const local = async (raw) => {
     catch (e) { return 'Nie udało się pobrać pogody: ' + e.message; }
   }
 
-  if (/(bitcoin|btc|ethereum|\beth\b|solana|\bsol\b|\bbnb\b|krypto|kurs)/.test(n)) return act('get_crypto_prices', {});
+  if (/(bitcoin|btc|ethereum|\beth\b|solana|\bsol\b|\bbnb\b|krypto|kursy? (?:tokenow|gieldow|rynku))/.test(n)) return act('get_crypto_prices', {});
 
   if ((m = /(\d+(?:[.,]\d+)?)\s*%\s*(?:z|od)\s*(\d+(?:[.,]\d+)?)/.exec(n))) { const r = J.calc(m[1] + '/100*' + m[2]); J.action('calculate'); return m[1] + '% z ' + m[2] + ' to **' + r + '**.'; }
   if ((m = grab(/^(?:oblicz|policz|ile to|ile jest|wylicz|ile wynosi)\s*:?\s*(.+)$/)) || (/[\d)]\s*[-+*/^x×÷]\s*[\d(]/.test(n) && /^[\d\s+\-*/().,%^x×÷]+$/.test(n) && (m = [n, n]))) {
@@ -202,7 +228,7 @@ const local = async (raw) => {
     return r.ok ? r.text.replace(/= (.+)$/, '= **$1**') : r.text;
   }
 
-  if (/(motyw|kolor|akcent|barw)/.test(n)) {
+  if (/(motyw|zmien (?:kolor|barw)|kolor (?:interfejsu|akcentu)|akcent)/.test(n)) {
     const k = Object.keys(THEME_ALIASES).find(a => n.includes(a));
     if (!k) { J.wm.open('settings'); return 'Wybierz kolor w Ustawieniach lub powiedz np. „motyw fiolet”. Dostępne: ' + Object.keys(J.THEMES).join(', ') + '.'; }
     return act('set_theme', { color: THEME_ALIASES[k] });
@@ -221,6 +247,7 @@ const local = async (raw) => {
   if ((m = grab(/^(?:powiedz|przeczytaj|wypowiedz)\s+(.+)$/))) { const was = J.state.settings.speech; J.state.settings.speech = true; J.voice.speak(m[1]); J.state.settings.speech = was; return '🔊 ' + m[1]; }
 
   if (/^(zamknij|schowaj|ukryj)\s+(wszystko|wszystkie|okna)/.test(n)) return act('close_app', { app: 'all' });
+  if (/^(uloz|rozloz|poukladaj|ustaw)\s+okna/.test(n)) return act('arrange_windows', { layout: /kaskad/.test(n) ? 'cascade' : 'tile' });
   if (/^(zminimalizuj|pokaz pulpit)/.test(n)) { J.wm.minimizeAll(); return 'Pulpit jest czysty.'; }
   if ((m = /^(?:zamknij|wylacz)\s+(.+)$/.exec(n))) { const app = findApp(m[1]); if (app) return act('close_app', { app }); }
 
@@ -256,7 +283,7 @@ const setStatus = st => { const ch = J.hermes.status !== st; J.hermes.status = s
 J.hermesPing = async () => {
   if (!J.aiReady()) { setStatus('unknown'); return 'unknown'; }
   const c = cfg(); let ok = false;
-  try { const r = await fetch(c.url + '/models', { headers: headers(), signal: AbortSignal.timeout(2500) }); ok = r.status < 500; } catch (e) { ok = false; }
+  try { const r = await fetch(c.url + '/models', { headers: headers(), signal: AbortSignal.timeout(8000) }); ok = r.status < 500; } catch (e) { ok = false; }
   setStatus(ok ? 'up' : 'down'); return J.hermes.status;
 };
 
@@ -273,18 +300,43 @@ Gdy użytkownik prosi o działanie w Jarvis OS (otwarcie/zamknięcie aplikacji, 
 <tool_call>
 {"name": "nazwa_funkcji", "arguments": {"argument": "wartość"}}
 </tool_call>
-Możesz podać kilka wywołań naraz. Wyniki otrzymasz w znacznikach <tool_response></tool_response> — wtedy krótko potwierdź, co zrobiłeś. Nie wymyślaj wyników funkcji. Jeśli masz też własne narzędzia serwerowe (wyszukiwanie w sieci, pliki, terminal, pamięć), możesz z nich korzystać normalnie.`;
+Możesz podać kilka wywołań naraz. Wyniki otrzymasz w znacznikach <tool_response></tool_response> — wtedy krótko potwierdź, co zrobiłeś. Nie wymyślaj wyników funkcji. Do sterowania Jarvis OS używaj wyłącznie funkcji z listy <tools> — nie wymyślaj innych nazw. Jeśli masz też własne narzędzia serwerowe (wyszukiwanie w sieci, pliki, terminal, pamięć), możesz z nich korzystać normalnie. Wywołanie ZAWSZE zapisuj w znacznikach <tool_call>…</tool_call> — opis słowny („wywołuję create_widget…”) niczego nie wykona.
+
+NAWIGACJA I STEROWANIE OKNAMI:
+• Otwórz aplikację: open_app({app:"calc"}) / open_app({app:"notes"}) / open_app({app:"market"})
+• Zamknij aplikację: close_app({app:"calc"}) / close_app({app:"all"}) — "all" zamyka wszystkie
+• Dostępne aplikacje: calc, notes, market, schedule, monitor, terminal, weather, timer, settings, library, chat
+• Stan środowiska i id otwartych okien (także widgetów w:xxxx): get_status()
+• Jedno okno: window_control({app:"notes", action:"focus"|"minimize"|"maximize"|"restore"|"close"}) — dla widgetu podaj jego id z get_status
+• Wiele okien: arrange_windows({layout:"tile"}) kafelki · ({layout:"cascade"}) kaskada · ({layout:"minimize_all"}) pokaż pulpit
+• Tryb skupienia: focus_mode({on:true})
+Zanim manipulujesz oknem, którego id nie znasz, wywołaj get_status().
+
+TWORZENIE WIDGETÓW NA PULPICIE:
+• Widget notatki:  create_widget({type:"note",  title:"Moja notatka",    content:"Treść..."})
+• Widget listy:    create_widget({type:"list",  title:"Lista zakupów",   items:["mleko","chleb","masło"]})
+• Widget wyniku:   create_widget({type:"result",title:"Wynik obliczeń",  content:"42 * 1.23 = 51.66"})
+• Widget kalk.:    create_widget({type:"calc",  title:"Kalkulator"})
+UWAGA: create_widget tworzy statyczny widget na pulpicie. Do interaktywnego kalkulatora z klawiaturą ZAWSZE używaj open_app({app:"calc"}).
+
+KILKA WYWOŁAŃ NARAZ (przykład):
+<tool_call>
+{"name": "open_app", "arguments": {"app": "notes"}}
+</tool_call>
+<tool_call>
+{"name": "create_widget", "arguments": {"type": "list", "title": "TODO", "items": ["zadanie 1", "zadanie 2"]}}
+</tool_call>`;
 
 const fmtMs = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
 const history = [];
-const MAX_TURNS = 6;
+const MAX_TURNS = 6, STALL_MS = 120000;
 let controller = null;
 const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
 
 const headers = () => {
   const c = cfg(), h = { 'Content-Type': 'application/json' };
   if (c.key) h.Authorization = 'Bearer ' + c.key;
-  if (c.provider === 'agent') h['X-Hermes-Session-Key'] = sessionKey;
+  if (c.provider === 'agent') h['X-Hermes-Session-Id'] = sessionKey;
   return h;
 };
 const netError = () => {
@@ -303,11 +355,22 @@ const httpError = async r => {
 /* strumień SSE z /chat/completions */
 const streamChat = async (messages, onDelta, onTool, onReason) => {
   const c = cfg();
-  controller = new AbortController();
+  const ctl = controller = new AbortController();
+  let last = Date.now(), stalled = false;
+  const wd = setInterval(() => { if (Date.now() - last > STALL_MS) { stalled = true; ctl.abort(); } }, 5000);
+  try {
+    return await streamBody(c, messages, ctl, () => { last = Date.now(); }, onDelta, onTool, onReason);
+  } catch (e) {
+    if (stalled && e.name === 'AbortError') { const er = new Error('Hermes nie odpowiada — brak danych przez ' + STALL_MS / 1000 + ' s.'); er.net = true; throw er; }
+    throw e;
+  } finally { clearInterval(wd); }
+};
+const streamBody = async (c, messages, ctl, touch, onDelta, onTool, onReason) => {
   let r;
   try {
-    r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ model: c.model, messages, stream: true, temperature: 0.6 }) });
+    r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: ctl.signal, body: JSON.stringify({ model: c.model, messages, stream: true, temperature: 0.6 }) });
   } catch (e) { if (e.name === 'AbortError') throw e; const er = new Error(netError()); er.net = true; throw er; }
+  touch();
   if (!r.ok) { const er = new Error(await httpError(r)); er.net = [401, 403, 404, 502, 503].includes(r.status); throw er; }
   if (!r.body || !(r.headers.get('content-type') || '').includes('event-stream')) {
     const j = await r.json(); const t = j.choices?.[0]?.message?.content || ''; onDelta(t); return t;
@@ -316,6 +379,7 @@ const streamChat = async (messages, onDelta, onTool, onReason) => {
   let buf = '', content = '';
   for (;;) {
     const { value, done } = await reader.read();
+    touch();
     if (done) break;
     buf += dec.decode(value, { stream: true });
     let i;
@@ -340,28 +404,58 @@ const streamChat = async (messages, onDelta, onTool, onReason) => {
 };
 
 /* wyciąganie wywołań <tool_call> i czyszczenie tekstu do wyświetlenia */
-const parseCalls = text => {
-  const calls = [], re = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g; let m;
-  while ((m = re.exec(text))) {
-    try {
-      const j = JSON.parse(m[1]);
-      let args = j.arguments ?? j.parameters ?? {};
-      if (typeof args === 'string') args = JSON.parse(args);
-      calls.push({ name: j.name, args, ok: true });
-    } catch (e) { calls.push({ name: '?', args: null, ok: false, raw: m[1] }); }
+/* zbalansowany obiekt JSON zaczynający się w text[start] === '{' (pomija nawiasy w stringach) */
+const balanced = (text, start) => {
+  let depth = 0, inStr = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true; else if (c === '{') depth++; else if (c === '}' && --depth === 0) return i + 1;
   }
+  return -1;
+};
+const toolNames = () => TOOLS.map(t => t.name);
+const asCall = raw => {
+  try {
+    const j = JSON.parse(raw);
+    let args = j.arguments ?? j.parameters ?? {};
+    if (typeof args === 'string') args = JSON.parse(args);
+    return { name: j.name, args, ok: true };
+  } catch (e) { return { name: '?', args: null, ok: false, raw }; }
+};
+/* gołe obiekty {"name":"<narzędzie>","arguments":{…}} poza znacznikami — model bywa je pomija */
+const bareCalls = text => {
+  const out = [], names = toolNames(), re = /\{\s*"name"\s*:\s*"([a-z_]+)"/g; let m;
+  while ((m = re.exec(text))) {
+    if (!names.includes(m[1]) && m[1] !== 'skills_list') continue;
+    const end = balanced(text, m.index); if (end < 0) continue;
+    out.push({ start: m.index, end, call: asCall(text.slice(m.index, end)) }); re.lastIndex = end;
+  }
+  return out;
+};
+const parseCalls = text => {
+  const calls = [], re = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g; let m;
+  while ((m = re.exec(text))) if (m[1]) calls.push(asCall(m[1]));
+  if (!calls.length) bareCalls(text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '')).forEach(b => b.call.ok && calls.push(b.call));
   return calls;
 };
-const visible = text => text
-  .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
-  .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '')
-  .replace(/<\/?tool_response>/g, '')
-  .replace(/\n{3,}/g, '\n\n').trim();
+const visible = text => {
+  let t = text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').replace(/<\/?tool_response>/g, '');
+  const bare = bareCalls(t); for (let i = bare.length - 1; i >= 0; i--) t = t.slice(0, bare[i].start) + t.slice(bare[i].end);
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+};
 
 const hermes = async (text, bubble) => {
   history.push({ role: 'user', content: text });
   const startLen = history.length - 1;
   let reply = '';
+  const callSigs = new Map();
+  let nudged = false;
+  const t0 = Date.now();
+  const progressTimer = setInterval(() => {
+    const el = Math.round((Date.now() - t0) / 1000);
+    if (el >= 30) bubble.set('⏳ Hermes pracuje… (' + el + 's — Esc aby przerwać)');
+  }, 10000);
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const msgs = [{ role: 'system', content: SYSTEM() }, ...history.slice(-30)];
@@ -391,15 +485,35 @@ const hermes = async (text, bubble) => {
       history.push({ role: 'assistant', content: raw });
       const v = visible(raw); if (v) reply = prefix + v;
       const calls = parseCalls(raw);
-      if (!calls.length) break;
+      if (!calls.length) {
+        // model opisał wywołanie słowami zamiast znacznikami — jedna korekta, potem odpuszczamy
+        const said = toolNames().find(n => new RegExp('\\b' + n + '\\b').test(visible(raw)));
+        if (said && !nudged && turn < MAX_TURNS - 1 && /tool[ _]?call|wywołuj|wywołan|funkcj/i.test(visible(raw))) {
+          nudged = true;
+          J.proc.step('system', 'Korekta formatu wywołania', [['Powód', 'Model wspomniał „' + said + '”, ale nie użył <tool_call>']]);
+          history.push({ role: 'user', content: '<tool_response>\n' + JSON.stringify({ ok: false, content: 'Nic nie zostało wykonane: brak znaczników <tool_call>. Zapisz wywołanie dokładnie tak: <tool_call>\n{"name": "' + said + '", "arguments": {…}}\n</tool_call>' }) + '\n</tool_response>' });
+          reply = ''; continue;
+        }
+        break;
+      }
       J.orb.set('thinking', 'wykonuję: ' + calls.map(c => c.name).join(', '));
       const results = [];
+      let loopDetected = false;
       for (const c of calls) {
         if (!c.ok) J.proc.step('error', 'Nieprawidłowe wywołanie narzędzia', [['Surowy tekst', c.raw]], { status: 'err', preview: 'INVALID_JSON' });
         const r = c.ok ? await run(c.name, c.args) : { ok: false, text: 'INVALID_JSON: nie udało się odczytać argumentów wywołania' };
+        const sig = c.name + ':' + JSON.stringify(c.args);
+        const prev = callSigs.get(sig);
+        if (prev && prev.lastResult === r.text) {
+          if (++prev.count >= 3) {
+            J.proc.step('error', 'Pętla wykryta — narzędzie „' + c.name + '" powtarza się bez postępu', [['Sygnatura', sig]], { status: 'err', preview: 'loop' });
+            loopDetected = true; break;
+          }
+        } else { callSigs.set(sig, { count: 1, lastResult: r.text }); }
         J.chat.add('action', (r.ok ? '⚙ ' : '⚠ ') + c.name + ' → ' + r.text);
         results.push('<tool_response>\n' + JSON.stringify({ name: c.name, ok: r.ok, content: r.text }) + '\n</tool_response>');
       }
+      if (loopDetected) { reply = (reply ? reply + '\n\n' : '') + '⚠ Przerwano — model powtarzał tę samą akcję. Spróbuj inaczej sformułować zadanie.'; break; }
       history.push({ role: 'user', content: results.join('\n') });
       bubble.set(reply || '…');
     }
@@ -408,7 +522,7 @@ const hermes = async (text, bubble) => {
     history.length = startLen;
     if (e.name === 'AbortError') return (reply ? reply + ' ' : '') + '⏹ przerwano.';
     throw e;
-  } finally { controller = null; }
+  } finally { controller = null; clearInterval(progressTimer); }
 };
 
 /* =================== INTERFEJS MÓZGU =================== */
@@ -474,5 +588,6 @@ J.brain = {
   }
 };
 J.brain.local = local;
+J.brain.parse = parseCalls; J.brain.visible = visible; J.brain.exec = exec;
 setInterval(() => { if (J.aiReady() && !J.brain.busy) J.hermesPing(); }, 45000);
 })();

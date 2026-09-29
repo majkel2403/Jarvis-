@@ -10,7 +10,8 @@ const { $, h, esc, icon } = J;
 const TYPES = {
   note:   { label: 'Notatka', icon: 'notes', w: 300, h: 260 },
   list:   { label: 'Lista', icon: 'list', w: 290, h: 300 },
-  result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260 }
+  result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260 },
+  calc:   { label: 'Kalkulator', icon: 'calc', w: 290, h: 200 }
 };
 const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
 
@@ -43,6 +44,27 @@ const mounts = {
     $('small', body).textContent = w.data.meta || '';
     $('[data-a=copy]', body).onclick = () => { navigator.clipboard?.writeText(w.data.text || '').then(() => J.toast('Skopiowano wynik'), () => J.toast('Nie udało się skopiować')); };
     $('[data-a=log]', body).onclick = () => J.proc.toggle();
+  },
+  calc(body) {
+    body.innerHTML = '<div class="w-calc"><input class="w-calc-in input" placeholder="np. 2+2, sin(90), pi*2" autocomplete="off" spellcheck="false"><div class="w-calc-res">—</div><div class="w-foot"><small>sin/cos/sqrt/pi/e · ^ dla potęgi</small><span class="sp"></span><button class="btn sm ghost" data-a="copy">Kopiuj</button></div></div>';
+    const inp = $('.w-calc-in', body), res = $('.w-calc-res', body);
+    let lastVal = '';
+    const compute = () => {
+      const v = inp.value.trim();
+      if (!v) { res.textContent = '—'; res.className = 'w-calc-res'; lastVal = ''; return; }
+      try {
+        const r = J.calc(v);
+        const display = Number.isInteger(r) ? String(r) : parseFloat(r.toFixed(10)).toString();
+        res.textContent = '= ' + display; res.className = 'w-calc-res ok'; lastVal = display;
+      } catch (e) { res.textContent = e.message.slice(0, 50); res.className = 'w-calc-res err'; lastVal = ''; }
+    };
+    inp.oninput = compute;
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); compute(); inp.select(); } };
+    $('[data-a=copy]', body).onclick = () => {
+      if (!lastVal) return;
+      navigator.clipboard?.writeText(lastVal).then(() => J.toast('Skopiowano: ' + lastVal), () => J.toast('Nie udało się skopiować'));
+    };
+    setTimeout(() => inp.focus(), 60);
   }
 };
 

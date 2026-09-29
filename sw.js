@@ -1,5 +1,5 @@
 /* Jarvis OS — service worker: działanie offline (powłoka aplikacji) */
-const CACHE = 'jarvis-os-v7';
+const CACHE = 'jarvis-os-v8';
 const SHELL = ['./', 'index.html', 'css/jarvis.css', 'js/core.js', 'js/events.js', 'js/process.js', 'js/ai.js', 'js/apps.js', 'js/widgets.js', 'js/hud.js', 'js/main.js', 'assets/wallpaper.jpg', 'assets/icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {
@@ -16,6 +16,6 @@ self.addEventListener('fetch', e => {
     fetch(e.request).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
       return res;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
   );
 });

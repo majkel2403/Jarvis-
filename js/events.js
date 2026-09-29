@@ -57,7 +57,7 @@ J.ev = {
     if (/memory|remember|recall/.test(t)) return 'memory';
     if (/delegate|agent|spawn/.test(t)) return 'agent';
     if (/calc/.test(t)) return 'calc';
-    if (/open_app|close_app|theme|wallpaper|shortcut|widget|focus|status/.test(t)) return 'desktop';
+    if (/open_app|close_app|window|arrange|theme|wallpaper|shortcut|widget|focus|status/.test(t)) return 'desktop';
     return 'tool';
   }
 };

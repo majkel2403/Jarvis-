@@ -94,7 +94,7 @@ const fx = (() => {
 
 /* =================== CORE: szklana kula, orbity, wiązka, cząstki =================== */
 const orbCv = $('#orbCanvas'), oc = orbCv.getContext('2d');
-let orbAmp = 0, freq = new Uint8Array(128);
+let orbAmp = 0, smoothSp = 0.75, freq = new Uint8Array(128);
 const SZ = 560, C0 = SZ / 2, RB = 108;
 const rnd = (() => { let s = 11; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
 const PART = Array.from({ length: 130 }, () => ({ a: rnd() * 6.283, r: .16 + rnd() * .8, sp: (.12 + rnd() * .55) * (rnd() < .5 ? -1 : 1), s: .5 + rnd() * 1.5, v: rnd() < .4 }));
@@ -118,7 +118,8 @@ function orbDraw(t) {
   const idle = st === 'idle' && eg.mode === 'IDLE';
   const breath = idle ? .78 + .22 * Math.sin(t / 1600) : 1;
   const act = J.clamp(eg.activity, 0, 1), busy = !!eg.taskId, energy = J.clamp(.3 + act * .95 + orbAmp * .4, 0, 1.4);
-  const sp = .6 + energy * 1.6;   // prędkość ruchu elementów
+  smoothSp += (.72 + Math.min(energy, 0.8) * 0.3 - smoothSp) * .04;  // wolne lerp: zakres 0.72-1.0
+  const sp = smoothSp;
 
   // — poświata
   let g = oc.createRadialGradient(C0, C0, RB * .5, C0, C0, RB * 2.4);
@@ -335,8 +336,6 @@ const sysWeather = d => {
 J.on('weather', sysWeather);
 const loadWeather = () => J.weather.fetch().catch(() => { $('#wxTemp').textContent = 'offline'; });
 
-const nodes = () => { };   // (dawny panel węzłów zastąpiony kartami HUD)
-
 /* =================== PULPIT: ikony i dok =================== */
 const BUILTIN = [['chat', 'Czat', 'blue'], ['notes', 'Notatnik', 'dark'], ['market', 'Lista tokenów', 'blue'], ['schedule', 'Harmonogram', 'blue'], ['monitor', 'Wynik zadania', 'teal']];
 const TONES = { chat: 'blue', notes: 'orange', market: 'teal', schedule: 'indigo', monitor: 'green', weather: 'sky', terminal: 'dark', settings: 'dark', calc: 'purple', timer: 'purple', library: 'dark' };
@@ -509,7 +508,7 @@ $('#btnFull').onclick = () => { try { document.fullscreenElement ? document.exit
 $('#btnAvatar').textContent = S.user;
 $('#searchPill').insertAdjacentHTML('afterbegin', '');
 $('#btnVoice').onclick = () => J.ear.toggle();
-$('#btnSound').onclick = () => { S.sound = !S.sound; J.save(); soundIcon(); J.sfx.click(); J.toast(S.sound ? 'Dźwięki włączone' : 'Dźwięki wyciszone'); };
+$('#btnSound').onclick = () => { S.sound = !S.sound; S.speech = S.sound; J.save(); soundIcon(); if (!S.sound) J.voice.stop(); J.sfx.click(); J.toast(S.sound ? 'Dźwięki włączone' : 'Dźwięki wyciszone'); };
 $('#btnFocus').onclick = () => J.setFocus(!$('#app').classList.contains('focus'));
 $('#btnAvatar').onclick = () => J.wm.open('settings');
 $('#searchPill').onclick = () => palette.open();
@@ -637,12 +636,10 @@ J.on('hermes', syncStatus); J.on('settings', syncStatus);
 ['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
 J.proc.init(); J.hud.init(); renderIcons(); renderDock(); syncStatus();
 clock(); setInterval(clock, 1000);
-setInterval(nodes, 1500);
 setInterval(() => J.tasks.check(), 15e3);
 loadWeather(); setInterval(loadWeather, 15 * 60e3);
-J.on('action', nodes); J.on('tasks', nodes);
-addEventListener('online', () => { nodes(); J.toast('Połączenie przywrócone'); });
-addEventListener('offline', () => { nodes(); J.toast('Utracono połączenie z internetem'); J.log('Sieć', 'Tryb offline — działają funkcje lokalne.', 'warn'); });
+addEventListener('online', () => { syncStatus(); J.toast('Połączenie przywrócone'); });
+addEventListener('offline', () => { syncStatus(); J.toast('Utracono połączenie z internetem'); J.log('Sieć', 'Tryb offline — działają funkcje lokalne.', 'warn'); });
 
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
@@ -655,7 +652,7 @@ boot().then(() => {
   const pending = J.tasks.today().filter(t => !t.done && t.time >= J.hhmm());
   const msg = `${greet}. Wszystkie systemy online.` + (pending.length ? ` Następne zadanie: ${pending[0].text} o ${pending[0].time}.` : '');
   J.orb.set('idle', msg);
-  setTimeout(() => J.voice.speak(msg), 700);
+  // autoplay TTS wyłączony — użytkownik inicjuje rozmowę samodzielnie
   let seen = '1'; try { seen = localStorage.getItem('jarvis-os:seen'); localStorage.setItem('jarvis-os:seen', '1'); } catch (e) { }
   if (!seen) {
     setTimeout(() => J.toast('Wskazówka: kliknij orb, aby mówić · Ctrl+K otwiera paletę poleceń', 6000), 1800);

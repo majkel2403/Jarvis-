@@ -1,0 +1,9 @@
+.env
+.env.*
+*.key
+*.pem
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+jarvis-os-backup*.json
