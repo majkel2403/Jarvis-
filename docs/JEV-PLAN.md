@@ -504,4 +504,4 @@ F0 (bezpiecznik, budżet, walidacja, P0–P2, dziennik, tryb cienia, naprawy L1�
 Świadomie **niewykonane**, bo wymaga prawdziwego klucza OpenRouter:
 - faktyczny pomiar trafności Jeva, krzywa zaufania i dobór progów (`node tests/jev-probe.js`); do tego czasu progi 0,80 / 0,92 są ostrożnymi hipotezami, a tryb cienia pozwala je zweryfikować na własnym użyciu;
 - eksperyment E2 (opisy po angielsku) — wymaga angielskich opisów poleceń; E1 i E3 są gotowe w sondzie (`--e1`, `--e3`);
-- D17 (nawigacja w aplikacjach: która karta/panel) — zrobione tylko `schedule_day` i `settings_open`; D18/D20 — zgodnie z planem odrzucone lub odłożone.
+- D17 (nawigacja wewnątrz aplikacji: która karta/panel) — zrobione tylko `schedule_day` i `settings_open`; D18 (układy okien) działa jako wybór z listy zapisanych układów; D20 zgodnie z planem odrzucone.
