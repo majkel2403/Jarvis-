@@ -26,6 +26,7 @@
 | bus | `tool.failed` | ai.js |
 | bus | `tool.started` | ai.js |
 | ui | `action` | core.js |
+| ui | `app-view` | apps.js, commands-ext.js |
 | ui | `ear` | core.js |
 | ui | `ear-standby` | core.js |
 | ui | `files` | commands.js |
@@ -39,7 +40,7 @@
 | ui | `plan` | events.js |
 | ui | `proc-end` | process.js |
 | ui | `settings` | apps.js, commands.js, core.js, main.js |
-| ui | `shortcuts` | apps.js |
+| ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |
 | ui | `task-overdue` | context.js |
@@ -48,6 +49,7 @@
 | ui | `timer-ended` | apps.js |
 | ui | `undo-done` | undo.js |
 | ui | `undo-offer` | undo.js |
+| ui | `undo-stack` | undo.js |
 | ui | `voice` | core.js |
 | ui | `voice-command` | core.js |
 | ui | `weather` | apps.js |

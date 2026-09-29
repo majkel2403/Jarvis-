@@ -148,13 +148,6 @@ D-15: okna na cały ekran, bez przeciągania i zmiany rozmiaru; `wm_move`/`wm_ar
 
 | polecenie | co robi | poziom | cofanie | fala |
 |---|---|---|---|---|
-| `wm_move` (rozszerzenie) | Przesuń / zmień rozmiar okna (rozszerzenie) | A2 | poprzednia pozycja i rozmiar | W1 |
-| `wm_arrange` (rozszerzenie) | Ułóż okna (rozszerzenie: pół na pół, cofanie) | A3 | poprzednie pozycje okien | W1 |
-| `close_app` (rozszerzenie) | Zamknij okno (rozszerzenie: poziom wg argumentu) | A3 | wm_reopen | W1 |
-| `wm_pin` | Zawsze na wierzchu | A2 | przywróć poprzedni stan przypięcia | W1 |
-| `wm_reopen` | Otwórz ponownie zamknięte | A3 | zamknij ponownie | W1 |
-| `wm_restore` | Przywróć okna | A3 | zminimalizuj ponownie | W1 |
-| `wm_close_others` | Zamknij pozostałe | A1 | otwórz ponownie zamknięte okna | W1 |
 | `layout_list` | Lista układów | A3 | — | W2 |
 | `layout_remove` | Usuń układ | A0 | przywróć układ (10 min) | W2 |
 | `layout_rename` | Zmień nazwę układu | A2 | poprzednia nazwa | W2 |

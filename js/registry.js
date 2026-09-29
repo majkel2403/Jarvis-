@@ -191,7 +191,7 @@ const api = J.registry = {
       const r = await c.run(args, { ok, fail, ctx, cmd: c });
       J.action(id);
       const env = r == null ? ok(null, 'Gotowe.') : typeof r === 'string' ? ok(null, r) : typeof r.ok !== 'boolean' ? ok(r, 'Gotowe.') : r;
-      if (env.ok && typeof env.undo === 'function') env.undoEntry = J.undo?.push({ id, label: c.label, text: env.text, undo: env.undo, source: ctx.source }) || null;
+      if (env.ok && typeof env.undo === 'function') env.undoEntry = J.undo?.push({ id, label: c.label, text: env.text, undo: env.undo, changed: typeof env.undo.changed === 'function' ? env.undo.changed : undefined, source: ctx.source }) || null;
       if (env.undoEntry) Object.defineProperty(env, 'undoEntry', { enumerable: false });
       return env;
     } catch (e) {

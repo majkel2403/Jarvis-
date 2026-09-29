@@ -27,7 +27,7 @@ const esc = s => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const cmds = R.list().map(c => ({
   id: c.id, group: c.group, label: c.label, description: c.description.replace(/\s+/g, ' '),
   args: c.args || { type: 'object', properties: {} }, required: c.args?.required || [],
-  risk: c.risk, level: P.level(c), levelDependsOnArgs: ['settings_set', 'terminal_run'].includes(c.id),
+  risk: c.risk, level: P.level(c), levelDependsOnArgs: ['settings_set', 'terminal_run', 'close_app'].includes(c.id),
   undoable: !!c.undoable, external: !!c.external, idempotent: !!c.idempotent, writes: c.writes || [],
   hermes: c.hermes !== false, examples: (c.examples || []).slice(0, 6), needsConfirmText: !!c.confirmText
 }));

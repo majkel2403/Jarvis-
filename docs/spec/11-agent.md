@@ -117,8 +117,6 @@ Zasady:
 | `routine_run` | Uruchom rutynę | A1 | cofnij kroki odwracalne | W4 |
 | `routine_list` | Lista rutyn | A3 | — | W4 |
 | `routine_remove` | Usuń rutynę | A0 | przywróć rutynę (10 min) | W4 |
-| `undo` | Cofnij | A3 | — | W1 |
-| `undo_list` | Historia do cofnięcia | A3 | — | W1 |
 | `plan_control` | Sterowanie planem | A3 | — | W4 |
 
 Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).

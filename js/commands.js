@@ -17,6 +17,20 @@ const TRUSTED = new Set(Object.values(SITES).map(u => new URL(u).hostname).conca
 [['cyjan', /cyjan|turkus/], ['niebieski', /niebiesk/], ['fiolet', /fiolet|purpur/], ['zielony', /zielon/], ['złoty', /zlot|pomarancz/], ['czerwony', /czerwon/], ['różowy', /rozow/], ['jarvis', /jarvis|domysl/]].forEach(([id, re]) => R.alias('color', id, re));
 [['aurora', /aurora|zorz/], ['void', /pust|czarn|void|ciemn/], ['photo', /miast|zdjec|photo|jezior|gor/]].forEach(([id, re]) => R.alias('wallpaper', id, re));
 const findApp = t => { const n = norm(t); for (const [id, re] of R.aliases.app) if (re.test(n)) return id; return null; };
+/* rodzaj gramatyczny nazw aplikacji (komunikaty: „Notatnik nie jest otwarty”, „Pogoda nie jest otwarta”, „Ustawienia nie są otwarte”) */
+const APP_GENDER = { chat: 'm', notes: 'm', market: 'm', schedule: 'm', monitor: 'm', terminal: 'm', weather: 'f', calc: 'm', timer: 'm', settings: 'pl', library: 'f' };
+const winName = id => APP_NAMES[id] || J.apps[id]?.title || id;
+const notOpen = id => winName(id) + ({ f: ' nie jest otwarta', pl: ' nie są otwarte', n: ' nie jest otwarte' }[APP_GENDER[id]] || ' nie jest otwarty') + '.';
+/* okno po nazwie: id aplikacji, „current”/„to”, „w:<id>”, tytuł widgetu albo nazwa potoczna */
+const resolveWin = q => {
+  const v = String(q || '').trim(); if (!v) return J.wm.focused();
+  if (J.apps[v] && (APP_IDS.includes(v) || v.startsWith('w:'))) return v;
+  const n = norm(v); if (/^(current|to|ten|te|ta|tego|biezace|aktualne|aktywne)( okno)?$/.test(n)) return J.wm.focused();
+  const w = J.widgets?.list.find(x => x.id === v || norm(x.title) === n) || J.widgets?.list.find(x => norm(x.title).includes(n)); if (w && (/widget/.test(n) || !findApp(v))) return 'w:' + w.id;
+  return findApp(v) || (w ? 'w:' + w.id : null);
+};
+/* „Cofnij” dla układania okien: migawka wszystkich pozycji sprzed zmiany */
+const layoutUndo = () => { const snap = J.wm.snapshot(); return () => J.wm.applySnapshot(snap); };
 const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
 /* ---------- wyszukiwanie obiektów po id / tytule (z wykrywaniem dwuznaczności) ---------- */
@@ -59,15 +73,16 @@ R.add({ id: 'open_app', group: 'Aplikacje i okna', label: 'Otwórz aplikację', 
   examples: ['otworz {app}', 'uruchom {app}', 'pokaz {app}', 'wlacz {app}', 'odpal {app}', 'przejdz do {app}'],
   parse(raw, n) { if (/^(otworz|uruchom|pokaz|wlacz|odpal|start|przejdz do|idz do)\s+/.test(n)) return null; const app = n.split(' ').length <= 2 ? findApp(n) : null; return app ? { args: { app }, score: -20 } : null; },
   run({ app }) { J.wm.open(app); return ok({ app, open: J.wm.list() }, 'Otwarto: ' + APP_NAMES[app] + '.', { highlight: app }); } });
-R.add({ id: 'close_app', group: 'Aplikacje i okna', label: 'Zamknij okno', description: 'Zamyka okno aplikacji. app="all" zamyka wszystkie okna (wymaga potwierdzenia).',
+R.add({ id: 'close_app', group: 'Aplikacje i okna', label: 'Zamknij okno', description: 'Zamyka okno aplikacji (da się cofnąć: wm_reopen). app="all" zamyka wszystkie okna (wymaga potwierdzenia).',
   args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'all', 'current'] } }, required: ['app'] }, risk: 'confirm', confirmText: a => a.app === 'all' ? 'Zamknąć wszystkie okna?' : 'Zamknąć ' + (APP_NAMES[a.app] || 'bieżące okno') + '?', writes: ['windows'],
   examples: ['zamknij {app}', 'wylacz {app}', 'zamknij (wszystko|wszystkie okna|okna)', 'zamknij to'],
   parse(raw, n) { if (/^zamknij\s+(wszystko|wszystkie|okna)/.test(n)) return { args: { app: 'all' } }; if (/^zamknij\s+(to|biezace|aktualne)/.test(n)) return { args: { app: 'current' } }; return null; },
   run({ app }) {
-    if (app === 'all') { const n = J.wm.count(); J.wm.closeAll(); return ok({ closed: n }, n ? 'Zamknięto ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + '.' : 'Nie było otwartych okien.'); }
-    if (app === 'current') { const f = J.wm.focused(); if (!f) return fail('NOT_FOUND', 'Żadne okno nie jest aktywne.'); J.wm.close(f); return ok({ app: f }, 'Zamknięto: ' + (J.apps[f]?.title || f) + '.'); }
-    if (!J.wm.isOpen(app)) return fail('NOT_FOUND', 'Okno ' + APP_NAMES[app] + ' nie jest otwarte. Otwarte: ' + (J.wm.list().join(', ') || 'brak') + '.');
-    J.wm.close(app); return ok({ app }, 'Zamknięto: ' + APP_NAMES[app] + '.');
+    const reopen = ids => () => ids.slice().reverse().forEach(id => J.wm.reopen(id));
+    if (app === 'all') { const ids = J.wm.list().filter(k => !k.startsWith('w:')), n = ids.length; J.wm.closeAll(); return ok({ closed: n }, n ? 'Zamknięto ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + '.' : 'Nie było otwartych okien.', null, n ? reopen(ids) : null); }
+    if (app === 'current') { const f = J.wm.focused(); if (!f) return fail('NOT_FOUND', 'Żadne okno nie jest aktywne.'); if (f.startsWith('w:')) return fail('INVALID_ARGS', 'To jest widget — zamknięcie go usuwa. Powiedz „usuń widget”.'); J.wm.close(f); return ok({ app: f }, 'Zamknięto: ' + winName(f) + '.', null, reopen([f])); }
+    if (!J.wm.isOpen(app)) return fail('NOT_FOUND', notOpen(app) + ' Otwarte: ' + (J.wm.list().map(winName).join(', ') || 'brak') + '.');
+    J.wm.close(app); return ok({ app }, 'Zamknięto: ' + APP_NAMES[app] + '.', null, reopen([app]));
   } });
 R.add({ id: 'wm_list', group: 'Aplikacje i okna', label: 'Lista okien', description: 'Zwraca otwarte okna z pozycją, rozmiarem, stanem i tym, które jest aktywne.', idempotent: true, reads: ['windows'], palette: false,
   examples: ['jakie okna sa otwarte', 'lista okien', 'co jest otwarte'],
@@ -76,26 +91,54 @@ R.add({ id: 'wm_focus', group: 'Aplikacje i okna', label: 'Aktywuj okno', descri
   args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'next'] } }, required: ['app'] }, idempotent: true, writes: ['windows'],
   examples: ['przelacz na {app}', 'aktywuj {app}', 'nastepne okno', 'przelacz okno'],
   parse(raw, n) { return /^(nastepne okno|przelacz okno|kolejne okno)$/.test(n) ? { args: { app: 'next' } } : null; },
-  run({ app }) { if (app === 'next') { const id = J.wm.cycle(); return id ? ok({ app: id }, 'Aktywne: ' + (J.apps[id]?.title || id) + '.') : fail('NOT_FOUND', 'Brak okien.'); } if (!J.wm.isOpen(app)) return fail('NOT_FOUND', APP_NAMES[app] + ' nie jest otwarte.'); J.wm.open(app); return ok({ app }, 'Aktywne: ' + APP_NAMES[app] + '.'); } });
+  run({ app }) { if (app === 'next') { const id = J.wm.cycle(); return id ? ok({ app: id }, 'Aktywne: ' + (J.apps[id]?.title || id) + '.') : fail('NOT_FOUND', 'Brak okien.'); } if (!J.wm.isOpen(app)) return fail('NOT_FOUND', notOpen(app)); J.wm.open(app); return ok({ app }, 'Aktywne: ' + APP_NAMES[app] + '.'); } });
 R.add({ id: 'wm_minimize', group: 'Aplikacje i okna', label: 'Minimalizuj', description: 'Minimalizuje okno do doku. app="all" pokazuje pulpit.',
   args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'all', 'current'] } }, required: ['app'] }, idempotent: true, writes: ['windows'],
   examples: ['zminimalizuj {app}', 'schowaj {app}', 'pokaz pulpit', 'zminimalizuj wszystko', 'schowaj okna'],
   parse(raw, n) { return /^(pokaz pulpit|zminimalizuj (wszystko|wszystkie okna)|schowaj (wszystko|okna))$/.test(n) ? { args: { app: 'all' } } : null; },
   run({ app }) { if (app === 'all') { J.wm.minimizeAll(); return ok(null, 'Pulpit jest czysty.'); } const id = app === 'current' ? J.wm.focused() : app; if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', 'Okno nie jest otwarte.'); J.wm.minimize(id); return ok({ app: id }, 'Zminimalizowano ' + (J.apps[id]?.title || id) + '.'); } });
 R.add({ id: 'wm_arrange', group: 'Aplikacje i okna', label: 'Ułóż okna', description: 'Układa okna: tile (kafelki z otwartych okien), left/right/top/bottom (przyciąga aktywne okno do krawędzi), max (maksymalizuje), center; layout=nazwa zapisanego układu lub presetu (praca, rynek, czysto).',
-  args: { type: 'object', properties: { mode: { type: 'string', enum: ['tile', 'left', 'right', 'top', 'bottom', 'max', 'center', 'layout'] }, layout: { type: 'string', description: 'nazwa układu przy mode=layout' }, app: { type: 'string', enum: APP_IDS, description: 'okno do przyciągnięcia; domyślnie aktywne' } }, required: ['mode'] }, writes: ['windows'],
+  args: { type: 'object', properties: { mode: { type: 'string', enum: ['tile', 'left', 'right', 'top', 'bottom', 'max', 'center', 'layout', 'split'] }, layout: { type: 'string', description: 'nazwa układu przy mode=layout' }, app: { type: 'string', description: 'okno do przyciągnięcia (id aplikacji albo w:<id> widgetu); domyślnie aktywne' }, apps: { type: 'array', items: { type: 'string' }, maxItems: 2, description: 'przy mode=split: [lewe, prawe]' } }, required: ['mode'] }, writes: ['windows'],
   examples: ['uloz okna', 'rozmiesc okna', 'kafelkuj okna', 'okno na lewo', 'okno na prawo', 'maksymalizuj [okno]', 'wysrodkuj okno', 'uklad {layout}', 'zastosuj uklad {layout}'],
-  parse(raw, n) { let m; if (/^(uloz|kafelkuj|poukladaj|rozmiesc)\s+okna$/.test(n)) return { args: { mode: 'tile' } }; if ((m = /^(?:okno|przesun okno|przesun)\s+(?:na|w)\s+(lewo|prawo|gore|dol)$/.exec(n))) return { args: { mode: { lewo: 'left', prawo: 'right', gore: 'top', dol: 'bottom' }[m[1]] } }; if (/^maksymalizuj/.test(n)) return { args: { mode: 'max' } }; if (/^wysrodkuj/.test(n)) return { args: { mode: 'center' } }; if ((m = /^(?:zastosuj\s+)?uklad\s+(.+)$/.exec(n))) return { args: { mode: 'layout', layout: m[1] } }; return null; },
-  run({ mode, layout, app }) {
-    if (mode === 'tile') { const n = J.wm.tile(); return n ? ok({ tiled: n }, 'Ułożyłem ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + ' w kafelki.') : fail('NOT_FOUND', 'Brak okien do ułożenia.'); }
-    if (mode === 'layout') { const r = J.layouts.apply(layout); return r.ok ? ok(r, 'Układ „' + r.name + '”: ' + r.apps.join(', ') + '.') : fail('NOT_FOUND', 'Nie znam układu „' + layout + '”. Dostępne: ' + J.layouts.list().join(', ') + '.'); }
-    const id = app || J.wm.focused(); if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', 'Brak aktywnego okna.');
-    if (mode === 'max') { J.wm.setMax(id, true); return ok({ app: id }, 'Zmaksymalizowano ' + (J.apps[id]?.title || id) + '.'); }
-    J.wm.snap(id, mode); return ok({ app: id, mode }, 'Okno ' + (J.apps[id]?.title || id) + ': ' + ({ left: 'lewa połowa', right: 'prawa połowa', top: 'górna połowa', bottom: 'dolna połowa', center: 'wyśrodkowane' })[mode] + '.');
+  parse(raw, n) { let m; if ((m = /^(?:pol na pol|podziel ekran(?: na)?|obok siebie:?)?\s*(.+?)\s+(?:i|oraz)\s+(.+?)(?:\s+obok siebie|\s+pol na pol)?$/.exec(n)) && (/obok siebie|pol na pol|podziel ekran/.test(n))) { const a = findApp(m[1]), b = findApp(m[2]); if (a && b && a !== b) return { args: { mode: 'split', apps: [a, b] }, score: 30 }; } if (/^(uloz|kafelkuj|poukladaj|rozmiesc)\s+okna$/.test(n)) return { args: { mode: 'tile' } }; if ((m = /^(?:okno|przesun okno|przesun)\s+(?:na|w)\s+(lewo|prawo|gore|dol)$/.exec(n))) return { args: { mode: { lewo: 'left', prawo: 'right', gore: 'top', dol: 'bottom' }[m[1]] } }; if (/^maksymalizuj/.test(n)) return { args: { mode: 'max' } }; if (/^wysrodkuj/.test(n)) return { args: { mode: 'center' } }; if ((m = /^(?:zastosuj\s+)?uklad\s+(.+)$/.exec(n))) return { args: { mode: 'layout', layout: m[1] } }; return null; },
+  run({ mode, layout, app, apps }) {
+    const undo = layoutUndo();
+    if (mode === 'tile') { const n = J.wm.tile(); return n ? ok({ tiled: n }, 'Ułożyłem ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + ' w kafelki.', null, undo) : fail('NOT_FOUND', 'Brak okien do ułożenia.'); }
+    if (mode === 'layout') { const r = J.layouts.apply(layout); return r.ok ? ok(r, 'Układ „' + r.name + '”: ' + (r.apps.map(winName).join(', ') || 'czysty pulpit') + '.' + (r.skipped ? ' Pominąłem ' + r.skipped + ' ' + J.pl(r.skipped, 'okno', 'okna', 'okien') + ', których już nie ma.' : ''), null, undo) : fail('NOT_FOUND', 'Nie znam układu „' + layout + '”. Dostępne: ' + J.layouts.list().join(', ') + '.'); }
+    if (mode === 'split') { const [a, b] = (apps || []).map(resolveWin); if (!a || !b || a === b) return fail('INVALID_ARGS', 'Podaj dwa różne okna, np. „notatnik i harmonogram obok siebie”.'); [a, b].forEach(k => J.wm.open(k)); J.wm.snap(a, 'left'); J.wm.snap(b, 'right'); return ok({ apps: [a, b] }, winName(a) + ' po lewej, ' + winName(b) + ' po prawej.', null, undo); }
+    const id = resolveWin(app); if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', app ? notOpen(id || app) : 'Brak aktywnego okna.');
+    if (mode === 'max') { J.wm.setMax(id, true); return ok({ app: id }, 'Zmaksymalizowano ' + winName(id) + '.', null, undo); }
+    J.wm.snap(id, mode); return ok({ app: id, mode }, 'Okno ' + winName(id) + ': ' + ({ left: 'lewa połowa', right: 'prawa połowa', top: 'górna połowa', bottom: 'dolna połowa', center: 'wyśrodkowane' })[mode] + '.', null, undo);
   } });
-R.add({ id: 'wm_move', group: 'Aplikacje i okna', label: 'Przesuń / zmień rozmiar okna', description: 'Ustawia pozycję (x,y) i/lub rozmiar (w,h) okna w pikselach względem pulpitu.',
-  args: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS }, x: { type: 'number' }, y: { type: 'number' }, w: { type: 'number', minimum: 280 }, h: { type: 'number', minimum: 180 } }, required: ['app'] }, writes: ['windows'], voice: false, palette: false,
-  run({ app, x, y, w, h }) { if (!J.wm.isOpen(app)) return fail('NOT_FOUND', APP_NAMES[app] + ' nie jest otwarte.'); const before = J.wm.info().find(k => k.id === app); if (x != null || y != null) J.wm.move(app, x, y); if (w != null || h != null) J.wm.resize(app, w, h); const i = J.wm.info().find(k => k.id === app); return ok(i, 'Okno ' + APP_NAMES[app] + ' ustawione.', null, () => { if (before && J.wm.isOpen(app)) { J.wm.move(app, before.x, before.y); J.wm.resize(app, before.w, before.h); } }); } });
+const DIRS = { lewo: 'left', prawo: 'right', gore: 'up', gory: 'up', dol: 'down', dolu: 'down' };
+R.add({ id: 'wm_move', group: 'Aplikacje i okna', label: 'Przesuń / zmień rozmiar okna', description: 'Przesuwa okno lub widget (app: id aplikacji, w:<id> widgetu, "current"): x,y w pikselach albo direction (left/right/up/down) + amount (small/medium/large); zmienia rozmiar: w,h w pikselach albo size (S, M, L, XL, half, third, quarter, bigger, smaller).',
+  args: { type: 'object', properties: { app: { type: 'string', description: 'id aplikacji, w:<id> widgetu albo "current"' }, x: { type: 'number' }, y: { type: 'number' }, w: { type: 'number', minimum: 120 }, h: { type: 'number', minimum: 100 }, direction: { type: 'string', enum: ['left', 'right', 'up', 'down'] }, amount: { type: 'string', enum: ['small', 'medium', 'large'] }, size: { type: 'string', enum: ['S', 'M', 'L', 'XL', 'half', 'third', 'quarter', 'bigger', 'smaller'] } }, required: ['app'] }, writes: ['windows'],
+  examples: ['przesun {app} (troche|bardziej|mocno)? w (lewo|prawo|gore|dol)', '(powieksz|zmniejsz) {app}', 'zrob {app} (maly|maly|sredni|duzy|wiekszy|mniejszy)', 'rozciagnij {app} na pol ekranu'],
+  parse(raw, n) {
+    let m;
+    if ((m = /^przesun\s+(.+?)\s+(troche|lekko|bardziej|mocno|duzo)?\s*(?:w|na|do)\s+(lewo|prawo|gore|gory|dol|dolu)$/.exec(n)) && !/^okno$/.test(m[1])) { const app = resolveWin(raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length)); if (app) return { args: { app, direction: DIRS[m[3]], amount: /troche|lekko/.test(m[2] || '') ? 'small' : /mocno|duzo/.test(m[2] || '') ? 'large' : 'medium' }, score: 25 }; }
+    if ((m = /^(powieksz|zwieksz|zmniejsz|pomniejsz)\s+(.+)$/.exec(n))) { const app = resolveWin(raw.slice(n.indexOf(m[2]))); if (app) return { args: { app, size: /^(powieksz|zwieksz)/.test(m[1]) ? 'bigger' : 'smaller' }, score: 20 }; }
+    if ((m = /^(?:zrob|ustaw)\s+(.+?)\s+(malym|maly|mala|male|srednim|sredni|srednia|duzym|duzy|duza|duze|ogromnym|ogromny|wiekszym|wiekszy|wieksze|mniejszym|mniejszy|mniejsze)$/.exec(n))) { const app = resolveWin(raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length)); if (app) return { args: { app, size: /^mal/.test(m[2]) ? 'S' : /^sred/.test(m[2]) ? 'M' : /^duz/.test(m[2]) ? 'L' : /^ogrom/.test(m[2]) ? 'XL' : /^wiek/.test(m[2]) ? 'bigger' : 'smaller' }, score: 20 }; }
+    if ((m = /^(?:rozciagnij|rozszerz|ustaw)\s+(.+?)\s+na\s+(pol|polowe|trzecia czesc|jedna trzecia|cwiartke) ekranu$/.exec(n))) { const app = resolveWin(raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length)); if (app) return { args: { app, size: /^pol/.test(m[2]) ? 'half' : /trzec/.test(m[2]) ? 'third' : 'quarter' }, score: 20 }; }
+    return null;
+  },
+  run({ app, x, y, w, h, direction, amount = 'medium', size }) {
+    const id = resolveWin(app); if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', id ? notOpen(id) : 'Nie ma okna „' + app + '”.');
+    if (innerWidth <= 640) return fail('UNSUPPORTED', 'Na małym ekranie okna zajmują cały ekran — nie da się ich przesuwać.');
+    if (J.wm.dragging() === id) return fail('CONFLICT', 'Okno jest właśnie przesuwane myszą.');
+    const before = J.wm.info().find(k => k.id === id), d = J.$('#desktop')?.getBoundingClientRect() || { width: innerWidth, height: innerHeight };
+    if (direction) { const step = { small: 40, medium: 120, large: Math.round((direction === 'left' || direction === 'right' ? d.width : d.height) / 4) }[amount] || 120; const dx = direction === 'left' ? -step : direction === 'right' ? step : 0, dy = direction === 'up' ? -step : direction === 'down' ? step : 0; J.wm.move(id, before.x + dx, before.y + dy); }
+    if (x != null || y != null) J.wm.move(id, x, y);
+    if (size) {
+      const W = d.width, H = d.height - 84, P = { S: [260, 200], M: [420, 320], L: [620, 460], XL: [860, 600] };
+      let nw, nh; if (P[size]) [nw, nh] = P[size]; else if (size === 'half') { nw = W / 2 - 12; nh = H - 16; } else if (size === 'third') { nw = W / 3 - 12; nh = H - 16; } else if (size === 'quarter') { nw = W / 2 - 12; nh = H / 2 - 12; } else { const k = size === 'bigger' ? 1.2 : 1 / 1.2; nw = before.w * k; nh = before.h * k; }
+      const cx = before.x + before.w / 2, cy = before.y + before.h / 2; J.wm.resize(id, Math.round(nw), Math.round(nh)); const now = J.wm.info().find(k => k.id === id);
+      if (size === 'half' || size === 'third' || size === 'quarter') J.wm.move(id, cx < W / 2 ? 8 : W - now.w - 8, 8); else J.wm.move(id, Math.round(cx - now.w / 2), Math.round(cy - now.h / 2));
+    }
+    if (w != null || h != null) J.wm.resize(id, w, h);
+    const i = J.wm.info().find(k => k.id === id);
+    return ok(i, 'Okno ' + winName(id) + ' ' + (size ? 'ma nowy rozmiar' : 'przesunięte') + '.', null, () => { if (before && J.wm.isOpen(id)) { J.wm.move(id, before.x, before.y); J.wm.resize(id, before.w, before.h); } });
+  } });
 R.add({ id: 'nav_back', group: 'Aplikacje i okna', label: 'Wróć do poprzedniego okna', description: 'Wraca do poprzednio aktywnego okna (historia nawigacji); otwiera je, jeśli zostało zamknięte.', idempotent: false, writes: ['windows'],
   examples: ['wroc', 'cofnij okno', 'wroc do poprzedniego okna', 'poprzednie okno', 'wroc do poprzedniej aplikacji', 'wroc tam gdzie bylem'],
   run() { const r = J.nav.back(); return r.ok ? ok({ app: r.app }, r.text, { highlight: r.app }) : fail('NOT_FOUND', r.text); } });
@@ -134,15 +177,15 @@ R.add({ id: 'create_note', group: 'Notatki', label: 'Nowa notatka', description:
 R.add({ id: 'notes_append', group: 'Notatki', label: 'Dopisz do notatki', description: 'Dopisuje tekst na końcu istniejącej notatki (po id lub tytule).', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' }, text: { type: 'string' }, show: { type: 'boolean' } }, required: ['note', 'text'] },
   examples: ['dopisz do notatki {note}: {text}', 'dodaj do notatki {note}: {text}', 'dopisz do {note}: {text}', 'dodaj do listy {note} {text}', 'dopisz do notatki {note} {text}', 'dodaj do notatki {note} {text}'],
-  async run({ note, text, show }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note, prevBody = n.body, prevTs = n.ts; n.body = (n.body ? n.body.replace(/\s+$/, '') + '\n' : '') + text; n.ts = Date.now(); J.save(); J.emit('notes', n.id); showIf(show, 'notes', n.id); return ok(noteRow(n), 'Dopisałem do „' + n.title + '”.', { highlight: 'notes' }, () => { n.body = prevBody; n.ts = prevTs; J.save(); J.emit('notes', n.id); }); } });
+  async run({ note, text, show }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note, prevBody = n.body, prevTs = n.ts; n.body = (n.body ? n.body.replace(/\s+$/, '') + '\n' : '') + text; n.ts = Date.now(); const after = n.body; J.save(); J.emit('notes', n.id); showIf(show, 'notes', n.id); const u = () => { n.body = prevBody; n.ts = prevTs; J.save(); J.emit('notes', n.id); }; u.changed = () => n.body !== after; return ok(noteRow(n), 'Dopisałem do „' + n.title + '”.', { highlight: 'notes' }, u); } });
 R.add({ id: 'notes_update', group: 'Notatki', label: 'Zmień notatkę', description: 'Zmienia tytuł i/lub zastępuje całą treść notatki.', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' }, title: { type: 'string', maxLength: 80 }, content: { type: 'string' } }, required: ['note'] },
   examples: ['zmien tytul notatki {note} na {title}', 'przemianuj notatke {note} na {title}'],
-  async run({ note, title, content }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note, snap = { title: n.title, body: n.body, ts: n.ts }; if (title) n.title = title; if (content != null) n.body = content; n.ts = Date.now(); J.save(); J.emit('notes', n.id); return ok(noteRow(n), 'Zmieniłem notatkę „' + n.title + '”.', null, () => { Object.assign(n, snap); J.save(); J.emit('notes', n.id); }); } });
+  async run({ note, title, content }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note, snap = { title: n.title, body: n.body, ts: n.ts }; if (title) n.title = title; if (content != null) n.body = content; n.ts = Date.now(); const after = n.title + '\u0000' + n.body; J.save(); J.emit('notes', n.id); const u = () => { Object.assign(n, snap); J.save(); J.emit('notes', n.id); }; u.changed = () => n.title + '\u0000' + n.body !== after; return ok(noteRow(n), 'Zmieniłem notatkę „' + n.title + '”.', null, u); } });
 R.add({ id: 'notes_delete', group: 'Notatki', label: 'Usuń notatkę', description: 'Usuwa notatkę (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć notatkę „' + (J.state.notes.find(x => x.id === a.note)?.title || a.note) + '”?', writes: ['notes'],
   args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] },
   examples: ['usun notatke {note}', 'skasuj notatke {note}', 'wyrzuc notatke {note}'],
-  async run({ note }) { const f = await findNote(note); if (f.err) return f.err; J.notes.remove(f.note.id); return ok({ id: f.note.id }, 'Usunąłem notatkę „' + f.note.title + '”.'); } });
+  async run({ note }) { const f = await findNote(note); if (f.err) return f.err; const n = f.note, idx = J.state.notes.indexOf(n); J.notes.remove(n.id); return ok({ id: n.id }, 'Usunąłem notatkę „' + n.title + '”.', null, () => { if (!J.state.notes.some(x => x.id === n.id)) { J.state.notes.splice(Math.max(0, idx), 0, n); J.save(); J.emit('notes', n.id); } }); } });
 
 /* =================== ZADANIA I CZAS =================== */
 R.add({ id: 'tasks_list', group: 'Zadania i czas', label: 'Lista zadań', description: 'Zwraca zadania: range=today (domyślnie), tomorrow, week, all, overdue.', idempotent: true, reads: ['tasks'],
@@ -184,7 +227,7 @@ R.add({ id: 'tasks_update', group: 'Zadania i czas', label: 'Zmień zadanie', de
 R.add({ id: 'tasks_remove', group: 'Zadania i czas', label: 'Usuń zadanie', description: 'Usuwa zadanie z Harmonogramu (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć zadanie „' + (J.state.tasks.find(x => x.id === a.task)?.text || a.task) + '”?', writes: ['tasks'],
   args: { type: 'object', properties: { task: { type: 'string' } }, required: ['task'] },
   examples: ['usun zadanie {task}', 'skasuj zadanie {task}', 'usun przypomnienie {task}'],
-  async run({ task }) { const f = await findTask(task); if (f.err) return f.err; J.state.tasks = J.state.tasks.filter(x => x !== f.task); J.save(); J.emit('tasks'); return ok({ id: f.task.id }, 'Usunąłem zadanie „' + f.task.text + '”.'); } });
+  async run({ task }) { const f = await findTask(task); if (f.err) return f.err; const t = f.task; J.state.tasks = J.state.tasks.filter(x => x !== t); J.save(); J.emit('tasks'); return ok({ id: t.id }, 'Usunąłem zadanie „' + t.text + '”.', null, () => { if (!J.state.tasks.includes(t)) { J.state.tasks.push(t); J.state.tasks.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); J.save(); J.emit('tasks'); } }); } });
 R.add({ id: 'start_timer', group: 'Zadania i czas', label: 'Minutnik', description: 'Uruchamia minutnik na podaną liczbę sekund.', writes: ['timer'],
   args: { type: 'object', properties: { seconds: { type: 'number', minimum: 1, maximum: 86400 }, label: { type: 'string', maxLength: 40 }, show: { type: 'boolean' } }, required: ['seconds'] },
   examples: ['minutnik {seconds}', 'ustaw minutnik na {seconds}', 'odliczaj {seconds}', 'odmierz {seconds}', 'pomodoro', 'budzik za {seconds}'],
@@ -220,7 +263,7 @@ R.add({ id: 'widgets_update', group: 'Pulpit i widgety', label: 'Zmień widget',
 R.add({ id: 'widgets_remove', group: 'Pulpit i widgety', label: 'Usuń widget', description: 'Usuwa widget z pulpitu (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć widget „' + (J.widgets.list.find(x => x.id === a.widget)?.title || a.widget) + '”?', writes: ['widgets'],
   args: { type: 'object', properties: { widget: { type: 'string' } }, required: ['widget'] },
   examples: ['usun widget {widget}', 'zamknij widget {widget}'],
-  run({ widget }) { const q = norm(widget), w = J.widgets.list.find(x => x.id === widget) || J.widgets.list.find(x => norm(x.title).includes(q)); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”.'); J.widgets.remove(w.id); return ok({ id: w.id }, 'Usunąłem widget „' + w.title + '”.'); } });
+  run({ widget }) { const q = norm(widget), w = J.widgets.list.find(x => x.id === widget) || J.widgets.list.find(x => norm(x.title).includes(q)); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”.'); const copy = JSON.parse(JSON.stringify(w)), pos = J.state.winPos['w:' + w.id] ? { ...J.state.winPos['w:' + w.id] } : null; J.widgets.remove(w.id, { silent: true }); return ok({ id: w.id }, 'Usunąłem widget „' + w.title + '”.', null, () => J.widgets.restoreOne(copy, pos)); } });
 R.add({ id: 'add_shortcut', group: 'Pulpit i widgety', label: 'Skrót na pulpicie', description: 'Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url).', writes: ['shortcuts'],
   args: { type: 'object', properties: { name: { type: 'string', maxLength: 40 }, app: { type: 'string', enum: APP_IDS }, url: { type: 'string' } }, required: ['name'] },
   examples: ['dodaj skrot {name}', 'utworz skrot do {name}', 'nowa ikona {name}'],
@@ -228,7 +271,7 @@ R.add({ id: 'add_shortcut', group: 'Pulpit i widgety', label: 'Skrót na pulpici
   run({ name, app, url }) { if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url; const s = J.shortcuts.add(name, app ? { app } : url ? { url } : {}); return ok({ id: s.id, name: s.name, app: s.app, url: s.url }, 'Skrót „' + s.name + '” jest na pulpicie.', { highlight: 'sc:' + s.id }, () => { J.shortcuts.remove(s.id); }); } });
 R.add({ id: 'shortcut_remove', group: 'Pulpit i widgety', label: 'Usuń skrót', description: 'Usuwa skrót z pulpitu (wymaga potwierdzenia).', risk: 'confirm', writes: ['shortcuts'],
   args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, examples: ['usun skrot {name}', 'usun ikone {name}'],
-  run({ name }) { const q = norm(name), s = J.state.shortcuts.find(x => x.id === name || norm(x.name).includes(q)); if (!s) return fail('NOT_FOUND', 'Nie ma skrótu „' + name + '”.'); J.shortcuts.remove(s.id); return ok({ id: s.id }, 'Usunąłem skrót „' + s.name + '”.'); } });
+  run({ name }) { const q = norm(name), s = J.state.shortcuts.find(x => x.id === name || norm(x.name).includes(q)); if (!s) return fail('NOT_FOUND', 'Nie ma skrótu „' + name + '”.'); const idx = J.state.shortcuts.indexOf(s); J.shortcuts.remove(s.id); return ok({ id: s.id }, 'Usunąłem skrót „' + s.name + '”.', null, () => { if (!J.state.shortcuts.some(x => x.id === s.id)) { J.state.shortcuts.splice(idx, 0, s); J.save(); J.emit('shortcuts'); } }); } });
 R.add({ id: 'set_theme', group: 'Pulpit i widgety', label: 'Motyw kolorystyczny', description: 'Zmienia kolor akcentu interfejsu.', idempotent: true, writes: ['settings'],
   args: { type: 'object', properties: { color: { type: 'string', enum: Object.keys(J.THEMES) } }, required: ['color'] },
   examples: ['motyw {color}', 'ustaw motyw {color}', 'zmien motyw na {color}', 'kolor {color}', 'ustaw akcent {color}', 'zmien kolor na {color}', 'nastepny motyw'],
@@ -248,7 +291,7 @@ R.add({ id: 'focus_mode', group: 'Pulpit i widgety', label: 'Tryb skupienia', de
 R.add({ id: 'get_weather', group: 'Dane', label: 'Pogoda', description: 'Aktualna pogoda i prognoza (Open-Meteo). Bez miasta — lokalizacja użytkownika. show=false nie otwiera okna.', idempotent: true, reads: ['internet'],
   args: { type: 'object', properties: { city: { type: 'string' }, days: { type: 'integer', minimum: 1, maximum: 6 }, show: { type: 'boolean' } } },
   examples: ['[jaka jest] pogoda', 'pogoda w {city}', 'jaka [jest] pogoda w {city}', 'czy bedzie padac', 'czy pada', 'jaka [jest] temperatura', 'prognoza [pogody]', 'prognoza na {city}', 'jak jest na dworze'],
-  parse(raw, n) { if (!/(pogod|temperatur|na dworze|padac|pada\b|prognoz|cieplo|zimno)/.test(n)) return null; const c = /\b(?:w|we|dla|na)\s+([a-z\- ]{3,})$/.exec(n); const city = c ? raw.slice(n.lastIndexOf(c[1]), n.lastIndexOf(c[1]) + c[1].length).trim() : undefined; return { args: { city }, score: 5 }; },
+  parse(raw, n) { if (!/(pogod|temperatur|na dworze|padac|pada\b|prognoz|cieplo|zimno)/.test(n)) return null; if (/(wieksz|mniejsz|na ekranie|okno|okien|zamknij|potrzebuj|przesun|przypnij|obok siebie)/.test(n)) return null; /* zdanie o oknie Pogody, nie o pogodzie */ const c = /\b(?:w|we|dla|na)\s+([a-z\- ]{3,})$/.exec(n); const city = c ? raw.slice(n.lastIndexOf(c[1]), n.lastIndexOf(c[1]) + c[1].length).trim() : undefined; return { args: { city }, score: 5 }; },
   async run({ city, days = 2, show }, { ctx }) { const d = await J.weather.get(city || undefined); showIf(show, 'weather', city || undefined); const dl = d.daily, fc = dl.time.slice(1, 1 + days).map((t, i) => ({ date: t, code: dl.weather_code[i + 1], desc: J.wxInfo(dl.weather_code[i + 1])[1], min: Math.round(dl.temperature_2m_min[i + 1]), max: Math.round(dl.temperature_2m_max[i + 1]), rain: dl.precipitation_probability_max[i + 1] })); return ok({ city: d.city, now: { temp: Math.round(d.current.temperature_2m), feels: Math.round(d.current.apparent_temperature), desc: J.wxInfo(d.current.weather_code)[1], wind: Math.round(d.current.wind_speed_10m), humidity: d.current.relative_humidity_2m, is_day: d.current.is_day }, forecast: fc }, J.weather.describe(d)); } });
 R.add({ id: 'get_crypto_prices', group: 'Dane', label: 'Kursy krypto', description: 'Aktualne kursy BTC, ETH, SOL, BNB w USD ze zmianą 24h (CoinGecko / Binance).', idempotent: true, reads: ['internet'],
   args: { type: 'object', properties: { symbol: { type: 'string', enum: ['BTC', 'ETH', 'SOL', 'BNB'] }, show: { type: 'boolean' } } },
@@ -348,7 +391,7 @@ R.add({ id: 'memory_recall', group: 'Pamięć', label: 'Przypomnij fakty', descr
   async run({ query }) { const l = await J.memory.recall(query); return ok({ facts: l }, l.length ? 'Pamiętam: ' + l.map(f => f.fact).join('; ') + '.' : 'Nie mam jeszcze zapamiętanych faktów' + (query ? ' o „' + query + '”' : '') + '.'); } });
 R.add({ id: 'memory_forget', group: 'Pamięć', label: 'Zapomnij', description: 'Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia.', risk: 'confirm', writes: ['memory'],
   args: { type: 'object', properties: { fact: { type: 'string' } }, required: ['fact'] }, examples: ['zapomnij [ze] {fact}', 'zapomnij o {fact}'],
-  async run({ fact }) { const n = await J.memory.forget(fact); return n ? ok({ removed: n }, 'Zapomniałem.') : fail('NOT_FOUND', 'Nie znalazłem takiego faktu.'); } });
+  async run({ fact }) { const before = await J.memory.all(); const n = await J.memory.forget(fact); if (!n) return fail('NOT_FOUND', 'Nie znalazłem takiego faktu.'); const after = new Set((await J.memory.all()).map(f => f.id)), gone = before.filter(f => !after.has(f.id)); return ok({ removed: n }, 'Zapomniałem: ' + gone.map(f => f.fact).join('; ') + '.', null, async () => { for (const f of gone) await J.memory.remember(f.fact, f.scope); }); } });
 
 /* =================== PLIKI (File System Access — Chromium) =================== */
 const FS = J.files = {
@@ -374,7 +417,9 @@ R.add({ id: 'files_export_note', group: 'Pliki', label: 'Eksportuj notatkę do p
   async run({ note }) { const f = await findNote(note); if (f.err) return f.err; const base = (f.note.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '').trim() || 'notatka'; const taken = new Set((await FS.list()).map(x => x.name)); let name = base + '.md', k = 2; while (taken.has(name)) name = base + ' (' + (k++) + ').md'; await FS.write(name, '# ' + f.note.title + '\n\n' + f.note.body); return ok({ name }, 'Zapisałem „' + f.note.title + '” jako ' + name + '.'); } });
 
 /* polecenia odwracalne (zwracają undo() w kopercie): tylko one mogą działać w autonomii A2 */
-['create_note', 'notes_append', 'notes_update', 'add_task', 'tasks_complete', 'tasks_update', 'start_timer', 'timer_control', 'create_widget', 'widgets_update', 'add_shortcut', 'market_watch', 'layout_save', 'wm_move', 'memory_remember', 'set_theme', 'set_wallpaper', 'sound_toggle'].forEach(id => { R.get(id).undoable = true; });
+['create_note', 'notes_append', 'notes_update', 'add_task', 'tasks_complete', 'tasks_update', 'start_timer', 'timer_control', 'create_widget', 'widgets_update', 'add_shortcut', 'market_watch', 'layout_save', 'wm_move', 'memory_remember', 'set_theme', 'set_wallpaper', 'sound_toggle', 'close_app', 'wm_arrange', 'notes_delete', 'tasks_remove', 'shortcut_remove', 'memory_forget', 'widgets_remove'].forEach(id => { R.get(id).undoable = true; });
+/* zamknięcie jednego okna jest odwracalne (wm_reopen) — pytamy tylko o „wszystkie” */
+R.get('close_app').prepare = a => ({ trusted: a.app !== 'all' });
 /* układy okien: zapisane nazwy i presety są dynamiczną listą wartości (Jev wybiera z niej „układ …”); przy mode=layout pole layout jest wymagane */
 R.get('wm_arrange').slotOptions = { layout: () => J.layouts.list() };
 R.get('wm_arrange').needs = a => a.mode === 'layout' ? ['layout'] : [];
@@ -388,4 +433,5 @@ R.get('settings_set').prepare = a => ({ trusted: !J.policy.SENSITIVE_SETTINGS.in
 /* =================== ZGODNOŚĆ: J.actions (stare wywołania) =================== */
 J.actions = new Proxy({}, { get: (_, name) => typeof name === 'string' && R.has(name) ? (args) => R.run(name, args, { source: 'ui' }) : undefined });
 J.APP_NAMES = APP_NAMES; J.APP_IDS = APP_IDS; J.SITES = SITES; J.findApp = findApp;
+J.cmdKit = { findNote, findTask, resolveWin, winName, notOpen, layoutUndo, noteRow, taskRow, cut, showIf, APP_GENDER };
 })();

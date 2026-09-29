@@ -12,11 +12,12 @@ const route = (id, conf, o = {}, v = {}) => P.route(V(id, conf, v), ctxFor(id, o
 
 test('poziomy autonomii: każde polecenie ma poziom; nieodwracalne = A0; A2 tylko odwracalne', () => {
   for (const c of R.list()) assert.match(P.level(c), /^A[0-3]$/, c.id);
-  for (const c of R.list(c => c.risk !== 'safe' && !['settings_set', 'terminal_run'].includes(c.id))) assert.equal(P.level(c), 'A0', c.id + ' (ryzyko ' + c.risk + ')');   // settings_set i terminal_run zależą od argumentów (poniżej)
+  for (const c of R.list(c => c.risk !== 'safe' && !['settings_set', 'terminal_run', 'close_app'].includes(c.id))) assert.equal(P.level(c), 'A0', c.id + ' (ryzyko ' + c.risk + ')');   // settings_set, terminal_run i close_app zależą od argumentów (poniżej)
   for (const id of P.A2) { assert.ok(R.get(id), 'brak polecenia ' + id); assert.equal(R.get(id).undoable, true, id + ' musi zwracać undo()'); }
   for (const id of P.A3) assert.ok(R.get(id), 'brak polecenia ' + id);
   for (const id of P.A3) assert.ok(!R.get(id).writes.some(w => ['notes', 'tasks', 'files', 'memory'].includes(w)), id + ' zapisuje dane, a jest A3');
   assert.equal(P.level('settings_set', { key: 'proactive' }), 'A0'); assert.equal(P.level('settings_set', { key: 'city' }), 'A1');
+  assert.equal(P.level('close_app', { app: 'all' }), 'A0'); assert.equal(P.level('close_app', { app: 'notes' }), 'A3');
   assert.equal(P.level('terminal_run', { command: 'close all' }), 'A0'); assert.equal(P.level('terminal_run', { command: 'date' }), 'A1');
 });
 

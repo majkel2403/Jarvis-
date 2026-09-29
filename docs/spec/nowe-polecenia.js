@@ -25,10 +25,6 @@ const WIN = str({ description: 'id aplikacji, "w:<id>" widgetu, "current" = akty
 
 module.exports = [
   /* ================= NAWIGACJA (03-nawigacja.md) ================= */
-  { id: 'nav_forward', group: 'Nawigacja', label: 'Dalej (po „wróć”)', description: 'Idzie do przodu w historii okien — odwrotność nav_back.', args: S({}), level: 'A3', risk: 'safe', undo: null, writes: ['windows'], phase: 'W1', doc: '03-nawigacja.md',
-    examples: ['dalej', 'naprzód', 'wróć do przodu'] },
-  { id: 'app_view', group: 'Nawigacja', label: 'Przejdź do widoku w aplikacji', description: 'Otwiera aplikację na konkretnym widoku lub obiekcie (np. notatka, dzień, zakładka stopera, para w rynku, miasto w pogodzie, sekcja ustawień). Lista widoków: 03-nawigacja.md §3.', args: S({ app: str({ enum: APPS }), view: str({ description: 'nazwa widoku z §3' }), target: str({ description: 'obiekt w widoku (id, nazwa, data)' }) }, ['app']), level: 'A3', risk: 'safe', undo: 'nav_back', writes: ['windows'], phase: 'W1', doc: '03-nawigacja.md',
-    examples: ['pokaż stoper', 'otwórz notatkę zakupy', 'pokaż ethereum w rynku', 'pokaż pogodę w Gdańsku'] },
   { id: 'search_all', group: 'Nawigacja', label: 'Szukaj wszędzie', description: 'Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, historii czatu, ustawieniach i poleceniach. Zwraca listę wyników z typem i akcją „otwórz”.', args: S({ query: str({ maxLength: 120 }), types: { type: 'array', items: str({ enum: ['notes', 'tasks', 'widgets', 'shortcuts', 'memory', 'chat', 'settings', 'commands', 'files'] }) }, limit: num({ minimum: 1, maximum: 50 }) }, ['query']), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '03-nawigacja.md',
     examples: ['szukaj wszędzie bank', 'gdzie mam coś o wakacjach', 'znajdź wszystko o spotkaniu'] },
   { id: 'recent_list', group: 'Nawigacja', label: 'Ostatnio otwierane', description: 'Lista ostatnio otwieranych okien, notatek i widoków (do szybkiego powrotu).', args: S({ limit: num({ minimum: 1, maximum: 20 }) }), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '03-nawigacja.md',
@@ -37,20 +33,6 @@ module.exports = [
     examples: ['tryb prezentacji', 'posprzątaj pulpit', 'tryb pracy'] },
 
   /* ================= OKNA (04-okna.md) ================= */
-  { id: 'wm_move', extends: true, group: 'Aplikacje i okna', label: 'Przesuń / zmień rozmiar okna (rozszerzenie)', description: 'Rozszerzenie: widgety („w:<id>”), ruch względny (direction + amount), rozmiar z presetu (size).', args: S({ app: WIN, x: num(), y: num(), w: num(), h: num(), direction: str({ enum: ['left', 'right', 'up', 'down'] }), amount: str({ enum: ['small', 'medium', 'large'] }), size: str({ enum: ['S', 'M', 'L', 'XL', 'half', 'third', 'quarter'] }) }, ['app']), level: 'A2', risk: 'safe', undo: 'poprzednia pozycja i rozmiar', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['przesuń notatnik trochę w prawo', 'powiększ to okno', 'zrób minutnik mały', 'rozciągnij pogodę na pół ekranu'] },
-  { id: 'wm_arrange', extends: true, group: 'Aplikacje i okna', label: 'Ułóż okna (rozszerzenie: pół na pół, cofanie)', description: 'Rozszerzenie: mode=split układa dwa okna obok siebie (apps=[lewe, prawe]); każde ułożenie odkłada poprzednie pozycje na stos „Cofnij”.', args: S({ mode: str({ enum: ['tile', 'left', 'right', 'top', 'bottom', 'max', 'center', 'layout', 'split'] }), layout: str(), app: WIN, apps: { type: 'array', items: str(), maxItems: 2 } }, ['mode']), level: 'A3', risk: 'safe', undo: 'poprzednie pozycje okien', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['notatnik i harmonogram obok siebie', 'podziel ekran na pogodę i rynek', 'pół na pół notatki i terminal'] },
-  { id: 'close_app', extends: true, group: 'Aplikacje i okna', label: 'Zamknij okno (rozszerzenie: poziom wg argumentu)', description: 'Rozszerzenie: jedno okno → A3 z „Cofnij” (wm_reopen); app="all" → A0 jak dziś.', args: S({ app: str({ description: 'id aplikacji, "w:<id>", "current" albo "all"' }) }, ['app']), level: 'A3', risk: 'safe', undo: 'wm_reopen', writes: ['windows'], phase: 'W1', doc: '04-okna.md', levelDependsOnArgs: true,
-    examples: ['zamknij pogodę', 'zamknij to okno', 'wyłącz kalkulator'] },
-  { id: 'wm_pin', group: 'Aplikacje i okna', label: 'Zawsze na wierzchu', description: 'Przypina okno lub widget nad innymi (albo odpina).', args: S({ app: WIN, on: bool }, ['app']), level: 'A2', risk: 'safe', undo: 'przywróć poprzedni stan przypięcia', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['przypnij minutnik na wierzchu', 'odepnij to okno', 'minutnik zawsze na wierzchu'] },
-  { id: 'wm_reopen', group: 'Aplikacje i okna', label: 'Otwórz ponownie zamknięte', description: 'Otwiera ostatnio zamknięte okno w tej samej pozycji i widoku (stos 10 ostatnich).', args: S({}), level: 'A3', risk: 'safe', undo: 'zamknij ponownie', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['otwórz ponownie zamknięte', 'przywróć zamknięte okno', 'otwórz to co zamknąłem'] },
-  { id: 'wm_restore', group: 'Aplikacje i okna', label: 'Przywróć okna', description: 'Przywraca zminimalizowane okno albo wszystkie (odwrotność „pokaż pulpit”).', args: S({ app: str({ description: 'id albo "all"' }) }, ['app']), level: 'A3', risk: 'safe', undo: 'zminimalizuj ponownie', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['przywróć okna', 'pokaż z powrotem wszystkie okna', 'przywróć notatnik'] },
-  { id: 'wm_close_others', group: 'Aplikacje i okna', label: 'Zamknij pozostałe', description: 'Zamyka wszystkie okna poza wskazanym (widgety zostają). Można cofnąć przez wm_reopen.', args: S({ app: WIN }, ['app']), level: 'A1', risk: 'safe', undo: 'otwórz ponownie zamknięte okna', writes: ['windows'], phase: 'W1', doc: '04-okna.md',
-    examples: ['zostaw tylko notatnik', 'zamknij pozostałe okna', 'zamknij wszystko poza harmonogramem'] },
   { id: 'layout_list', group: 'Aplikacje i okna', label: 'Lista układów', description: 'Presety i zapisane układy okien z listą aplikacji.', args: S({}), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W2', doc: '04-okna.md',
     examples: ['jakie mam układy', 'lista układów', 'pokaż zapisane układy'] },
   { id: 'layout_remove', group: 'Aplikacje i okna', label: 'Usuń układ', description: 'Usuwa zapisany układ okien (presetów nie można usunąć).', args: S({ name: str() }, ['name']), level: 'A0', risk: 'confirm', undo: 'przywróć układ (10 min)', writes: ['layouts'], phase: 'W2', doc: '04-okna.md',
@@ -135,8 +117,6 @@ module.exports = [
     examples: ['popraw w pamięci: pracuję hybrydowo, nie zdalnie', 'zmień fakt o kawie na herbatę', 'zaktualizuj to co wiesz o moim psie'] },
   { id: 'files_open', group: 'Pliki', label: 'Pokaż plik', description: 'Otwiera podgląd pliku (tekst, Markdown, JSON, obraz) w oknie Pliki.', args: S({ path: str() }, ['path']), level: 'A3', risk: 'safe', undo: null, writes: ['windows'], phase: 'W3', doc: '08-aplikacje.md',
     examples: ['pokaż plik raport.md', 'otwórz plik notatki.txt', 'podgląd pliku dane.json'] },
-  { id: 'shortcut_edit', group: 'Pulpit i widgety', label: 'Edytuj skrót', description: 'Zmienia nazwę, adres, aplikację albo ikonę skrótu.', args: S({ shortcut: str(), name: str({ maxLength: 40 }), url: str(), app: str({ enum: APPS }), icon: str() }, ['shortcut']), level: 'A2', risk: 'safe', undo: 'poprzednie wartości', writes: ['shortcuts'], phase: 'W3', doc: '08-aplikacje.md',
-    examples: ['zmień nazwę skrótu github na kod', 'skrót poczta niech otwiera gmail.com', 'zmień ikonę skrótu'] },
   { id: 'dock_order', group: 'Pulpit i widgety', label: 'Kolejność w doku', description: 'Ustawia kolejność aplikacji i skrótów w doku (przesuń element na pozycję).', args: S({ item: str(), position: num({ minimum: 1, maximum: 30 }) }, ['item', 'position']), level: 'A2', risk: 'safe', undo: 'poprzednia kolejność', writes: ['settings'], phase: 'W3', doc: '08-aplikacje.md',
     examples: ['przesuń notatnik na początek doku', 'terminal jako ostatni w doku', 'daj pogodę na drugie miejsce'] },
 
@@ -165,10 +145,6 @@ module.exports = [
     examples: ['jakie mam rutyny', 'lista rutyn', 'pokaż automatyzacje'] },
   { id: 'routine_remove', group: 'Agent', label: 'Usuń rutynę', description: 'Usuwa rutynę.', args: S({ name: str() }, ['name']), level: 'A0', risk: 'confirm', undo: 'przywróć rutynę (10 min)', writes: ['routines'], phase: 'W4', doc: '11-agent.md',
     examples: ['usuń rutynę poranek', 'skasuj automatyzację wieczór', 'nie potrzebuję już rutyny start pracy'] },
-  { id: 'undo', group: 'Agent', label: 'Cofnij', description: 'Cofa ostatnią akcję (albo N ostatnich; albo wszystko z ostatnich M minut). Dziś „cofnij” działa jako zdanie specjalne — to formalizuje je w rejestrze.', args: S({ count: num({ minimum: 1, maximum: 10 }), minutes: num({ minimum: 1, maximum: 10 }) }), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W1', doc: '11-agent.md',
-    examples: ['cofnij', 'cofnij dwie ostatnie rzeczy', 'cofnij wszystko z ostatnich 5 minut'] },
-  { id: 'undo_list', group: 'Agent', label: 'Historia do cofnięcia', description: 'Pokazuje stos akcji, które da się cofnąć (z czasem i opisem).', args: S({}), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W1', doc: '11-agent.md',
-    examples: ['co mogę cofnąć', 'historia zmian', 'co ostatnio zrobiłeś'] },
   { id: 'plan_control', group: 'Agent', label: 'Sterowanie planem', description: 'Pauza, wznowienie, pominięcie kroku albo zatrzymanie trwającego zadania wieloetapowego.', args: S({ op: str({ enum: ['pause', 'resume', 'skip', 'stop'] }) }, ['op']), level: 'A3', risk: 'safe', undo: null, writes: [], phase: 'W4', doc: '11-agent.md',
     examples: ['wstrzymaj', 'pomiń ten krok', 'dokończ', 'stop'] }
 ];

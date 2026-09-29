@@ -4,19 +4,10 @@
 'use strict';
 module.exports = [
   // nawigacja
-  ['idź dalej', 'nav_forward', 'local'], ['z powrotem do przodu', 'nav_forward', 'para'],
-  ['pokaż mi zakładkę stoper w minutniku', 'app_view', 'para'], ['otwórz ustawienia na sekcji głos', 'app_view', 'local'], ['przejdź do solany w monitorze rynku', 'app_view', 'para'],
   ['przeszukaj wszystko pod kątem faktury', 'search_all', 'para'], ['szukaj wszędzie dentysta', 'search_all', 'local'],
   ['do czego ostatnio zaglądałem', 'recent_list', 'para'], ['ostatnio otwierane', 'recent_list', 'local'],
   ['włącz tryb prezentacji', 'ui_mode', 'local'], ['schowaj wszystko prywatne, będę pokazywał ekran', 'ui_mode', 'para'], ['czysty pulpit', 'ui_mode', 'para'],
   // okna
-  ['przesuń kalkulator w lewo', 'wm_move', 'local'], ['niech pogoda będzie większa', 'wm_move', 'para'], ['zmniejsz to okno do małego', 'wm_move', 'para'],
-  ['minutnik ma być zawsze widoczny', 'wm_pin', 'para'], ['przypnij kalkulator', 'wm_pin', 'local'],
-  ['przywróć ostatnio zamknięte okno', 'wm_reopen', 'local'], ['o nie, zamknąłem notatnik przez przypadek', 'wm_reopen', 'para'],
-  ['pokaż znowu moje okna', 'wm_restore', 'para'], ['przywróć wszystkie okna', 'wm_restore', 'local'],
-  ['zamknij wszystko oprócz terminala', 'wm_close_others', 'local'], ['chcę mieć na ekranie tylko pogodę', 'wm_close_others', 'para'],
-  ['notatki i pogoda obok siebie', 'wm_arrange', 'para'], ['pół na pół terminal i rynek', 'wm_arrange', 'local'],
-  ['zamknij kalkulator', 'close_app', 'local'], ['nie potrzebuję już pogody na ekranie', 'close_app', 'para'],
   ['pokaż moje układy okien', 'layout_list', 'local'], ['jakie układy mam zapisane', 'layout_list', 'para'],
   ['usuń zapisany układ wieczór', 'layout_remove', 'local'], ['wywal układ test', 'layout_remove', 'para'],
   ['zmień nazwę układu test na nocny', 'layout_rename', 'local'], ['układ praca niech się nazywa biuro', 'layout_rename', 'para'],
@@ -59,7 +50,6 @@ module.exports = [
   ['nowy wątek', 'chat_thread', 'local'], ['zacznijmy osobną rozmowę o pracy', 'chat_thread', 'para'],
   ['popraw fakt o pracy w pamięci', 'memory_edit', 'local'], ['źle zapamiętałeś, mam kota nie psa', 'memory_edit', 'para'],
   ['otwórz plik todo.md', 'files_open', 'local'], ['pokaż co jest w pliku raport', 'files_open', 'para'],
-  ['zmień adres skrótu poczta', 'shortcut_edit', 'local'], ['skrót github ma się nazywać repo', 'shortcut_edit', 'para'],
   ['notatnik na pierwsze miejsce w doku', 'dock_order', 'local'], ['przestaw kolejność w doku', 'dock_order', 'para'],
   // wygląd
   ['powiększ wszystko', 'ui_scale', 'local'], ['litery są za małe', 'ui_scale', 'para'],
@@ -74,7 +64,5 @@ module.exports = [
   ['uruchom rutynę wieczór', 'routine_run', 'local'], ['odpal mój poranek', 'routine_run', 'para'],
   ['pokaż rutyny', 'routine_list', 'local'], ['co mam zautomatyzowane', 'routine_list', 'para'],
   ['usuń rutynę wieczór', 'routine_remove', 'local'], ['wyłącz na stałe automatyzację poranną', 'routine_remove', 'para'],
-  ['cofnij ostatnie trzy', 'undo', 'local'], ['odkręć to co zrobiłeś', 'undo', 'para'],
-  ['historia do cofnięcia', 'undo_list', 'local'], ['co ostatnio pozmieniałeś', 'undo_list', 'para'],
   ['pauza zadania', 'plan_control', 'local'], ['poczekaj chwilę z tym planem', 'plan_control', 'para']
 ];

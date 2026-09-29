@@ -10,7 +10,7 @@ const { $, h, esc, icon } = J;
 const TYPES = {
   note:   { label: 'Notatka', icon: 'notes', w: 300, h: 260 },
   list:   { label: 'Lista', icon: 'list', w: 290, h: 300 },
-  result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260 }
+  result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260, minW: 240, minH: 160 }
 };
 const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
 
@@ -53,9 +53,14 @@ J.widgets = {
   register(w) {
     const t = TYPES[w.type], key = 'w:' + w.id;
     J.apps[key] = {
-      title: w.title, icon: t.icon, w: t.w, h: t.h, widget: true, flush: true,
+      title: w.title, icon: t.icon, w: t.w, h: t.h, minW: t.minW || 200, minH: t.minH || 140, widget: true, flush: true,
       mount(body, ctx) {
-        ctx.onClose(() => { delete J.apps[key]; J.widgets.list = J.widgets.list.filter(x => x.id !== w.id); J.state.widgets = J.state.widgets.filter(x => x.id !== w.id); delete J.state.winPos[key]; J.save(); });
+        ctx.onClose(() => {
+          const copy = JSON.parse(JSON.stringify(w)), pos = J.state.winPos[key] ? { ...J.state.winPos[key] } : null;
+          delete J.apps[key]; J.widgets.list = J.widgets.list.filter(x => x.id !== w.id); J.state.widgets = J.state.widgets.filter(x => x.id !== w.id); delete J.state.winPos[key]; J.save();
+          /* zamknięcie widgetu ✕ = usunięcie; zostawiamy „Cofnij” (polecenie widgets_remove ma własne cofanie, więc wtedy po cichu) */
+          if (!w._silent && J.undo) { const e = J.undo.push({ id: 'widgets_remove', label: 'Usuń widget', text: 'Usunięto widget „' + w.title + '”', undo: () => J.widgets.restoreOne(copy, pos), source: 'ui' }); J.undo.offer(e); }
+        });
         mounts[w.type](body, w);
       }
     };
@@ -78,7 +83,13 @@ J.widgets = {
     J.state.widgets = J.state.widgets.filter(w => TYPES[w.type] && w.data);
     J.state.widgets.forEach(w => { if (!J.apps['w:' + w.id]) J.wm.open(J.widgets.register(w)); });
   },
-  remove(id) { const key = 'w:' + id; if (J.wm.isOpen(key)) J.wm.close(key); else { J.widgets.list = J.widgets.list.filter(x => x.id !== id); J.state.widgets = J.state.widgets.filter(x => x.id !== id); delete J.apps[key]; J.save(); } },
+  /* przywraca usunięty widget (Cofnij) w tej samej pozycji */
+  restoreOne(copy, pos) {
+    if (!copy || J.widgets.list.some(x => x.id === copy.id)) return false;
+    delete copy._silent; J.state.widgets.push(copy); if (pos) J.state.winPos['w:' + copy.id] = pos; J.save();
+    J.wm.open(J.widgets.register(copy)); return true;
+  },
+  remove(id, opts = {}) { const key = 'w:' + id; const w0 = J.widgets.list.find(x => x.id === id); if (w0 && opts.silent) w0._silent = true; if (J.wm.isOpen(key)) J.wm.close(key); else { J.widgets.list = J.widgets.list.filter(x => x.id !== id); J.state.widgets = J.state.widgets.filter(x => x.id !== id); delete J.apps[key]; J.save(); } },
   /* odśwież zawartość po zmianie danych (np. przez narzędzie) */
   refresh(id) { const key = 'w:' + id, w = J.widgets.list.find(x => x.id === id), ctx = J.wm.ctx(key); if (w && ctx) { ctx.body.innerHTML = ''; mounts[w.type](ctx.body, w); ctx.setTitle(w.title); } },
   menu(x, y) { return J.widgets._menu?.(x, y); }

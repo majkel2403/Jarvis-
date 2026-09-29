@@ -190,7 +190,7 @@ const judge = J.judge = {
     if (allowed('current')) qs.current = Q.current;
     if (opts.prev && allowed('act')) qs.act = Q.act;
     try {
-      const { answers, usage, ms, cost, cached } = await call(qs, stateFor({ utterance: text, ...(opts.prev ? { previous_utterance: String(opts.prev).slice(0, 200) } : {}) }), { timeout: opts.timeout || 1500, cache: true });
+      const { answers, usage, ms, cost, cached } = await call(qs, stateFor({ utterance: String(text).slice(0, 500), ...(opts.prev ? { previous_utterance: String(opts.prev).slice(0, 200) } : {}) }), { timeout: opts.timeout || 1500, cache: true });
       const it = answers.intent || {};
       if (!it.choice) throw Object.assign(new Error('Jev: brak odpowiedzi o intencji'), { code: 'INTERNAL' });
       const probs = it.probabilities || {};

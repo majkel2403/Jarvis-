@@ -233,12 +233,16 @@ const accent = () => J.state.settings.accent;
 /* ---------- pomocnik: subskrypcja zdarzeń z auto-sprzątaniem ---------- */
 // lekka wersja: zdarzenia z flagą życia okna
 const sub = (ctx, ev, fn) => ctx.onClose(J.on(ev, fn));
+/* widok w aplikacji: argument okna może być tekstem (stary sposób) albo obiektem { view, target } (app_view, historia „wróć”) */
+const viewOf = arg => arg && typeof arg === 'object' ? arg : null;
+const flash = el => { if (!el) return; el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); el.classList.remove('hl'); void el.offsetWidth; el.classList.add('hl'); setTimeout(() => el.classList.remove('hl'), 2200); };
+J.viewOf = viewOf;
 
 /* =================== APLIKACJE =================== */
 
 /* ---------- CZAT ---------- */
 J.apps.chat = {
-  title: 'Czat z Jarvisem', icon: 'chat', w: 420, h: 540, flush: true,
+  title: 'Czat z Jarvisem', icon: 'chat', minW: 320, minH: 360, w: 420, h: 540, flush: true,
   mount(body, ctx, arg) {
     body.innerHTML = `<div class="chat">
       <div class="panel-head" style="font-weight:600"><span class="status"></span> Jarvis <span class="mode-pill" id="modePill"></span>
@@ -312,9 +316,10 @@ J.chat = (() => {
 
 /* ---------- NOTATNIK ---------- */
 J.apps.notes = {
-  title: 'Notatnik', icon: 'notes', w: 620, h: 420, flush: true,
+  title: 'Notatnik', icon: 'notes', minW: 420, minH: 280, w: 620, h: 420, flush: true,
   mount(body, ctx, arg) {
-    let sel = (typeof arg === 'string' && J.state.notes.find(n => n.id === arg)?.id) || J.state.notes[0]?.id, q = '';
+    const va = viewOf(arg);
+    let sel = ((typeof arg === 'string' ? arg : va?.view === 'note' ? va.target : null) && J.state.notes.find(n => n.id === (typeof arg === 'string' ? arg : va.target))?.id) || J.state.notes[0]?.id, q = va?.view === 'search' ? String(va.target || '').toLowerCase() : '';
     body.innerHTML = `<div class="notes">
       <div class="notes-side"><div class="top"><input class="input" placeholder="Szukaj…" id="nq"><button class="btn" id="nNew" title="Nowa notatka">${icon('plus', 'width="14" height="14"')}</button></div><div class="notes-list" id="nList"></div></div>
       <div class="notes-main"><input id="nTitle" placeholder="Tytuł"><textarea id="nBody" placeholder="Zacznij pisać… (zapis automatyczny)"></textarea>
@@ -344,21 +349,23 @@ J.apps.notes = {
     ti.oninput = bo.oninput = upd;
     $('#nq', body).oninput = e => { q = e.target.value.toLowerCase(); renderList(); };
     $('#nNew', body).onclick = () => { const n = J.notes.add('Nowa notatka', ''); sel = n.id; renderList(); renderEd(); ti.select(); };
-    $('#nDel', body).onclick = () => { const n = cur(); if (!n) return; if (!confirm('Usunąć notatkę „' + (n.title || 'Bez tytułu') + '”?')) return; J.notes.remove(n.id); sel = J.state.notes[0]?.id; renderList(); renderEd(); J.toast('Notatka usunięta'); };
+    $('#nDel', body).onclick = async () => { const n = cur(); if (!n) return; const r = await J.uiRun('notes_delete', { note: n.id }); if (r.ok) { sel = J.state.notes[0]?.id; renderList(); renderEd(); } };
     $('#nExp', body).onclick = () => { const n = cur(); if (!n) return; const a = h('a', { href: URL.createObjectURL(new Blob([n.title + '\n\n' + n.body], { type: 'text/plain' })), download: (n.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '') + '.txt' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
     $('#nRead', body).onclick = () => { const n = cur(); if (n) { const was = J.state.settings.speech; J.state.settings.speech = true; J.voice.speak(n.title + '. ' + n.body); J.state.settings.speech = was; } };
     sub(ctx, 'notes', id => { if (id) sel = id; renderList(); renderEd(); });
-    ctx.state = () => { const n = cur(); return n ? { noteId: n.id, title: n.title, words: n.body.trim().split(/\s+/).filter(Boolean).length } : null; };
+    ctx.state = () => { const n = cur(); return n ? { view: 'note', target: n.id, label: n.title, noteId: n.id, title: n.title, words: n.body.trim().split(/\s+/).filter(Boolean).length } : null; };
+    ctx.setQuery = v => { q = String(v || '').toLowerCase(); $('#nq', body).value = v || ''; renderList(); };
+    if (q) $('#nq', body).value = va.target;
     renderList(); renderEd();
   },
-  onArg(arg, ctx) { J.emit('notes', arg); },
+  onArg(arg, ctx) { const v = viewOf(arg); if (!v) return J.emit('notes', arg); if (v.view === 'search') ctx?.setQuery?.(v.target); else if (v.target) J.emit('notes', v.target); J.emit('app-view'); },
   state: ctx => ctx?.state?.() || null
 };
 
 /* ---------- RYNEK ---------- */
 J.apps.market = {
-  title: 'Monitor rynku', icon: 'market', w: 440, h: 400,
-  mount(body, ctx) {
+  title: 'Monitor rynku', icon: 'market', minW: 320, minH: 300, w: 440, h: 400,
+  mount(body, ctx, arg) {
     body.innerHTML = `<div class="market" id="mk"></div><div class="src"><span id="mkSrc">Łączenie…</span><span class="dim">aktualizacja na żywo</span></div>`;
     const grid = $('#mk', body), cards = {};
     J.market.COINS.forEach(c => {
@@ -378,15 +385,21 @@ J.apps.market = {
     sub(ctx, 'market', draw); sub(ctx, 'wm-resize', () => draw());
     J.market.subscribe(); ctx.onClose(() => J.market.unsubscribe());
     requestAnimationFrame(() => draw());
-  }
+    let focusSym = null;
+    ctx.showCoin = sym => { const k = String(sym || '').toUpperCase(); const el = cards[k]; if (!el) return false; focusSym = k; Object.values(cards).forEach(c => c.classList.toggle('sel', c === el)); flash(el); return true; };
+    ctx.state = () => focusSym ? { view: 'coin', target: focusSym, label: focusSym } : null;
+    const va = viewOf(arg); if (va?.view === 'coin') setTimeout(() => ctx.showCoin(va.target), 60);
+  },
+  onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'coin') ctx?.showCoin?.(v.target); J.emit('app-view'); },
+  state: ctx => ctx?.state?.() || null
 };
 
 /* ---------- HARMONOGRAM ---------- */
 J.apps.schedule = {
-  title: 'Harmonogram', icon: 'calendar', w: 420, h: 480,
+  title: 'Harmonogram', icon: 'calendar', minW: 340, minH: 360, w: 420, h: 480,
   mount(body, ctx, arg) {
     const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
-    let day = isDay(arg) ? arg : J.today();
+    const va = viewOf(arg); let day = isDay(arg) ? arg : isDay(va?.target) ? va.target : J.today();
     body.innerHTML = `<div class="day-strip" id="days"></div>
       <form class="row" id="tf" style="margin-bottom:12px"><input class="input" type="time" id="tt" style="width:100px"><input class="input" id="tx" placeholder="Nowe zadanie…" required><button class="btn primary">${icon('plus', 'width="13" height="13"')}</button></form>
       <div class="tasks" id="tl"></div>`;
@@ -411,15 +424,15 @@ J.apps.schedule = {
       list.forEach((t, i) => {
         const el = h('div', { class: 'task' + (t.done ? ' done' : '') + (i === nextIdx ? ' now' : '') }, `<input type="checkbox" ${t.done ? 'checked' : ''}><span class="t">${esc(t.time || '—')}</span><span class="n"></span><button class="del" title="Usuń">×</button>`);
         $('.n', el).textContent = t.text;
-        $('input', el).onchange = e => { t.done = e.target.checked; J.save(); J.emit('tasks'); if (t.done) { J.sfx.click(); J.log('Zadanie ukończone', t.text); } };
-        $('.del', el).onclick = () => { J.state.tasks = J.state.tasks.filter(x => x !== t); J.save(); J.emit('tasks'); };
+        $('input', el).onchange = e => { J.uiRun('tasks_complete', { task: t.id, done: e.target.checked }, { offer: false }); };
+        $('.del', el).onclick = () => J.uiRun('tasks_remove', { task: t.id });
         tl.appendChild(el);
       });
     };
-    $('#tf', body).onsubmit = e => { e.preventDefault(); const tx = $('#tx', body); J.tasks.add($('#tt', body).value, tx.value.trim(), day); tx.value = ''; J.sfx.click(); };
+    $('#tf', body).onsubmit = e => { e.preventDefault(); const tx = $('#tx', body), v = tx.value.trim(); if (!v) return; J.uiRun('add_task', { text: v, time: $('#tt', body).value || undefined, date: day }, { offer: false }); tx.value = ''; J.sfx.click(); };
     sub(ctx, 'tasks', () => { renderDays(); render(); });
     const iv = setInterval(render, 30e3); ctx.onClose(() => clearInterval(iv));
-    ctx.state = () => ({ day });
+    ctx.state = () => ({ view: 'day', target: day, day, label: new Date(day + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }) });
     ctx.setDay = d => { if (isDay(d)) { day = d; renderDays(); render(); } };   // nawigacja: „pokaż piątek”
     // import kalendarza .ics (VEVENT → zadania)
     const imp = h('label', { class: 'btn sm ghost', style: 'cursor:pointer;margin-left:auto', title: 'Importuj wydarzenia z pliku .ics' }, icon('download', 'width="12" height="12"') + ' .ics<input type="file" accept=".ics,text/calendar" hidden>');
@@ -427,7 +440,7 @@ J.apps.schedule = {
     $('input[type=file]', imp).onchange = async e => { const f = e.target.files[0]; if (!f) return; const n = J.ics.import(await f.text()); J.toast(n ? 'Zaimportowano ' + n + ' ' + J.pl(n, 'wydarzenie', 'wydarzenia', 'wydarzeń') : 'Brak wydarzeń w pliku'); };
     renderDays(); render();
   },
-  onArg(arg, ctx) { ctx?.setDay?.(arg); },
+  onArg(arg, ctx) { const v = viewOf(arg); ctx?.setDay?.(v ? v.target : arg); J.emit('app-view'); },
   state: ctx => ctx?.state?.() || null
 };
 
@@ -446,8 +459,11 @@ J.ics = {
 
 /* ---------- MONITOR SYSTEMU ---------- */
 J.apps.monitor = {
-  title: 'Monitor systemu', icon: 'monitor', w: 440, h: 470,
-  mount(body, ctx) {
+  title: 'Monitor systemu', icon: 'monitor', minW: 340, minH: 320, w: 440, h: 470,
+  onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'section') ctx?.goSection?.(v.target); },
+  mount(body, ctx, arg) {
+    ctx.goSection = sec => { const id = { fps: 'sFps', klatki: 'sFps', pamiec: 'sMem', pamięć: 'sMem', siec: 'sNet', sieć: 'sNet', dane: 'sSto', bateria: 'sBat', okna: 'sWin' }[J.norm(sec || '')] || 'sFps'; flash($('#' + id, body)?.closest('.stat')); };
+    setTimeout(() => { const va = viewOf(arg); if (va?.view === 'section') ctx.goSection(va.target); }, 80);
     body.innerHTML = `<div class="stats">
       <div class="stat wide"><span>Klatki / s</span><strong id="sFps">—</strong><canvas id="cFps"></canvas></div>
       <div class="stat"><span>Pamięć JS</span><strong id="sMem">—</strong><canvas id="cMem"></canvas></div>
@@ -490,7 +506,7 @@ J.apps.monitor = {
 
 /* ---------- POGODA ---------- */
 J.apps.weather = {
-  title: 'Pogoda', icon: 'weather', w: 440, h: 400,
+  title: 'Pogoda', icon: 'weather', minW: 320, minH: 300, w: 440, h: 400,
   mount(body, ctx, arg) {
     body.innerHTML = `<form class="row" id="wf" style="margin-bottom:14px"><input class="input" id="wc" placeholder="Miasto…"><button class="btn">Szukaj</button><button class="btn ghost" type="button" id="wg" title="Moja lokalizacja">📍</button></form><div id="wo"><div class="empty">Pobieram prognozę…</div></div>`;
     const out = $('#wo', body);
@@ -514,16 +530,20 @@ J.apps.weather = {
         J.weather.ts = 0; load(); J.toast('Ustawiono lokalizację: ' + s.city);
       }, () => J.toast('Brak zgody na lokalizację'));
     };
-    ctx.body._load = load;
-    load(typeof arg === 'string' ? arg : undefined);
+    let cityNow = null;
+    const load0 = load; ctx.body._load = c => { cityNow = c || null; return load0(c); };
+    ctx.state = () => cityNow ? { view: 'city', target: cityNow, label: cityNow } : null;
+    const va = viewOf(arg); ctx.body._load(typeof arg === 'string' ? arg : va?.view === 'city' ? va.target : undefined);
   },
-  onArg(arg, ctx) { ctx.body._load?.(arg); }
+  onArg(arg, ctx) { const v = viewOf(arg); ctx.body._load?.(v ? v.target : arg); J.emit('app-view'); },
+  state: ctx => ctx?.state?.() || null
 };
 
 /* ---------- TERMINAL ---------- */
 J.apps.terminal = {
-  title: 'Terminal', icon: 'terminal', w: 560, h: 380, flush: true,
-  mount(body, ctx) {
+  title: 'Terminal', icon: 'terminal', minW: 380, minH: 220, w: 560, h: 380, flush: true,
+  onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'run') ctx?.prefill?.(v.target); },
+  mount(body, ctx, arg) {
     body.innerHTML = `<div class="term"><div class="term-out" id="to"></div><div class="term-in"><span>jarvis@os:~$</span><input id="ti" autocomplete="off" spellcheck="false"></div></div>`;
     const out = $('#to', body), inp = $('#ti', body), hist = []; let hi = 0;
     const print = (html, cls = '') => { const d = h('div', { class: cls }, html); out.appendChild(d); out.scrollTop = out.scrollHeight; };
@@ -538,6 +558,9 @@ J.apps.terminal = {
     });
     body.addEventListener('click', () => inp.focus());
     print('<span class="c">Jarvis OS 2.1</span> — terminal. Wpisz <span class="c">help</span>, aby zobaczyć polecenia.');
+    ctx.prefill = t => { inp.value = String(t || ''); inp.focus(); };   // tylko wpisuje — wykonanie wymaga Enter
+    ctx.dirty = () => !!inp.value.trim();
+    const va = viewOf(arg); if (va?.view === 'run') ctx.prefill(va.target);
     setTimeout(() => inp.focus(), 60);
   }
 };
@@ -599,8 +622,9 @@ J.terminalRun = async line => { const buf = []; const r = await TERM.run(line, h
 
 /* ---------- KALKULATOR ---------- */
 J.apps.calc = {
-  title: 'Kalkulator', icon: 'calc', w: 300, h: 440,
-  mount(body, ctx) {
+  title: 'Kalkulator', icon: 'calc', minW: 260, minH: 380, aspect: .68, w: 300, h: 440,
+  onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'expr') ctx?.setExpr?.(v.target); },
+  mount(body, ctx, arg) {
     let expr = '';
     body.innerHTML = `<div class="calc-disp"><div class="expr" id="ce"></div><div class="res" id="cr">0</div></div><div class="calc-keys" id="ck"></div>`;
     const keys = ['C', '(', ')', '÷', '7', '8', '9', '×', '4', '5', '6', '−', '1', '2', '3', '+', '%', '0', ',', '='];
@@ -626,13 +650,17 @@ J.apps.calc = {
       else if (e.key.toLowerCase() === 'c') press('C');
     };
     addEventListener('keydown', onKey); ctx.onClose(() => removeEventListener('keydown', onKey));
+    ctx.setExpr = v => { expr = String(v || '').replace(/×/g, '*').replace(/÷/g, '/').replace(/,/g, '.'); show(); };
+    const va = viewOf(arg); if (va?.view === 'expr') ctx.setExpr(va.target);
   }
 };
 
 /* ---------- MINUTNIK / STOPER ---------- */
 J.apps.timer = {
-  title: 'Minutnik', icon: 'timer', w: 340, h: 470,
-  mount(body, ctx) {
+  title: 'Minutnik', icon: 'timer', minW: 280, minH: 360, w: 340, h: 470,
+  onArg(arg, ctx) { const v = viewOf(arg); if (v) ctx?.setMode?.(v.view === 'stopwatch' ? 'sw' : 'timer'); J.emit('app-view'); },
+  state: ctx => ctx?.state?.() || null,
+  mount(body, ctx, arg) {
     let mode = 'timer', swStart = 0, swAcc = 0, swRun = false, laps = [];
     const C = 2 * Math.PI * 76;
     body.innerHTML = `<div class="seg"><button data-m="timer" class="on">Minutnik</button><button data-m="sw">Stoper</button></div>
@@ -670,16 +698,21 @@ J.apps.timer = {
     const renderLaps = () => { const l = $('#laps', tv); if (l) l.innerHTML = laps.map((t, i) => `<div class="task"><span class="t">#${laps.length - i}</span><span class="n" style="font-family:var(--mono)">${swFmt(t)}</span></div>`).join(''); };
     const raf = () => { if (!alive) return; if (mode === 'sw') { const sd = $('#sd', tv); if (sd) sd.textContent = swFmt(swTime()); } requestAnimationFrame(raf); };
     let alive = true; ctx.onClose(() => alive = false);
-    $$('.seg button', body).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('.seg button', body).forEach(x => x.classList.toggle('on', x === b)); mode === 'timer' ? drawTimer() : drawSw(); });
+    const setMode = m => { mode = m; $$('.seg button', body).forEach(x => x.classList.toggle('on', x.dataset.m === m)); mode === 'timer' ? drawTimer() : drawSw(); J.emit('app-view'); };
+    $$('.seg button', body).forEach(b => b.onclick = () => setMode(b.dataset.m));
     sub(ctx, 'timer', upTimer);
+    ctx.setMode = setMode;
+    ctx.state = () => ({ view: mode === 'sw' ? 'stopwatch' : 'timer', label: mode === 'sw' ? 'stoper' : 'minutnik' });
     drawTimer(); raf();
+    const va = viewOf(arg); if (va?.view === 'stopwatch') ctx.setMode('sw');
   }
 };
 
 /* ---------- USTAWIENIA ---------- */
 J.apps.settings = {
-  title: 'Ustawienia', icon: 'settings', w: 460, h: 560,
-  onArg(arg, ctx) { ctx?.goSection?.(arg); },
+  title: 'Ustawienia', icon: 'settings', minW: 380, minH: 420, w: 460, h: 560,
+  onArg(arg, ctx) { const v = viewOf(arg); ctx?.goSection?.(v ? v.target : arg); J.emit('app-view'); },
+  state: ctx => ctx?.state?.() || null,
   mount(body, ctx, arg) {
     const s = J.state.settings;
     const walls = [['photo', 'Miasto nocą', "url('assets/wallpaper.jpg')"], ['aurora', 'Aurora', 'linear-gradient(135deg,#1b1147,#0b3b5a)'], ['void', 'Pustka', 'radial-gradient(circle,#0a1a30,#01040a)']];
@@ -751,8 +784,10 @@ J.apps.settings = {
     /* nawigacja po sekcjach (polecenie „otwórz ustawienia Jev”): etykiety dostają identyfikatory, okno przewija się do wybranej */
     const SEC = [['openrouter', /^openrouter/], ['akcent', /^kolor akcentu/], ['tapeta', /^tapeta/], ['interfejs', /^interfejs/], ['glos', /^glos/], ['uzytkownik', /^uzytkownik/], ['hermes', /^hermes/], ['agent', /^agent i proaktywnosc/], ['jev', /^sedzia jev/], ['pamiec', /^pamiec/], ['pliki', /^folder roboczy/], ['dane', /^dane/]];
     $$('.label', body).forEach(l => { const hit = SEC.find(([, re]) => re.test(J.norm(l.textContent))); if (hit) l.dataset.sec = hit[0]; });
-    const goSection = sec => { const l = $('[data-sec="' + sec + '"]', body); if (!l) return false; l.scrollIntoView({ block: 'start', behavior: 'smooth' }); l.classList.remove('hl'); void l.offsetWidth; l.classList.add('hl'); setTimeout(() => l.classList.remove('hl'), 2200); return true; };
-    ctx.goSection = goSection; if (arg) setTimeout(() => goSection(arg), 80);
+    const goSection = sec => { const l = $('[data-sec="' + sec + '"]', body); if (!l) return false; l.scrollIntoView?.({ block: 'start', behavior: 'smooth' }); l.classList.remove('hl'); void l.offsetWidth; l.classList.add('hl'); setTimeout(() => l.classList.remove('hl'), 2200); return true; };
+    let secNow = null; ctx.goSection = sec => { const r = goSection(sec); if (r !== false) secNow = sec; return r; };
+    ctx.state = () => secNow ? { view: 'section', target: secNow, label: secNow } : null;
+    { const va = viewOf(arg), sec = va ? va.target : arg; if (sec) setTimeout(() => ctx.goSection(sec), 80); }
     const sw = $('#sw', body);
     const drawSw = () => { sw.innerHTML = ''; Object.entries(J.THEMES).forEach(([n, [a, b]]) => { const e = h('button', { class: 'swatch' + (s.accent === a ? ' on' : ''), title: n, style: `background:linear-gradient(135deg,${a},${b});color:${a}` }); e.onclick = () => { s.accent = a; s.accent2 = b; J.applyTheme(); J.save(); J.emit('settings'); drawSw(); J.sfx.click(); }; sw.appendChild(e); }); };
     drawSw();
@@ -844,7 +879,7 @@ J.apps.settings = {
     $('#jvClearLog', body).onclick = () => { J.judge.log.clear(); jvHelp(); };
     sub(ctx, 'judge', jvHelp);
     /* pamięć */
-    const drawMem = async () => { const l = await J.memory.all(); const box = $('#memList', body); box.innerHTML = l.length ? '' : '<div class="dim" style="font-size:11px">Brak zapamiętanych faktów.</div>'; l.slice().reverse().forEach(f => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><span class="dim" style="font-size:9.5px"></span><button class="btn sm ghost danger" title="Zapomnij">×</button>'); r.children[0].textContent = f.fact; r.children[1].textContent = f.scope; r.children[2].onclick = async () => { await J.memory.forget(f.id); drawMem(); }; box.appendChild(r); }); };
+    const drawMem = async () => { const l = await J.memory.all(); const box = $('#memList', body); box.innerHTML = l.length ? '' : '<div class="dim" style="font-size:11px">Brak zapamiętanych faktów.</div>'; l.slice().reverse().forEach(f => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><span class="dim" style="font-size:9.5px"></span><button class="btn sm ghost danger" title="Zapomnij">×</button>'); r.children[0].textContent = f.fact; r.children[1].textContent = f.scope; r.children[2].onclick = async () => { await J.uiRun('memory_forget', { fact: f.id }); drawMem(); }; box.appendChild(r); }); };
     drawMem(); sub(ctx, 'memory', drawMem);
     /* pliki */
     const fsInfo = async () => { const el = $('#fsInfo', body); if (!J.files.supported) { el.textContent = 'Dostęp do folderów wymaga Chrome lub Edge.'; return; } const hnd = J.files.handle || await J.files.load(); el.textContent = hnd ? 'Folder: ' + hnd.name : 'Nie wybrano folderu.'; };
@@ -856,8 +891,11 @@ J.apps.settings = {
 
 /* ---------- BIBLIOTEKA APLIKACJI ---------- */
 J.apps.library = {
-  title: 'Biblioteka środowiska', icon: 'apps', w: 470, h: 440,
-  mount(body, ctx) {
+  title: 'Biblioteka środowiska', icon: 'apps', minW: 380, minH: 320, w: 470, h: 440,
+  onArg(arg, ctx) { const v = viewOf(arg); if (v) ctx?.goView?.(v.view); },
+  mount(body, ctx, arg) {
+    ctx.goView = v => setTimeout(() => flash($(v === 'shortcut' || v === 'shortcuts' ? '#sf' : '#ag', body)), 60);
+    { const va = viewOf(arg); if (va) ctx.goView(va.view); }
     const ids = ['chat', 'notes', 'market', 'schedule', 'weather', 'monitor', 'terminal', 'calc', 'timer', 'settings'];
     body.innerHTML = `<div class="appgrid" id="ag"></div>
       <div class="label" style="margin-top:18px">Utwórz skrót na pulpicie</div>

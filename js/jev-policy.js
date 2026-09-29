@@ -11,8 +11,8 @@ const S = () => J.state.settings;
 /* ---------- poziomy autonomii (sekcja 5 planu) ----------
    A3 po cichu (odczyty, nawigacja, wygląd) · A2 wykonaj z „Cofnij” (odwracalne zapisy)
    A1 zawsze z pytaniem „Chodzi o…?” · A0 tylko z jawnym potwierdzeniem (nieodwracalne, wrażliwe) */
-const A3 = new Set(['open_app', 'wm_focus', 'wm_minimize', 'wm_arrange', 'wm_list', 'palette_open', 'notifications_open', 'notes_list', 'notes_read', 'notes_search', 'tasks_list', 'get_datetime', 'get_weather', 'get_crypto_prices', 'widgets_list', 'memory_recall', 'files_list', 'files_read', 'settings_get', 'get_status', 'help', 'calculate', 'set_theme', 'set_wallpaper', 'focus_mode', 'sound_toggle', 'speak', 'ui_highlight', 'ui_narrate', 'ui_toast', 'ui_ask', 'nav_back', 'schedule_day', 'settings_open']);
-const A2 = new Set(['create_note', 'notes_append', 'notes_update', 'add_task', 'tasks_complete', 'tasks_update', 'start_timer', 'timer_control', 'create_widget', 'widgets_update', 'add_shortcut', 'market_watch', 'layout_save', 'wm_move', 'memory_remember']);
+const A3 = new Set(['open_app', 'wm_focus', 'wm_minimize', 'wm_arrange', 'wm_list', 'palette_open', 'notifications_open', 'notes_list', 'notes_read', 'notes_search', 'tasks_list', 'get_datetime', 'get_weather', 'get_crypto_prices', 'widgets_list', 'memory_recall', 'files_list', 'files_read', 'settings_get', 'get_status', 'help', 'calculate', 'set_theme', 'set_wallpaper', 'focus_mode', 'sound_toggle', 'speak', 'ui_highlight', 'ui_narrate', 'ui_toast', 'ui_ask', 'nav_back', 'schedule_day', 'settings_open', 'nav_forward', 'app_view', 'wm_reopen', 'wm_restore', 'undo', 'undo_list', 'close_app']);
+const A2 = new Set(['create_note', 'notes_append', 'notes_update', 'add_task', 'tasks_complete', 'tasks_update', 'start_timer', 'timer_control', 'create_widget', 'widgets_update', 'add_shortcut', 'market_watch', 'layout_save', 'wm_move', 'memory_remember', 'wm_pin', 'shortcut_edit']);
 /* klucze ustawień, których zmiana ma skutki uboczne (proaktywność, nasłuch) — wymagają zgody */
 const SENSITIVE_SETTINGS = ['proactive', 'wakeWord'];
 /* podpolecenia Terminala, które niczego nie zmieniają (reszta wymaga zgody, gdy prosi o nie model) */
@@ -23,6 +23,7 @@ const P = J.policy = {
   level(cmd, args) {
     const c = typeof cmd === 'string' ? J.registry.get(cmd) : cmd; if (!c) return 'A1';
     if (c.id === 'settings_set') return SENSITIVE_SETTINGS.includes(args?.key) ? 'A0' : 'A1';
+    if (c.id === 'close_app') return args?.app === 'all' ? 'A0' : 'A3';   // jedno okno: zamknięcie odwracalne (wm_reopen)
     if (c.id === 'terminal_run') return TERMINAL_SAFE.test(String(args?.command || '').trim()) ? 'A1' : 'A0';
     if (c.risk !== 'safe') return 'A0';
     if (A3.has(c.id)) return 'A3';

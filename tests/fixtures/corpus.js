@@ -96,5 +96,33 @@ add('en', 'set_theme', ['switch the theme to purple', 'make it green']);
 add('en', 'conversation', ['how are you', 'tell me a joke', 'who wrote Hamlet', 'what is the capital of Japan']);
 add('en', 'calculate', ['calculate 15 times 12', 'what is 45 plus 30']);
 
+/* ---- przeniesione z planu (nav_forward, app_view, wm_move, wm_arrange, close_app, wm_pin, wm_reopen, wm_restore, wm_close_others, shortcut_edit, undo, undo_list) ---- */
+C.push(['idź dalej', 'nav_forward', 'local']);
+C.push(['z powrotem do przodu', 'nav_forward', 'para']);
+C.push(['pokaż mi zakładkę stoper w minutniku', 'app_view', 'para']);
+C.push(['otwórz ustawienia na sekcji głos', 'app_view', 'local']);
+C.push(['przejdź do solany w monitorze rynku', 'app_view', 'para']);
+C.push(['przesuń kalkulator w lewo', 'wm_move', 'local']);
+C.push(['niech pogoda będzie większa', 'wm_move', 'para']);
+C.push(['zmniejsz to okno do małego', 'wm_move', 'para']);
+C.push(['minutnik ma być zawsze widoczny', 'wm_pin', 'para']);
+C.push(['przypnij kalkulator', 'wm_pin', 'local']);
+C.push(['przywróć ostatnio zamknięte okno', 'wm_reopen', 'local']);
+C.push(['o nie, zamknąłem notatnik przez przypadek', 'wm_reopen', 'para']);
+C.push(['pokaż znowu moje okna', 'wm_restore', 'para']);
+C.push(['przywróć wszystkie okna', 'wm_restore', 'local']);
+C.push(['zamknij wszystko oprócz terminala', 'wm_close_others', 'local']);
+C.push(['chcę mieć na ekranie tylko pogodę', 'wm_close_others', 'para']);
+C.push(['notatki i pogoda obok siebie', 'wm_arrange', 'para']);
+C.push(['pół na pół terminal i rynek', 'wm_arrange', 'local']);
+C.push(['zamknij kalkulator', 'close_app', 'local']);
+C.push(['nie potrzebuję już pogody na ekranie', 'close_app', 'para']);
+C.push(['zmień adres skrótu poczta', 'shortcut_edit', 'local']);
+C.push(['skrót github ma się nazywać repo', 'shortcut_edit', 'para']);
+C.push(['cofnij ostatnie trzy', 'undo', 'local']);
+C.push(['odkręć to co zrobiłeś', 'undo', 'para']);
+C.push(['historia do cofnięcia', 'undo_list', 'local']);
+C.push(['co ostatnio pozmieniałeś', 'undo_list', 'para']);
+
 /* powtórzenia (np. z generatora) usuwamy — każde zdanie liczy się raz */
 module.exports = C.filter((x, i) => C.findIndex(y => y[0] === x[0]) === i);

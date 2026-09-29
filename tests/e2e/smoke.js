@@ -83,6 +83,35 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     assert(bad.length === 0, 'kolizje HUD przy ' + w + 'x' + h + ': ' + bad.join(','));
     await p.evaluate(() => { J.ev.emit('task.completed', { title: 'x', task_id: 'lay1' }); }); await p.waitForTimeout(300);
   }
+  // ===== W1: okna, widoki, cofanie, UI przez rejestr =====
+  await p.evaluate(() => { J.state.settings.jevOn = false; J.emit('settings'); J.wm.closeAll(); });
+  await expect('pokaż stoper', /Minutnik/);
+  assert(await p.evaluate(() => J.apps.timer.state(J.wm.ctx('timer')).view) === 'stopwatch', 'widok stopera');
+  await expect('przypnij minutnik', /na wierzchu/);
+  assert(await p.evaluate(() => document.querySelector('.window[data-app="timer"]').classList.contains('pinned')), 'klasa pinned');
+  await expect('zamknij minutnik', /Zamknięto/);
+  await p.keyboard.press('Control+Shift+T'); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.wm.isOpen('timer')), 'Ctrl Shift T otwiera ponownie');
+  // zmiana rozmiaru lewą krawędzią
+  await p.evaluate(() => { J.wm.open('notes'); J.wm.move('notes', 300, 120); J.wm.resize('notes', 620, 420); }); await p.waitForTimeout(600);   // koniec animacji otwierania
+  const box = await p.evaluate(() => { const r = document.querySelector('.window[data-app="notes"] .rz-w').getBoundingClientRect(); return { x: r.left + 2, y: r.top + r.height / 2 }; });
+  await p.mouse.move(box.x, box.y); await p.mouse.down(); await p.mouse.move(box.x - 80, box.y, { steps: 5 }); await p.mouse.up();
+  const nw = await p.evaluate(() => J.wm.info().find(w => w.id === 'notes'));
+  assert(nw.w >= 690 && nw.x <= 225, 'lewa krawędź: ' + JSON.stringify(nw));
+  // Harmonogram: kliknięcia przez rejestr (Process Log / cofanie)
+  await p.evaluate(() => J.wm.open('schedule')); await p.waitForTimeout(300);
+  await p.fill('.window[data-app="schedule"] #tx', 'test W1'); await p.press('.window[data-app="schedule"] #tx', 'Enter'); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.state.tasks.some(t => t.text === 'test W1')), 'zadanie z formularza');
+  await p.click('.window[data-app="schedule"] .task:has-text("test W1") .del'); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => !J.state.tasks.some(t => t.text === 'test W1')), 'usunięte przyciskiem');
+  await p.waitForSelector('#undoChip.show', { timeout: 2000 });
+  await p.click('body', { position: { x: 5, y: 400 } }); await p.keyboard.press('Control+z'); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.state.tasks.some(t => t.text === 'test W1')), 'Ctrl Z przywraca usunięte zadanie');
+  // menu okna prawym przyciskiem na nagłówku
+  const hb = await p.evaluate(() => { const r = document.querySelector('.window[data-app="schedule"] .win-head b').getBoundingClientRect(); return { x: r.left + 5, y: r.top + 5 }; });
+  await p.mouse.click(hb.x, hb.y, { button: 'right' }); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => /Przypnij na wierzchu/.test(document.querySelector('.ctx')?.textContent || '')), 'menu okna');
+  await p.keyboard.press('Escape');
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {

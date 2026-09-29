@@ -483,17 +483,35 @@ const ctxMenu = (x, y, entries) => {
   ctxEl.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; ctxEl.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
 };
 addEventListener('pointerdown', e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); });
+/* menu okna: prawy przycisk na nagłówku albo Alt Spacja */
+const winMenu = (id, x, y) => {
+  if (!id) return; const pinned = J.wm.isPinned(id), isW = id.startsWith('w:');
+  const size = s => ({ ic: 'max', t: s[1], run: () => J.uiRun('wm_move', { app: id, size: s[0] }) });
+  ctxMenu(x, y, [
+    { ic: 'pin', t: pinned ? 'Odepnij' : 'Przypnij na wierzchu', run: () => J.uiRun('wm_pin', { app: id, on: !pinned }) },
+    ...[['S', 'Rozmiar: mały'], ['M', 'Rozmiar: średni'], ['L', 'Rozmiar: duży'], ['half', 'Pół ekranu']].map(size),
+    ...[['left', 'Przyciągnij w lewo'], ['right', 'Przyciągnij w prawo'], ['center', 'Wyśrodkuj']].map(([m, t]) => ({ ic: 'grid', t, run: () => J.uiRun('wm_arrange', { mode: m, app: id }) })),
+    ...(isW ? [] : [{ ic: 'link', t: 'Kopiuj link do tego widoku', run: () => { const st = J.apps[id]?.state?.(J.wm.ctx(id)); const url = location.origin + location.pathname + '#go=' + [id, st?.view, st?.target].filter(Boolean).map(encodeURIComponent).join('/'); navigator.clipboard?.writeText(url).then(() => J.toast('Skopiowano link'), () => J.toast(url)); } }]),
+    { ic: 'save', t: 'Zapisz układ…', run: () => { const n = prompt('Nazwa układu:'); if (n && n.trim()) J.uiRun('layout_save', { name: n.trim() }); } },
+    '-',
+    ...(isW ? [] : [{ ic: 'close', t: 'Zamknij pozostałe', run: () => J.uiRun('wm_close_others', { app: id }) }]),
+    { ic: 'close', t: isW ? 'Usuń widget' : 'Zamknij', danger: isW, run: () => isW ? J.wm.close(id) : J.uiRun('close_app', { app: id }) }
+  ]);
+};
+J.winMenu = winMenu;
 $('#app').addEventListener('contextmenu', e => {
   if (e.target.closest('input,textarea,.window .win-body,.chat-panel,.log-panel')) return;
   e.preventDefault();
+  const head = e.target.closest('.window .win-head');
+  if (head) return winMenu(head.closest('.window').dataset.app, e.clientX, e.clientY);
   const sc = e.target.closest('[data-sc]');
   if (sc) {
     const s = J.state.shortcuts.find(x => x.id === sc.dataset.sc); if (!s) return;
     return ctxMenu(e.clientX, e.clientY, [
       { ic: 'link', t: 'Otwórz', run: () => J.shortcuts.run(s) },
-      { ic: 'notes', t: 'Zmień nazwę', run: () => { const n = prompt('Nowa nazwa skrótu:', s.name); if (n) { s.name = n.trim(); J.save(); renderIcons(); } } },
-      { ic: 'globe', t: 'Zmień adres', run: () => { const u = prompt('Adres URL:', s.url || 'https://'); if (u) { s.url = /^https?:\/\//i.test(u) ? u : 'https://' + u; s.app = null; s.icon = 'link'; J.save(); renderIcons(); } } },
-      '-', { ic: 'trash', t: 'Usuń z pulpitu', danger: true, run: () => { J.shortcuts.remove(s.id); J.toast('Usunięto „' + s.name + '”'); } }
+      { ic: 'notes', t: 'Zmień nazwę', run: () => { const n = prompt('Nowa nazwa skrótu:', s.name); if (n && n.trim()) J.uiRun('shortcut_edit', { shortcut: s.id, name: n.trim() }); } },
+      { ic: 'globe', t: 'Zmień adres', run: () => { const u = prompt('Adres URL:', s.url || 'https://'); if (u && u.trim()) J.uiRun('shortcut_edit', { shortcut: s.id, url: u.trim() }); } },
+      '-', { ic: 'trash', t: 'Usuń z pulpitu', danger: true, run: () => J.uiRun('shortcut_remove', { name: s.id }) }
     ]);
   }
   ctxMenu(e.clientX, e.clientY, [
@@ -555,7 +573,18 @@ J.setFocus = on => {
 /* =================== SKRÓTY KLAWISZOWE =================== */
 addEventListener('keydown', e => {
   if (!$('#app').classList.contains('on')) return;
-  const mod = e.ctrlKey || e.metaKey;
+  const mod = e.ctrlKey || e.metaKey, inField = !!e.target.closest?.('input,textarea,select,[contenteditable]');
+  const arrows = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+  if (e.key === 'Escape' && inField && !J.ask.pending && !palette.isOpen) { e.target.blur(); return; }   // Esc w polu: najpierw wyjdź z pola
+  if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && !inField) { e.preventDefault(); J.uiRun('undo', {}, { quiet: false }).then(r => r.ok && J.toast(r.text)); return; }
+  if (mod && e.shiftKey && e.key.toLowerCase() === 't' && !inField) { e.preventDefault(); J.uiRun('wm_reopen', {}); return; }
+  if (mod && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !inField) { e.preventDefault(); J.uiRun(e.key === 'ArrowLeft' ? 'nav_back' : 'nav_forward', {}); return; }
+  if (e.altKey && e.shiftKey && arrows[e.key] && !inField) { const f = J.wm.focused(); if (f) { e.preventDefault(); if (mod) { const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 40 : -40; const i = J.wm.info().find(w => w.id === f); J.uiRun('wm_move', { app: f, w: i.w + (e.key === 'ArrowRight' || e.key === 'ArrowLeft' ? k : 0), h: i.h + (e.key === 'ArrowUp' || e.key === 'ArrowDown' ? k : 0) }, { offer: false }); } else J.uiRun('wm_move', { app: f, direction: arrows[e.key], amount: 'small' }, { offer: false }); } return; }
+  if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); const ids = J.wm.list(), cur = J.wm.focused(); if (ids.length) J.wm.open(ids[(ids.indexOf(cur) - 1 + ids.length) % ids.length]); return; }
+  if (e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd' && !inField) { e.preventDefault(); J.wm.list().some(k => !J.wm.isMin(k)) ? J.uiRun('wm_minimize', { app: 'all' }) : J.uiRun('wm_restore', { app: 'all' }); return; }
+  if (e.altKey && !e.shiftKey && e.key.toLowerCase() === 't' && !inField) { e.preventDefault(); J.uiRun('wm_arrange', { mode: 'tile' }); return; }
+  if (e.altKey && e.code === 'Space') { const f = J.wm.focused(); if (f) { e.preventDefault(); const r = J.$('.window[data-app="' + f + '"] .win-head')?.getBoundingClientRect(); winMenu(f, r ? r.left + 20 : 100, r ? r.bottom : 100); } return; }
+  if (e.key === '?' && !inField && !mod) { e.preventDefault(); J.keysHelp?.(); return; }
   if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.isOpen ? palette.close() : palette.open(); }
   else if (mod && e.code === 'Space') { e.preventDefault(); J.ear.toggle(); }
   else if (e.altKey && e.key === '1') { e.preventDefault(); J.chatPanel.toggle(); }
@@ -579,6 +608,11 @@ addEventListener('keydown', e => {
   }
   else if (e.key === '/' && !e.target.closest('input,textarea')) { e.preventDefault(); palette.open(); }
 });
+/* przyciski myszy „wstecz / dalej” = historia okien Jarvisa (bez wychodzenia ze strony) */
+addEventListener('mouseup', e => { if (e.button === 3 || e.button === 4) { e.preventDefault(); J.uiRun(e.button === 3 ? 'nav_back' : 'nav_forward', {}, { quiet: true }); } });
+/* ściąga skrótów klawiszowych („?”) */
+J.KEYS = [['Ctrl K, /', 'paleta i wyszukiwanie'], ['Ctrl Spacja', 'mów do Jarvisa'], ['Alt J', 'czuwanie („Jarvis…”)'], ['Alt 1 / 2 / 3', 'czat / Process Log / telemetria'], ['Alt N', 'powiadomienia'], ['Alt W, Alt Shift W', 'następne / poprzednie okno'], ['Alt ←→↑↓', 'przyciągnij okno do krawędzi'], ['Alt Enter', 'maksymalizuj'], ['Alt Shift ←→↑↓', 'przesuń okno'], ['Ctrl Alt Shift ←→↑↓', 'zmień rozmiar okna'], ['Ctrl Alt ← / →', 'wróć / dalej'], ['Alt D', 'pokaż pulpit / przywróć'], ['Alt T', 'ułóż w kafelki'], ['Alt Spacja', 'menu okna'], ['Ctrl Shift T', 'otwórz ponownie zamknięte'], ['Ctrl Z', 'cofnij ostatnią akcję'], ['Esc', 'zamknij / przerwij / wyjdź z pola'], ['?', 'ta ściąga']];
+J.keysHelp = () => { J.ask('Skróty klawiszowe:\n' + J.KEYS.map(([k, t]) => k + ' — ' + t).join('\n'), [{ label: 'OK', value: 'ok', primary: true }], { speak: false, timeout: 120000 }); };
 
 /* =================== POWIADOMIENIA SYSTEMOWE =================== */
 J.notify = (title, body) => {

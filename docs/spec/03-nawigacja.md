@@ -198,8 +198,6 @@ Konflikty z przeglądarką: nie przejmujemy `Ctrl T/W/N/L/R/Tab`, `F5`, `F11`, `
 
 | polecenie | co robi | poziom | cofanie | fala |
 |---|---|---|---|---|
-| `nav_forward` | Dalej (po „wróć”) | A3 | — | W1 |
-| `app_view` | Przejdź do widoku w aplikacji | A3 | nav_back | W1 |
 | `search_all` | Szukaj wszędzie | A3 | — | W2 |
 | `recent_list` | Ostatnio otwierane | A3 | — | W2 |
 | `ui_mode` | Tryb przestrzeni | A3 | poprzedni tryb | W2 |

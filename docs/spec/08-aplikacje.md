@@ -133,7 +133,6 @@ Aplikacja:
 | `chat_thread` | Wątki rozmów | A2 | poprzedni wątek | W2 |
 | `memory_edit` | Popraw zapamiętany fakt | A2 | poprzednia treść | W3 |
 | `files_open` | Pokaż plik | A3 | — | W3 |
-| `shortcut_edit` | Edytuj skrót | A2 | poprzednie wartości | W3 |
 | `dock_order` | Kolejność w doku | A2 | poprzednia kolejność | W3 |
 
 Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).

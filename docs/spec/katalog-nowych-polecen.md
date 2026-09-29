@@ -2,13 +2,13 @@
 
 > Generuje `node tools/gen-spec.js`. Źródło: `docs/spec/nowe-polecenia.js`. Szczegóły w dokumencie z kolumny „opis w”. „rozszerzenie” = polecenie już istnieje, zmieniają się argumenty.
 
-Planowanych: **65** (nowych 59, rozszerzeń 6). Po wdrożeniu rejestr będzie miał ok. 122 poleceń.
+Planowanych: **53** (nowych 50, rozszerzeń 3). Po wdrożeniu rejestr będzie miał ok. 122 poleceń.
 
 | fala | liczba |
 |---|---|
-| W1 | 11 |
+| W1 | 0 |
 | W2 | 15 |
-| W3 | 29 |
+| W3 | 28 |
 | W4 | 9 |
 | W5 | 1 |
 
@@ -16,8 +16,6 @@ Planowanych: **65** (nowych 59, rozszerzeń 6). Po wdrożeniu rejestr będzie mi
 
 | id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
 |---|---|---|---|---|---|---|---|
-| `nav_forward` | Dalej (po „wróć”) — Idzie do przodu w historii okien — odwrotność nav_back. | — | A3 | — | W1 | [03-nawigacja.md](03-nawigacja.md) | „dalej”, „naprzód”, „wróć do przodu” |
-| `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku lub obiekcie (np. notatka, dzień, zakładka stopera, para w rynku, miasto w pogodzie, sekcja ustawień). Lista widoków: 03-nawigacja.md §3. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; view: string; target: string | A3 | nav_back | W1 | [03-nawigacja.md](03-nawigacja.md) | „pokaż stoper”, „otwórz notatkę zakupy”, „pokaż ethereum w rynku” |
 | `search_all` | Szukaj wszędzie — Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, historii czatu, ustawieniach i poleceniach. Zwraca listę wyników z typem i akcją „otwórz”. | **query**: string; types: string[]; limit: number | A3 | — | W2 | [03-nawigacja.md](03-nawigacja.md) | „szukaj wszędzie bank”, „gdzie mam coś o wakacjach”, „znajdź wszystko o spotkaniu” |
 | `recent_list` | Ostatnio otwierane — Lista ostatnio otwieranych okien, notatek i widoków (do szybkiego powrotu). | limit: number | A3 | — | W2 | [03-nawigacja.md](03-nawigacja.md) | „co ostatnio otwierałem”, „ostatnie okna”, „pokaż ostatnie” |
 | `ui_mode` | Tryb przestrzeni — Przełącza tryb pulpitu: work (okna), clean (pusty pulpit, sam rdzeń), focus (jedno okno + cisza), present (bez prywatnych danych i logu). Tryb idle/thinking ustawia agent sam. | **mode**: work\|clean\|focus\|present | A3 | poprzedni tryb | W2 | [03-nawigacja.md](03-nawigacja.md) | „tryb prezentacji”, „posprzątaj pulpit”, „tryb pracy” |
@@ -26,13 +24,6 @@ Planowanych: **65** (nowych 59, rozszerzeń 6). Po wdrożeniu rejestr będzie mi
 
 | id | co robi | argumenty | poziom | cofanie | fala | opis w | przykłady PL |
 |---|---|---|---|---|---|---|---|
-| `wm_move` (rozszerzenie) | Przesuń / zmień rozmiar okna (rozszerzenie) — Rozszerzenie: widgety („w:<id>”), ruch względny (direction + amount), rozmiar z presetu (size). | **app**: string; x: number; y: number; w: number; h: number; direction: left\|right\|up\|down; amount: small\|medium\|large; size: S\|M\|L\|XL\|half\|third\|quarter | A2 | poprzednia pozycja i rozmiar | W1 | [04-okna.md](04-okna.md) | „przesuń notatnik trochę w prawo”, „powiększ to okno”, „zrób minutnik mały” |
-| `wm_arrange` (rozszerzenie) | Ułóż okna (rozszerzenie: pół na pół, cofanie) — Rozszerzenie: mode=split układa dwa okna obok siebie (apps=[lewe, prawe]); każde ułożenie odkłada poprzednie pozycje na stos „Cofnij”. | **mode**: tile\|left\|right\|top\|bottom\|max\|center\|layout\|split; layout: string; app: string; apps: string[] | A3 | poprzednie pozycje okien | W1 | [04-okna.md](04-okna.md) | „notatnik i harmonogram obok siebie”, „podziel ekran na pogodę i rynek”, „pół na pół notatki i terminal” |
-| `close_app` (rozszerzenie) | Zamknij okno (rozszerzenie: poziom wg argumentu) — Rozszerzenie: jedno okno → A3 z „Cofnij” (wm_reopen); app="all" → A0 jak dziś. | **app**: string | A3 | wm_reopen | W1 | [04-okna.md](04-okna.md) | „zamknij pogodę”, „zamknij to okno”, „wyłącz kalkulator” |
-| `wm_pin` | Zawsze na wierzchu — Przypina okno lub widget nad innymi (albo odpina). | **app**: string; on: boolean | A2 | przywróć poprzedni stan przypięcia | W1 | [04-okna.md](04-okna.md) | „przypnij minutnik na wierzchu”, „odepnij to okno”, „minutnik zawsze na wierzchu” |
-| `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno w tej samej pozycji i widoku (stos 10 ostatnich). | — | A3 | zamknij ponownie | W1 | [04-okna.md](04-okna.md) | „otwórz ponownie zamknięte”, „przywróć zamknięte okno”, „otwórz to co zamknąłem” |
-| `wm_restore` | Przywróć okna — Przywraca zminimalizowane okno albo wszystkie (odwrotność „pokaż pulpit”). | **app**: string | A3 | zminimalizuj ponownie | W1 | [04-okna.md](04-okna.md) | „przywróć okna”, „pokaż z powrotem wszystkie okna”, „przywróć notatnik” |
-| `wm_close_others` | Zamknij pozostałe — Zamyka wszystkie okna poza wskazanym (widgety zostają). Można cofnąć przez wm_reopen. | **app**: string | A1 | otwórz ponownie zamknięte okna | W1 | [04-okna.md](04-okna.md) | „zostaw tylko notatnik”, „zamknij pozostałe okna”, „zamknij wszystko poza harmonogramem” |
 | `layout_list` | Lista układów — Presety i zapisane układy okien z listą aplikacji. | — | A3 | — | W2 | [04-okna.md](04-okna.md) | „jakie mam układy”, „lista układów”, „pokaż zapisane układy” |
 | `layout_remove` | Usuń układ — Usuwa zapisany układ okien (presetów nie można usunąć). | **name**: string | A0 | przywróć układ (10 min) | W2 | [04-okna.md](04-okna.md) | „usuń układ biuro”, „skasuj układ praca2”, „nie potrzebuję układu wieczór” |
 | `layout_rename` | Zmień nazwę układu — Zmienia nazwę zapisanego układu. | **name**: string; **to**: string | A2 | poprzednia nazwa | W2 | [04-okna.md](04-okna.md) | „zmień nazwę układu biuro na praca”, „nazwij układ wieczór domowy”, „przemianuj układ rynek na giełda” |
@@ -48,7 +39,6 @@ Planowanych: **65** (nowych 59, rozszerzeń 6). Po wdrożeniu rejestr będzie mi
 | `widget_duplicate` | Duplikuj widget — Tworzy kopię widgetu obok oryginału. | **widget**: string | A2 | usuń kopię | W3 | [05-widgety.md](05-widgety.md) | „zduplikuj ten widget”, „zrób kopię listy zakupów”, „skopiuj widget krypto” |
 | `widget_collapse` | Zwiń / rozwiń widget — Zwija widget do paska tytułu albo rozwija. | **widget**: string; on: boolean | A3 | odwrotny stan | W3 | [05-widgety.md](05-widgety.md) | „zwiń widget krypto”, „rozwiń listę”, „zwiń wszystkie widgety” |
 | `widget_items` | Pozycje listy w widgecie — Dodaje, odhacza, zmienia lub usuwa pozycję w widgecie-liście. | **widget**: string; **op**: add\|check\|uncheck\|rename\|remove\|clear_done; item: string; to: string | A2 | poprzednia lista | W3 | [05-widgety.md](05-widgety.md) | „dodaj masło do listy zakupów”, „odhacz mleko na liście”, „usuń zrobione z listy” |
-| `shortcut_edit` | Edytuj skrót — Zmienia nazwę, adres, aplikację albo ikonę skrótu. | **shortcut**: string; name: string; url: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; icon: string | A2 | poprzednie wartości | W3 | [08-aplikacje.md](08-aplikacje.md) | „zmień nazwę skrótu github na kod”, „skrót poczta niech otwiera gmail.com”, „zmień ikonę skrótu” |
 | `dock_order` | Kolejność w doku — Ustawia kolejność aplikacji i skrótów w doku (przesuń element na pozycję). | **item**: string; **position**: number | A2 | poprzednia kolejność | W3 | [08-aplikacje.md](08-aplikacje.md) | „przesuń notatnik na początek doku”, „terminal jako ostatni w doku”, „daj pogodę na drugie miejsce” |
 
 ## Notatki
@@ -128,7 +118,5 @@ Planowanych: **65** (nowych 59, rozszerzeń 6). Po wdrożeniu rejestr będzie mi
 | `routine_run` | Uruchom rutynę — Uruchamia rutynę teraz (kroki z paskiem postępu; pauza/pominięcie/stop). | **name**: string | A1 | cofnij kroki odwracalne | W4 | [11-agent.md](11-agent.md) | „uruchom rutynę poranek”, „start pracy”, „zrób mój wieczór” |
 | `routine_list` | Lista rutyn — Rutyny z wyzwalaczami i ostatnim uruchomieniem. | — | A3 | — | W4 | [11-agent.md](11-agent.md) | „jakie mam rutyny”, „lista rutyn”, „pokaż automatyzacje” |
 | `routine_remove` | Usuń rutynę — Usuwa rutynę. | **name**: string | A0 | przywróć rutynę (10 min) | W4 | [11-agent.md](11-agent.md) | „usuń rutynę poranek”, „skasuj automatyzację wieczór”, „nie potrzebuję już rutyny start pracy” |
-| `undo` | Cofnij — Cofa ostatnią akcję (albo N ostatnich; albo wszystko z ostatnich M minut). Dziś „cofnij” działa jako zdanie specjalne — to formalizuje je w rejestrze. | count: number; minutes: number | A3 | — | W1 | [11-agent.md](11-agent.md) | „cofnij”, „cofnij dwie ostatnie rzeczy”, „cofnij wszystko z ostatnich 5 minut” |
-| `undo_list` | Historia do cofnięcia — Pokazuje stos akcji, które da się cofnąć (z czasem i opisem). | — | A3 | — | W1 | [11-agent.md](11-agent.md) | „co mogę cofnąć”, „historia zmian”, „co ostatnio zrobiłeś” |
 | `plan_control` | Sterowanie planem — Pauza, wznowienie, pominięcie kroku albo zatrzymanie trwającego zadania wieloetapowego. | **op**: pause\|resume\|skip\|stop | A3 | — | W4 | [11-agent.md](11-agent.md) | „wstrzymaj”, „pomiń ten krok”, „dokończ” |
 

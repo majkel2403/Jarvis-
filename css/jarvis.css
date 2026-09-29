@@ -636,7 +636,7 @@ select.input option{background:#0a1526}
 .undo-chip.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .undo-chip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .undo-chip i{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
-.ac-q{font-size:12.5px;line-height:1.45;margin-bottom:9px;color:#fff3dc}
+.ac-q{white-space:pre-line;max-height:50vh;overflow:auto;font-size:12.5px;line-height:1.45;margin-bottom:9px;color:#fff3dc}
 .ac-opts{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .ac-bar{position:absolute;left:0;bottom:0;height:2px;width:100%;background:linear-gradient(90deg,var(--warn),rgba(var(--warn-rgb),.3));box-shadow:0 0 8px var(--warn)}
 @keyframes askIn{0%{transform:translate(-50%,16px) scale(.96)}60%{transform:translate(-50%,-4px) scale(1.01)}100%{transform:translate(-50%,0) scale(1)}}
@@ -726,3 +726,13 @@ select.input option{background:#0a1526}
 #orInfo{white-space:pre-line}
 
 .nt.imp{border-color:rgba(var(--warn-rgb),.55)}.nt.imp b:before{content:"! ";color:var(--warn)}
+
+/* okna: uchwyty zmiany rozmiaru na krawędziach i rogach, przypięcie na wierzchu */
+.window .rz{position:absolute;z-index:3}
+.window .rz-n{top:0;left:12px;right:12px;height:6px;cursor:ns-resize;touch-action:none}.window .rz-s{bottom:0;left:12px;right:20px;height:6px;cursor:ns-resize;touch-action:none}
+.window .rz-e{right:0;top:12px;bottom:20px;width:6px;cursor:ew-resize;touch-action:none}.window .rz-w{left:0;top:12px;bottom:12px;width:6px;cursor:ew-resize;touch-action:none}
+.window .rz-ne{right:0;top:0;width:12px;height:12px;cursor:nesw-resize;touch-action:none}.window .rz-nw{left:0;top:0;width:12px;height:12px;cursor:nwse-resize;touch-action:none}.window .rz-sw{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize;touch-action:none}
+.window.max .rz{display:none}
+.win-actions .pn{opacity:.55}.window.pinned .win-actions .pn{opacity:1;color:var(--accent)}
+.window.pinned{box-shadow:0 0 0 1px rgba(var(--accent-rgb),.55),0 18px 50px rgba(0,0,0,.55)}
+@media (max-width:640px){.window .rz,.window .resize,.win-actions .pn{display:none}}

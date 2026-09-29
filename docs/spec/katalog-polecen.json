@@ -55,7 +55,7 @@
   "id": "close_app",
   "group": "Aplikacje i okna",
   "label": "Zamknij okno",
-  "description": "Zamyka okno aplikacji. app=\"all\" zamyka wszystkie okna (wymaga potwierdzenia).",
+  "description": "Zamyka okno aplikacji (da się cofnąć: wm_reopen). app=\"all\" zamyka wszystkie okna (wymaga potwierdzenia).",
   "args": {
    "type": "object",
    "properties": {
@@ -86,9 +86,9 @@
    "app"
   ],
   "risk": "confirm",
-  "level": "A0",
-  "levelDependsOnArgs": false,
-  "undoable": false,
+  "level": "A3",
+  "levelDependsOnArgs": true,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -250,7 +250,8 @@
       "bottom",
       "max",
       "center",
-      "layout"
+      "layout",
+      "split"
      ]
     },
     "layout": {
@@ -259,20 +260,15 @@
     },
     "app": {
      "type": "string",
-     "enum": [
-      "chat",
-      "notes",
-      "market",
-      "schedule",
-      "monitor",
-      "terminal",
-      "weather",
-      "calc",
-      "timer",
-      "settings",
-      "library"
-     ],
-     "description": "okno do przyciągnięcia; domyślnie aktywne"
+     "description": "okno do przyciągnięcia (id aplikacji albo w:<id> widgetu); domyślnie aktywne"
+    },
+    "apps": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "maxItems": 2,
+     "description": "przy mode=split: [lewe, prawe]"
     }
    },
    "required": [
@@ -285,7 +281,7 @@
   "risk": "safe",
   "level": "A3",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -306,25 +302,13 @@
   "id": "wm_move",
   "group": "Aplikacje i okna",
   "label": "Przesuń / zmień rozmiar okna",
-  "description": "Ustawia pozycję (x,y) i/lub rozmiar (w,h) okna w pikselach względem pulpitu.",
+  "description": "Przesuwa okno lub widget (app: id aplikacji, w:<id> widgetu, \"current\"): x,y w pikselach albo direction (left/right/up/down) + amount (small/medium/large); zmienia rozmiar: w,h w pikselach albo size (S, M, L, XL, half, third, quarter, bigger, smaller).",
   "args": {
    "type": "object",
    "properties": {
     "app": {
      "type": "string",
-     "enum": [
-      "chat",
-      "notes",
-      "market",
-      "schedule",
-      "monitor",
-      "terminal",
-      "weather",
-      "calc",
-      "timer",
-      "settings",
-      "library"
-     ]
+     "description": "id aplikacji, w:<id> widgetu albo \"current\""
     },
     "x": {
      "type": "number"
@@ -334,11 +318,42 @@
     },
     "w": {
      "type": "number",
-     "minimum": 280
+     "minimum": 120
     },
     "h": {
      "type": "number",
-     "minimum": 180
+     "minimum": 100
+    },
+    "direction": {
+     "type": "string",
+     "enum": [
+      "left",
+      "right",
+      "up",
+      "down"
+     ]
+    },
+    "amount": {
+     "type": "string",
+     "enum": [
+      "small",
+      "medium",
+      "large"
+     ]
+    },
+    "size": {
+     "type": "string",
+     "enum": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "half",
+      "third",
+      "quarter",
+      "bigger",
+      "smaller"
+     ]
     }
    },
    "required": [
@@ -358,7 +373,12 @@
    "windows"
   ],
   "hermes": true,
-  "examples": [],
+  "examples": [
+   "przesun {app} (troche|bardziej|mocno)? w (lewo|prawo|gore|dol)",
+   "(powieksz|zmniejsz) {app}",
+   "zrob {app} (maly|maly|sredni|duzy|wiekszy|mniejszy)",
+   "rozciagnij {app} na pol ekranu"
+  ],
   "needsConfirmText": false
  },
  {
@@ -777,7 +797,7 @@
   "risk": "confirm",
   "level": "A0",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -1001,7 +1021,7 @@
   "risk": "confirm",
   "level": "A0",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -1295,7 +1315,7 @@
   "risk": "confirm",
   "level": "A0",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -1386,7 +1406,7 @@
   "risk": "confirm",
   "level": "A0",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -2353,7 +2373,7 @@
   "risk": "confirm",
   "level": "A0",
   "levelDependsOnArgs": false,
-  "undoable": false,
+  "undoable": true,
   "external": false,
   "idempotent": false,
   "writes": [
@@ -2500,6 +2520,383 @@
   "examples": [
    "eksportuj notatke {note} [do pliku]",
    "zapisz notatke {note} jako plik"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "app_view",
+  "group": "Nawigacja",
+  "label": "Przejdź do widoku w aplikacji",
+  "description": "Otwiera aplikację na konkretnym widoku: notes note|search, schedule day, timer timer|stopwatch, market coin, weather city, settings section, terminal run (tylko wpisuje), calc expr, library apps|shortcuts, monitor section. Nawigacja — niczego nie zmienia.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    },
+    "view": {
+     "type": "string"
+    },
+    "target": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "app"
+   ]
+  },
+  "required": [
+   "app"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "pokaz stoper",
+   "pokaz zakladke stoper [w minutniku]",
+   "otworz minutnik na stoperze",
+   "pokaz {target} w rynku",
+   "otworz terminal z {target}",
+   "otworz kalkulator z {target}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "nav_forward",
+  "group": "Nawigacja",
+  "label": "Dalej (po „wróć”)",
+  "description": "Idzie do przodu w historii okien i widoków — odwrotność nav_back.",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "dalej",
+   "naprzod",
+   "idz dalej",
+   "wroc do przodu",
+   "do przodu"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "wm_pin",
+  "group": "Aplikacje i okna",
+  "label": "Zawsze na wierzchu",
+  "description": "Przypina okno lub widget nad innymi (on=false odpina). Maks. 3 przypięte.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "description": "id aplikacji, w:<id> widgetu albo \"current\""
+    },
+    "on": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "app"
+   ]
+  },
+  "required": [
+   "app"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "przypnij {app} [na wierzchu]",
+   "odepnij {app}",
+   "{app} zawsze na wierzchu"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "wm_reopen",
+  "group": "Aplikacje i okna",
+  "label": "Otwórz ponownie zamknięte",
+  "description": "Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "otworz ponownie zamkniete [okno]",
+   "przywroc zamkniete okno",
+   "przywroc ostatnio zamkniete okno",
+   "otworz to co zamknalem"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "wm_restore",
+  "group": "Aplikacje i okna",
+  "label": "Przywróć okna",
+  "description": "Przywraca zminimalizowane okno albo wszystkie (app=\"all\") — odwrotność „pokaż pulpit”.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "description": "id aplikacji, w:<id> albo \"all\""
+    }
+   },
+   "required": [
+    "app"
+   ]
+  },
+  "required": [
+   "app"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "przywroc okna",
+   "przywroc wszystkie okna",
+   "pokaz z powrotem [wszystkie] okna",
+   "przywroc {app}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "wm_close_others",
+  "group": "Aplikacje i okna",
+  "label": "Zamknij pozostałe",
+  "description": "Zamyka wszystkie okna poza wskazanym (widgety zostają). Da się cofnąć.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "app": {
+     "type": "string",
+     "description": "okno, które zostaje (domyślnie aktywne)"
+    }
+   },
+   "required": [
+    "app"
+   ]
+  },
+  "required": [
+   "app"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "zostaw tylko {app}",
+   "zamknij pozostale [okna]",
+   "zamknij wszystko (poza|oprocz) {app}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "undo",
+  "group": "Agent",
+  "label": "Cofnij",
+  "description": "Cofa ostatnią akcję (count = ile ostatnich, minutes = wszystko z ostatnich N minut). force=true cofa mimo późniejszej zmiany obiektu.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "count": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 10
+    },
+    "minutes": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 10
+    },
+    "force": {
+     "type": "boolean"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "cofnij",
+   "cofnij (dwie|trzy) ostatnie [rzeczy]",
+   "cofnij wszystko z ostatnich {minutes} minut",
+   "cofnij mimo to",
+   "odkrec to"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "undo_list",
+  "group": "Agent",
+  "label": "Historia do cofnięcia",
+  "description": "Lista ostatnich akcji, które da się cofnąć (10 minut).",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "co moge cofnac",
+   "historia do cofniecia",
+   "historia zmian",
+   "co ostatnio (zrobiles|zmieniles|pozmieniales)"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "shortcut_edit",
+  "group": "Pulpit i widgety",
+  "label": "Edytuj skrót",
+  "description": "Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "shortcut": {
+     "type": "string",
+     "description": "id albo nazwa skrótu"
+    },
+    "name": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "url": {
+     "type": "string"
+    },
+    "app": {
+     "type": "string",
+     "enum": [
+      "chat",
+      "notes",
+      "market",
+      "schedule",
+      "monitor",
+      "terminal",
+      "weather",
+      "calc",
+      "timer",
+      "settings",
+      "library"
+     ]
+    },
+    "icon": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "shortcut"
+   ]
+  },
+  "required": [
+   "shortcut"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "shortcuts"
+  ],
+  "hermes": true,
+  "examples": [
+   "zmien nazwe skrotu {shortcut} na {name}",
+   "skrot {shortcut} ma sie nazywac {name}",
+   "zmien adres skrotu {shortcut} na {url}"
   ],
   "needsConfirmText": false
  }
