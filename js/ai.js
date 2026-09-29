@@ -103,7 +103,18 @@ const summarize = async () => {
 };
 
 /* =================== TRANSPORT: SSE /chat/completions =================== */
-const netError = () => { const c = cfg(); if (c.provider === 'agent') return `Nie mogę połączyć się z Hermes Agent pod ${c.url}. Sprawdź, czy działa \`hermes gateway\` z API_SERVER_ENABLED=true oraz czy w ~/.hermes/.env jest API_SERVER_CORS_ORIGINS=${location.origin}`; return `Brak połączenia z ${c.url} (serwer wyłączony albo blokada CORS).`; };
+/* Przeglądarka nie odróżnia „serwer wyłączony” od „CORS zablokował” (oba to TypeError), więc sprawdzamy sondą no-cors:
+   odpowiedź nieprzezroczysta = serwer żyje, a błąd to CORS; „localhost” a 127.0.0.1 → typowy problem IPv6 na Windows. */
+const reachable = async url => { try { await fetch(url, { mode: 'no-cors', signal: AbortSignal.timeout(2000) }); return true; } catch (e) { return false; } };
+const netError = async () => {
+  const c = cfg(); let alt = '';
+  try { const u = new URL(c.url); if (u.hostname === 'localhost') { u.hostname = '127.0.0.1'; alt = u.href.replace(/\/+$/, ''); } } catch (e) { }
+  let msg;
+  if (await reachable(c.url + '/models')) msg = `Hermes odpowiada pod ${c.url}, ale przeglądarka blokuje połączenie (CORS). Dopisz do konfiguracji serwera origin tej strony: ${c.provider === 'agent' ? 'API_SERVER_CORS_ORIGINS=' : ''}${location.origin} (w ~/.hermes/.env; http://localhost i http://127.0.0.1 to różne originy) i zrestartuj gateway. Szybka naprawa: node tools/hermes-doctor.js --fix`;
+  else if (alt && await reachable(alt + '/models')) msg = `Pod ${c.url} nikt nie odpowiada, ale pod ${alt} działa (Windows: „localhost” trafia na IPv6). Wpisz w Ustawieniach adres ${alt}.`;
+  else msg = c.provider === 'agent' ? `Nie mogę połączyć się z Hermes Agent pod ${c.url}. Sprawdź, czy działa \`hermes gateway\` z API_SERVER_ENABLED=true (Hermes w WSL2? sprawdź curl ${c.url}/models z Windows). Diagnostyka: node tools/hermes-doctor.js` : `Brak połączenia z ${c.url} — serwer wyłączony albo adres jest błędny.`;
+  J.hermes.lastError = msg; return msg;
+};
 const httpError = async r => { let msg = ''; try { const j = await r.json(); msg = j.error?.message || j.message || JSON.stringify(j); } catch (e) { } if (r.status === 401 || r.status === 403) return 'Hermes odrzucił klucz API (' + r.status + ') — sprawdź API_SERVER_KEY w Ustawieniach.'; if (r.status === 404) return 'Nie znaleziono endpointu lub modelu „' + cfg().model + '” (404).'; if (r.status === 429) return 'Przekroczono limit zapytań — spróbuj za chwilę.'; return 'Błąd Hermesa (' + r.status + ')' + (msg ? ': ' + msg.slice(0, 200) : ''); };
 let controller = null;
 /* zwraca { content, calls: [{id,name,args}] (natywne), raw } ; on.delta(acc), on.tool(progress), on.reason(txt), on.call(call) gdy domknie się wywołanie w strumieniu */
@@ -114,7 +125,7 @@ const streamChat = async (messages, o = {}) => {
   if (o.format === 'openai') { body.tools = R.tools(); body.tool_choice = 'auto'; }
   let r;
   try { r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify(body) }); }
-  catch (e) { if (e.name === 'AbortError') throw e; const er = new Error(netError()); er.net = true; throw er; }
+  catch (e) { if (e.name === 'AbortError') throw e; const er = new Error(await netError()); er.net = true; throw er; }
   if (!r.ok) { const er = new Error(await httpError(r)); er.net = [401, 403, 404, 502, 503].includes(r.status); er.status = r.status; throw er; }
   const native = new Map();   // index -> {id, name, args}
   const finishNative = () => [...native.values()].map(t => { let args = {}; try { args = JSON.parse(t.args || '{}'); } catch (e) { args = null; } return { id: t.id, name: t.name, args, ok: args !== null, raw: t.args }; });
@@ -290,7 +301,7 @@ J.brain = {
   get summary() { return summary; },
   reset() { history.length = 0; summary = ''; persist(); J.context.reset(); },
   abort() { let did = false; if (controller) { controller.abort(); did = true; } if (taskAbort) { taskAbort.abort(); did = true; } J.ask?.cancel?.(); return did; },
-  async models() { const c = cfg(); let r; try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(netError()); } if (!r.ok) throw new Error(await httpError(r)); const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean); },
+  async models() { const c = cfg(); let r; try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(await netError()); } if (!r.ok) throw new Error(await httpError(r)); const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean); },
   /* test połączenia + autodetekcja formatu narzędzi */
   async test() {
     const list = await this.models(); const c = cfg(); const t0 = performance.now();

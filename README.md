@@ -34,9 +34,9 @@ Wszystkie dane (notatki, zadania, ustawienia, pamięć, rozmowa) są zapisywane 
 ## Uruchomienie
 
 ```bash
-# dowolny statyczny serwer, np.:
-python3 -m http.server 8080
-# → http://localhost:8080
+node tools/serve.js          # → http://localhost:4000  (bez zależności; Node ≥ 18)
+# Windows: dwuklik na start-jarvis.bat (uruchamia serwer i otwiera przeglądarkę)
+# albo dowolny statyczny serwer, np.: python3 -m http.server 8080
 ```
 
 Plik `index.html` działa też otwarty bezpośrednio z dysku (bez PWA i trybu offline).
@@ -58,12 +58,32 @@ Jarvis rozmawia z Hermesem przez API zgodne z OpenAI (`/v1/chat/completions`, st
    ```bash
    API_SERVER_ENABLED=true
    API_SERVER_KEY=twój-tajny-klucz
-   API_SERVER_CORS_ORIGINS=https://majkel2403.github.io   # adres, pod którym otwierasz Jarvis OS
+   API_SERVER_CORS_ORIGINS=http://localhost:4000   # DOKŁADNY adres, pod którym otwierasz Jarvis OS (kilka — po przecinku)
    ```
 3. Uruchom `hermes gateway` (serwer nasłuchuje na `http://localhost:8642`).
 4. W Jarvis OS wpisz ten sam klucz i kliknij **Połącz i testuj** — test sprawdza połączenie i wykrywa format narzędzi.
 
 Jarvis wysyła nagłówek `X-Hermes-Session-Key`, więc pamięć długoterminowa Hermesa jest przypisana do tej przeglądarki. Postęp narzędzi agenta (`hermes.tool.progress`) pojawia się w czacie i w karcie „Dane zewnętrzne”.
+
+### Diagnostyka i naprawa połączenia (Windows / macOS / Linux)
+
+```bash
+node tools/hermes-doctor.js --key TWÓJ_KLUCZ            # sprawdza serwer Jarvisa, gateway, klucz, CORS i czat
+node tools/hermes-doctor.js --key TWÓJ_KLUCZ --fix      # dopisuje brakujące API_SERVER_* do ~/.hermes/.env (kopia .env.bak)
+```
+
+Opcje: `--jarvis http://localhost:4000` (origin Jarvisa), `--url http://localhost:8642/v1` (gateway), `--env ŚCIEŻKA` (inny plik `.env`). Po `--fix` zrestartuj `hermes gateway`.
+
+Najczęstsze przyczyny „Hermes offline”:
+
+| Objaw | Przyczyna | Naprawa |
+|---|---|---|
+| „przeglądarka blokuje połączenie (CORS)” | `API_SERVER_CORS_ORIGINS` nie zawiera adresu strony. `http://localhost:4000` i `http://127.0.0.1:4000` to **różne** originy | dopisz dokładny origin, zrestartuj gateway |
+| „nikt nie odpowiada, ale pod 127.0.0.1 działa” | Windows rozwiązuje `localhost` na IPv6 `::1`, a gateway słucha tylko na IPv4 | wpisz w Ustawieniach `http://127.0.0.1:8642/v1` |
+| „odrzucił klucz API (401)” | klucz w Ustawieniach ≠ `API_SERVER_KEY` | ten sam klucz w obu miejscach |
+| nic nie nasłuchuje na 8642 | gateway nie działa albo `API_SERVER_ENABLED` ≠ `true`; Hermes w WSL2 bywa niedostępny z Windows | `hermes gateway`; z Windows sprawdź `curl http://localhost:8642/v1/models` |
+
+Testy połączenia bez prawdziwego Hermesa: `node tests/mock-hermes.js --key sekret --cors http://localhost:4000` uruchamia atrapę gateway'a, a `node tests/e2e/hermes.js` (atrapa na porcie 18642, nie koliduje z prawdziwym 8642) sprawdza w Chromium scenariusze brak CORS / zły klucz / OK / gateway wyłączony.
 
 ### Inne źródła modelu Hermes
 
