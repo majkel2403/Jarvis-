@@ -149,8 +149,8 @@ const loadWeather = () => J.weather.fetch().catch(() => { $('#wxTemp').textConte
 const nodes = () => {
   const set = (id, v) => { const e = $('#' + id); if (e) e.textContent = v; };
   const bar = (id, p) => { const e = $('#' + id); if (e) e.style.setProperty('--w', J.clamp(p, 3, 100) + '%'); };
-  const ai = !!S.apiKey;
-  set('nModel', ai ? 'CLAUDE' : 'LOKAL'); set('nModelS', ai ? S.model : 'Silnik poleceń offline'); bar('bModel', ai ? 92 : 45);
+  const ai = J.aiReady();
+  set('nModel', ai ? 'HERMES' : 'LOKAL'); set('nModelS', ai ? S.hermesModel + ' · ' + (J.HERMES_PRESETS[S.hermesProvider]?.label.split(' (')[0] || 'Hermes') : 'Silnik poleceń offline'); bar('bModel', ai ? 92 : 45);
   const a = J.state.stats.actions || 0; set('nTools', a); bar('bTools', Math.min(100, a * 4));
   set('nFps', J.fps || 60); bar('bFps', (J.fps || 60) / 60 * 100); set('nSysS', 'FPS · ' + (J.fps >= 45 ? 'płynnie' : 'obciążenie'));
   const t = J.tasks.today(), done = t.filter(x => x.done).length; set('nTasks', done + '/' + t.length); bar('bTasks', t.length ? done / t.length * 100 : 0);
@@ -352,6 +352,7 @@ addEventListener('keydown', e => {
     if (ctxEl) return closeCtx();
     if (palette.isOpen) return palette.close();
     if ($('#logPanel').classList.contains('open')) return toggleLog(false);
+    if (J.brain.abort()) return;
     if (J.voice.speaking) return J.voice.stop();
     if (J.ear.active) return J.ear.stop();
     J.wm.closeTop();
@@ -391,6 +392,8 @@ J.matrix = () => {
 };
 
 /* =================== START =================== */
+// kontenery z overflow:hidden potrafią się „przewinąć” przy fokusie — trzymamy je w miejscu
+['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
 renderIcons(); renderDock(); J.log.renderAll(); nodes();
 clock(); setInterval(clock, 1000);
 setInterval(nodes, 1500);

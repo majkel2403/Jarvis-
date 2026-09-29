@@ -1,5 +1,5 @@
 /* =========================================================
-   JARVIS OS — mózg: akcje systemowe, silnik lokalny, Claude AI
+   JARVIS OS — mózg: akcje systemowe, silnik lokalny, Hermes (Nous Research)
    ========================================================= */
 'use strict';
 (() => {
@@ -14,7 +14,7 @@ const APP_ALIASES = [
   ['terminal', /\b(terminal|konsol|shell)/], ['weather', /\b(pogod)/], ['calc', /\b(kalkulator|liczydl)/], ['timer', /\b(minutnik|stoper|timer)/],
   ['settings', /\b(ustawieni|opcje|konfiguracj|preferencj)/], ['library', /\b(bibliotek|aplikacj|menu|programy)/]
 ];
-const SITES = { youtube: 'https://youtube.com', google: 'https://google.com', github: 'https://github.com', gmail: 'https://mail.google.com', spotify: 'https://open.spotify.com', netflix: 'https://netflix.com', facebook: 'https://facebook.com', twitter: 'https://x.com', wikipedia: 'https://pl.wikipedia.org', 'mapy': 'https://maps.google.com', linkedin: 'https://linkedin.com', reddit: 'https://reddit.com', allegro: 'https://allegro.pl', claude: 'https://claude.ai' };
+const SITES = { youtube: 'https://youtube.com', google: 'https://google.com', github: 'https://github.com', gmail: 'https://mail.google.com', spotify: 'https://open.spotify.com', netflix: 'https://netflix.com', facebook: 'https://facebook.com', twitter: 'https://x.com', wikipedia: 'https://pl.wikipedia.org', 'mapy': 'https://maps.google.com', linkedin: 'https://linkedin.com', reddit: 'https://reddit.com', allegro: 'https://allegro.pl', nous: 'https://nousresearch.com', hermes: 'https://hermes-agent.nousresearch.com' };
 const THEME_ALIASES = { cyjan: 'cyjan', turkus: 'cyjan', niebiesk: 'niebieski', fiolet: 'fiolet', purpur: 'fiolet', zielon: 'zielony', zlot: 'złoty', pomarancz: 'złoty', czerwon: 'czerwony', rozow: 'różowy' };
 const findApp = n => (APP_ALIASES.find(([, re]) => re.test(n)) || [])[0];
 const JOKES = [
@@ -25,7 +25,7 @@ const JOKES = [
   'Optymista widzi szklankę do połowy pełną. Inżynier widzi szklankę dwa razy większą, niż trzeba.'
 ];
 
-/* =================== AKCJE (wspólne dla silnika lokalnego i Claude) =================== */
+/* =================== AKCJE (wspólne dla silnika lokalnego i Hermesa) =================== */
 const A = J.actions = {
   open_app({ app }) {
     if (!J.apps[app]) return { ok: false, text: 'Nieznana aplikacja: ' + app };
@@ -99,7 +99,7 @@ const A = J.actions = {
   focus_mode({ on }) { J.setFocus?.(on !== false); return { ok: true, text: on === false ? 'Tryb skupienia wyłączony' : 'Tryb skupienia włączony — okna zminimalizowane' }; }
 };
 
-/* definicje narzędzi dla Claude (JSON Schema) */
+/* definicje funkcji dla Hermesa (JSON Schema) */
 const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library'];
 const TOOLS = [
   { name: 'open_app', description: 'Otwiera aplikację w Jarvis OS. notes=Notatnik, market=Monitor rynku krypto, schedule=Harmonogram zadań, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik/stoper, settings=Ustawienia, library=Biblioteka aplikacji, chat=Czat.', input_schema: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS } }, required: ['app'] } },
@@ -117,7 +117,7 @@ const TOOLS = [
   { name: 'get_datetime', description: 'Zwraca aktualną datę i godzinę użytkownika.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_status', description: 'Zwraca stan środowiska: otwarte okna, notatki, zadania na dziś, minutnik, skróty.', input_schema: { type: 'object', properties: {} } },
   { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } }
-].map(t => ({ ...t, eager_input_streaming: true }));
+];
 
 /* wykonanie akcji z walidacją wejścia */
 const run = async (name, input) => {
@@ -136,13 +136,13 @@ const local = async (raw) => {
   const act = async (name, input) => { const r = await run(name, input); return r.text; };
 
   if (/^(pomoc|help|\?|co potrafisz|co umiesz|jakie masz (komendy|polecenia|mozliwosci)|komendy)/.test(n))
-    return 'Potrafię: **otwierać aplikacje** („otwórz notatnik”), **notować** („zanotuj: …”), **przypominać** („przypomnij mi o 18:00 trening”), **odliczać** („minutnik 5 minut”), sprawdzać **pogodę** i **kursy krypto**, **liczyć** („oblicz 15% z 2400”), zmieniać **motyw** i **tapetę**, tworzyć **skróty** („dodaj skrót GitHub github.com”), otwierać strony („otwórz YouTube”), szukać w Google, opowiedzieć żart i podać **raport** systemu. Z kluczem Claude API odpowiem na każde pytanie.';
+    return 'Potrafię: **otwierać aplikacje** („otwórz notatnik”), **notować** („zanotuj: …”), **przypominać** („przypomnij mi o 18:00 trening”), **odliczać** („minutnik 5 minut”), sprawdzać **pogodę** i **kursy krypto**, **liczyć** („oblicz 15% z 2400”), zmieniać **motyw** i **tapetę**, tworzyć **skróty** („dodaj skrót GitHub github.com”), otwierać strony („otwórz YouTube”), szukać w Google, opowiedzieć żart i podać **raport** systemu. Po podłączeniu Hermesa odpowiem na każde pytanie.';
   if (/^(hej|czesc|witaj|siema|dzien dobry|dobry wieczor|dobry|elo|hello|hi|yo)\b/.test(n)) {
     const hr = new Date().getHours();
     return (hr < 5 ? 'Późna pora' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj ponownie' : 'Dobry wieczór') + '. Wszystkie systemy działają. W czym mogę pomóc?';
   }
   if (/(dziek|dzieki|dzieku|thx|thanks)/.test(n)) return 'Zawsze do usług.';
-  if (/(kim jestes|jak sie nazywasz|przedstaw sie|czym jestes)/.test(n)) return 'Jestem Jarvis — inteligentna warstwa tego środowiska. Zarządzam oknami, notatkami, zadaniami i danymi, a z modelem Claude rozumiem dowolne polecenia.';
+  if (/(kim jestes|jak sie nazywasz|przedstaw sie|czym jestes)/.test(n)) return 'Jestem Jarvis — inteligentna warstwa tego środowiska. Zarządzam oknami, notatkami, zadaniami i danymi, a połączony z Hermesem od Nous Research rozumiem dowolne polecenia.';
   if (/(ktora (jest )?godzina|ktora godzina|jaki (jest )?czas|podaj godzine)/.test(n)) return 'Jest ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) + '.';
   if (/(jaki (dzis|dzisiaj|jest) dzien|ktory (dzis|dzisiaj|jest)|jaka (jest )?data|dzisiejsza data|jaki mamy dzien)/.test(n)) return 'Dziś ' + new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '.';
   if (/(zart|dowcip|rozsmiesz)/.test(n)) return JOKES[Math.floor(Math.random() * JOKES.length)];
@@ -221,82 +221,150 @@ const local = async (raw) => {
   return null;
 };
 
-/* =================== CLAUDE (Anthropic SDK w przeglądarce) =================== */
-let SDK = null, noFallback = false;
-const loadSDK = async () => {
-  if (SDK) return SDK;
-  const urls = ['https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk/+esm', 'https://esm.sh/@anthropic-ai/sdk'];
-  let err;
-  for (const u of urls) { try { SDK = await import(u); return SDK; } catch (e) { err = e; } }
-  throw new Error('Nie udało się wczytać Anthropic SDK (' + (err?.message || 'sieć') + ')');
+/* =================== HERMES (Nous Research) — API zgodne z OpenAI =================== */
+/* Domyślnie: Hermes Agent (`hermes gateway`, API server na :8642). Alternatywnie Nous Portal
+   albo dowolny serwer OpenAI-compatible z modelem Hermes (Ollama, LM Studio, vLLM…).
+   Akcje systemu Jarvis OS wywoływane są natywnym formatem Hermes: <tool_call>{…}</tool_call>. */
+J.HERMES_PRESETS = {
+  agent: { label: 'Hermes Agent (lokalny gateway)', url: 'http://localhost:8642/v1', model: 'hermes-agent' },
+  portal: { label: 'Nous Portal (chmura)', url: 'https://inference-api.nousresearch.com/v1', model: 'Hermes-4-405B' },
+  custom: { label: 'Własny serwer (Ollama / LM Studio / vLLM)', url: 'http://localhost:11434/v1', model: 'hermes3' }
 };
-const client = async () => {
-  const mod = await loadSDK(); const Anthropic = mod.default || mod.Anthropic;
-  return { mod, c: new Anthropic({ apiKey: J.state.settings.apiKey, dangerouslyAllowBrowser: true }) };
+const cfg = () => {
+  const s = J.state.settings;
+  return { url: (s.hermesUrl || '').replace(/\/+$/, ''), key: s.hermesKey || '', model: s.hermesModel || 'hermes-agent', provider: s.hermesProvider || 'agent' };
 };
-const SYSTEM = () => `Jesteś Jarvis — asystent AI i inteligentna powłoka systemu „Jarvis OS”, który działa w przeglądarce użytkownika (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Dzisiejsza data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}).
+J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url);
 
-Mówisz po polsku, zwięźle i konkretnie (zwykle 1–3 zdania), z elegancją i lekkim humorem w stylu J.A.R.V.I.S. z filmów Marvela. Twoje odpowiedzi mogą być czytane na głos, więc unikaj tabel, nagłówków i długich list; z formatowania używaj tylko **pogrubień** i \`kodu\`.
+const TOOL_SPEC = TOOLS.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+const SYSTEM = () => `Jesteś Jarvis — asystent AI i inteligentna powłoka systemu „Jarvis OS”, który działa w przeglądarce użytkownika (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Dzisiejsza data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.
 
-Masz narzędzia do sterowania środowiskiem. Gdy użytkownik prosi o działanie w systemie — otwarcie/zamknięcie aplikacji, notatkę, zadanie lub przypomnienie, minutnik, zmianę motywu lub tapety, skrót na pulpicie, pogodę, kursy kryptowalut, obliczenia, otwarcie strony — wykonaj je narzędziem, zamiast opisywać, jak to zrobić. Możesz wywołać kilka narzędzi naraz. Po akcji potwierdź krótko, co zrobiłeś. Godzinę sprawdzaj narzędziem get_datetime, a stan środowiska narzędziem get_status. Na pytania ogólne odpowiadaj z własnej wiedzy.`;
+Mówisz po polsku, zwięźle i konkretnie (zwykle 1–3 zdania), z elegancją i lekkim humorem w stylu J.A.R.V.I.S. Odpowiedzi są czytane na głos, więc unikaj tabel, nagłówków i długich list; z formatowania używaj tylko **pogrubień** i \`kodu\`.
+
+Sterujesz interfejsem Jarvis OS za pomocą funkcji wykonywanych w przeglądarce użytkownika. Sygnatury funkcji znajdują się w znacznikach <tools></tools>:
+<tools>
+${TOOL_SPEC.map(t => JSON.stringify(t)).join('\n')}
+</tools>
+Gdy użytkownik prosi o działanie w Jarvis OS (otwarcie/zamknięcie aplikacji, notatkę, zadanie lub przypomnienie, minutnik, motyw, tapetę, skrót na pulpicie, pogodę, kursy krypto, obliczenia, otwarcie strony), wywołaj funkcję, zamiast opisywać, jak to zrobić. Każde wywołanie zapisz jako obiekt JSON w znacznikach:
+<tool_call>
+{"name": "nazwa_funkcji", "arguments": {"argument": "wartość"}}
+</tool_call>
+Możesz podać kilka wywołań naraz. Wyniki otrzymasz w znacznikach <tool_response></tool_response> — wtedy krótko potwierdź, co zrobiłeś. Nie wymyślaj wyników funkcji. Jeśli masz też własne narzędzia serwerowe (wyszukiwanie w sieci, pliki, terminal, pamięć), możesz z nich korzystać normalnie.`;
 
 const history = [];
-const MAX_TURNS = 8;
+const MAX_TURNS = 6;
+let controller = null;
+const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
 
-const claude = async (text, bubble) => {
-  const { mod, c } = await client();
-  const model = J.state.settings.model || 'claude-opus-5-5';
+const headers = () => {
+  const c = cfg(), h = { 'Content-Type': 'application/json' };
+  if (c.key) h.Authorization = 'Bearer ' + c.key;
+  if (c.provider === 'agent') h['X-Hermes-Session-Key'] = sessionKey;
+  return h;
+};
+const netError = () => {
+  const c = cfg();
+  if (c.provider === 'agent') return `Nie mogę połączyć się z Hermes Agent pod ${c.url}. Sprawdź, czy działa \`hermes gateway\` z API_SERVER_ENABLED=true oraz czy w ~/.hermes/.env jest API_SERVER_CORS_ORIGINS=${location.origin}`;
+  return `Brak połączenia z ${c.url} (serwer wyłączony albo blokada CORS).`;
+};
+const httpError = async r => {
+  let msg = ''; try { const j = await r.json(); msg = j.error?.message || j.message || JSON.stringify(j); } catch (e) { }
+  if (r.status === 401 || r.status === 403) return 'Hermes odrzucił klucz API (' + r.status + ') — sprawdź API_SERVER_KEY w Ustawieniach.';
+  if (r.status === 404) return 'Nie znaleziono endpointu lub modelu „' + cfg().model + '” (404).';
+  if (r.status === 429) return 'Przekroczono limit zapytań — spróbuj za chwilę.';
+  return 'Błąd Hermesa (' + r.status + ')' + (msg ? ': ' + msg.slice(0, 200) : '');
+};
+
+/* strumień SSE z /chat/completions */
+const streamChat = async (messages, onDelta, onTool, onReason) => {
+  const c = cfg();
+  controller = new AbortController();
+  let r;
+  try {
+    r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify({ model: c.model, messages, stream: true, temperature: 0.6 }) });
+  } catch (e) { if (e.name === 'AbortError') throw e; const er = new Error(netError()); er.net = true; throw er; }
+  if (!r.ok) { const er = new Error(await httpError(r)); er.net = [401, 403, 404, 502, 503].includes(r.status); throw er; }
+  if (!r.body || !(r.headers.get('content-type') || '').includes('event-stream')) {
+    const j = await r.json(); const t = j.choices?.[0]?.message?.content || ''; onDelta(t); return t;
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '', content = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const block = buf.slice(0, i); buf = buf.slice(i + 2);
+      let ev = 'message', data = '';
+      for (const line of block.split('\n')) {
+        if (!line || line.startsWith(':')) continue;
+        if (line.startsWith('event:')) ev = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (!data || data === '[DONE]') continue;
+      let j; try { j = JSON.parse(data); } catch (e) { continue; }
+      if (ev === 'hermes.tool.progress') { onTool(j); continue; }
+      if (j.error) throw new Error('Hermes: ' + (j.error.message || JSON.stringify(j.error)));
+      const d = j.choices?.[0]?.delta || {};
+      if (d.reasoning_content || d.reasoning) onReason(d.reasoning_content || d.reasoning);
+      if (d.content) { content += d.content; onDelta(content); }
+    }
+  }
+  return content;
+};
+
+/* wyciąganie wywołań <tool_call> i czyszczenie tekstu do wyświetlenia */
+const parseCalls = text => {
+  const calls = [], re = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g; let m;
+  while ((m = re.exec(text))) {
+    try {
+      const j = JSON.parse(m[1]);
+      let args = j.arguments ?? j.parameters ?? {};
+      if (typeof args === 'string') args = JSON.parse(args);
+      calls.push({ name: j.name, args, ok: true });
+    } catch (e) { calls.push({ name: '?', args: null, ok: false, raw: m[1] }); }
+  }
+  return calls;
+};
+const visible = text => text
+  .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
+  .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '')
+  .replace(/<\/?tool_response>/g, '')
+  .replace(/\n{3,}/g, '\n\n').trim();
+
+const hermes = async (text, bubble) => {
   history.push({ role: 'user', content: text });
   const startLen = history.length - 1;
   let reply = '';
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const params = { model, max_tokens: 16000, system: SYSTEM(), tools: TOOLS, messages: history };
-      if (model !== 'claude-haiku-4-5') params.output_config = { effort: 'low' };
-      const useFallback = !noFallback && (model === 'claude-opus-5-5' || model === 'claude-sonnet-5-5');
-      if (useFallback) { params.betas = ['server-side-fallback-2026-07-01']; params.fallbacks = 'default'; }
-      let msg;
-      try {
-        const stream = (useFallback ? c.beta.messages : c.messages).stream(params);
-        let acc = '';
-        stream.on('text', d => { acc += d; bubble.set((reply ? reply + '\n\n' : '') + acc); J.orb.set('speaking'); });
-        msg = await stream.finalMessage();
-      } catch (e) {
-        const Bad = mod.BadRequestError || mod.default?.BadRequestError;
-        if (useFallback && typeof Bad === 'function' && e instanceof Bad && /fallback|beta/i.test(e.message)) { noFallback = true; turn--; continue; }
-        throw e;
+      const msgs = [{ role: 'system', content: SYSTEM() }, ...history.slice(-30)];
+      const prefix = reply ? reply + '\n\n' : '';
+      const raw = await streamChat(msgs,
+        acc => { const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
+        tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
+        () => J.orb.set('thinking', 'Hermes myśli…'));
+      history.push({ role: 'assistant', content: raw });
+      const v = visible(raw); if (v) reply = prefix + v;
+      const calls = parseCalls(raw);
+      if (!calls.length) break;
+      J.orb.set('thinking', 'wykonuję: ' + calls.map(c => c.name).join(', '));
+      const results = [];
+      for (const c of calls) {
+        const r = c.ok ? await run(c.name, c.args) : { ok: false, text: 'INVALID_JSON: nie udało się odczytać argumentów wywołania' };
+        J.chat.add('action', (r.ok ? '⚙ ' : '⚠ ') + c.name + ' → ' + r.text);
+        results.push('<tool_response>\n' + JSON.stringify({ name: c.name, ok: r.ok, content: r.text }) + '\n</tool_response>');
       }
-      if (msg.stop_reason === 'refusal') {
-        history.length = startLen;
-        return 'Przykro mi, w tej sprawie nie mogę pomóc.';
-      }
-      history.push({ role: 'assistant', content: msg.content });
-      const txt = msg.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
-      if (txt) reply = (reply ? reply + '\n\n' : '') + txt;
-      if (msg.stop_reason === 'max_tokens') { reply += ' …'; break; }
-      if (msg.stop_reason !== 'tool_use') break;
-      const uses = msg.content.filter(b => b.type === 'tool_use');
-      J.orb.set('thinking', 'wykonuję: ' + uses.map(u => u.name).join(', '));
-      const results = await Promise.all(uses.map(async u => {
-        const r = await run(u.name, u.input);
-        J.chat.add('action', (r.ok ? '⚙ ' : '⚠ ') + u.name + ' → ' + r.text);
-        return { type: 'tool_result', tool_use_id: u.id, content: r.text, ...(r.ok ? {} : { is_error: true }) };
-      }));
-      history.push({ role: 'user', content: results });
+      history.push({ role: 'user', content: results.join('\n') });
       bubble.set(reply || '…');
     }
     return reply || 'Gotowe.';
   } catch (e) {
     history.length = startLen;
-    const is = name => { const C = mod[name] || mod.default?.[name]; return typeof C === 'function' && e instanceof C; };
-    if (is('AuthenticationError')) throw new Error('Nieprawidłowy klucz API — sprawdź go w Ustawieniach.');
-    if (is('PermissionDeniedError')) throw new Error('Klucz nie ma dostępu do modelu ' + model + '.');
-    if (is('RateLimitError')) throw new Error('Przekroczono limit zapytań — spróbuj za chwilę.');
-    if (is('NotFoundError')) throw new Error('Model ' + model + ' jest niedostępny — wybierz inny w Ustawieniach.');
-    if (is('APIConnectionError')) throw new Error('Brak połączenia z API Anthropic.');
-    if (is('APIError')) throw new Error('Błąd API (' + (e.status || '?') + '): ' + e.message);
+    if (e.name === 'AbortError') return (reply ? reply + ' ' : '') + '⏹ przerwano.';
     throw e;
-  }
+  } finally { controller = null; }
 };
 
 /* =================== INTERFEJS MÓZGU =================== */
@@ -304,17 +372,23 @@ let busy = false;
 J.brain = {
   get busy() { return busy; },
   reset() { history.length = 0; },
+  abort() { if (controller) { controller.abort(); return true; } return false; },
+  async models() {
+    const c = cfg(); let r;
+    try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(netError()); }
+    if (!r.ok) throw new Error(await httpError(r));
+    const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean);
+  },
   async test() {
-    const { c } = await client();
-    const model = J.state.settings.model || 'claude-opus-5-5';
-    const params = { model, max_tokens: 1024, messages: [{ role: 'user', content: 'Odpowiedz tylko słowem: OK' }] };
-    if (model !== 'claude-haiku-4-5') params.output_config = { effort: 'low' };
-    try { const r = await c.messages.create(params); return r.model; }
-    catch (e) { throw new Error(e.status === 401 ? 'nieprawidłowy klucz' : e.message); }
+    const list = await this.models();
+    const c = cfg();
+    const t0 = performance.now();
+    const out = await streamChat([{ role: 'user', content: 'Odpowiedz jednym słowem: OK' }], () => { }, () => { }, () => { });
+    return `${c.model} odpowiada (${Math.round(performance.now() - t0)} ms): „${visible(out).slice(0, 40)}”` + (list.length ? ` · modele: ${list.slice(0, 4).join(', ')}` : '');
   },
   async handle(text, opts = {}) {
     text = String(text || '').trim(); if (!text) return;
-    if (busy) { J.toast('Jarvis jeszcze pracuje nad poprzednim poleceniem…'); return; }
+    if (busy) { J.toast('Jarvis jeszcze pracuje nad poprzednim poleceniem… (Esc przerywa)'); return; }
     busy = true;
     if (!J.wm.isOpen('chat') || J.wm.isMin('chat')) { if (!opts.silentWindow) J.wm.open('chat'); }
     J.chat.add('user', text);
@@ -323,17 +397,25 @@ J.brain = {
     J.log('Polecenie', text, 'info');
     let reply;
     try {
-      if (J.state.settings.apiKey) reply = await claude(text, bubble);
-      else {
-        await new Promise(r => setTimeout(r, 350 + Math.random() * 300));
+      if (J.aiReady()) {
+        try { reply = await hermes(text, bubble); }
+        catch (e) {
+          if (!e.net) throw e;
+          // Hermes nieosiągalny — wykonaj lokalnie, żeby polecenie nie przepadło
+          J.log('Hermes offline', e.message, 'warn');
+          const loc = await local(text);
+          reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ ' + e.message;
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 250));
         reply = await local(text);
-        if (reply == null) reply = 'Nie rozpoznałem tego polecenia. Wpisz „pomoc”, aby zobaczyć, co potrafię offline — albo dodaj klucz Claude API w Ustawieniach, a odpowiem na wszystko.';
+        if (reply == null) reply = 'Nie rozpoznałem tego polecenia. Wpisz „pomoc”, aby zobaczyć, co potrafię offline — albo podłącz Hermesa w Ustawieniach, a odpowiem na wszystko.';
       }
       bubble.set(reply);
       J.orb.set('idle', 'zadanie zakończone');
-      if (opts.voice || J.state.settings.speech) J.voice.speak(reply);
+      if (opts.voice || J.state.settings.speech) J.voice.speak(reply.split('\n\n⚠')[0]);
     } catch (e) {
-      bubble.set('⚠ ' + e.message); J.sfx.error(); J.orb.set('alert', e.message);
+      bubble.set('⚠ ' + e.message); J.sfx.error(); J.orb.set('alert', e.message.slice(0, 90));
       J.log('Błąd asystenta', e.message, 'err');
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 3000);
     } finally { busy = false; }

@@ -254,7 +254,7 @@ J.apps.chat = {
         <button class="send" id="chatSend" title="Wyślij">${icon('send')}</button>
       </div></div>`;
     const box = $('#messages', body), input = $('#chatInput', body);
-    const pill = () => { const ai = !!J.state.settings.apiKey; const p = $('#modePill', body); p.textContent = ai ? 'Claude AI' : 'tryb lokalny'; p.classList.toggle('ai', ai); };
+    const pill = () => { const ai = J.aiReady(); const p = $('#modePill', body); p.textContent = ai ? 'Hermes · ' + J.state.settings.hermesModel : 'tryb lokalny'; p.classList.toggle('ai', ai); };
     pill(); sub(ctx, 'settings', pill);
     J.chat.bind(box);
     const sugg = ['Co potrafisz?', 'Jaka jest pogoda?', 'Kurs bitcoina', 'Ustaw minutnik na 5 minut', 'Zanotuj: kupić mleko', 'Przypomnij mi o 18:00 trening', 'Oblicz 15% z 2400', 'Zmień motyw na fiolet'];
@@ -284,7 +284,7 @@ J.chat = (() => {
   };
   const scroll = () => { if (box) box.scrollTop = box.scrollHeight; };
   const api = {
-    bind(b) { box = b; b.innerHTML = ''; if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.state.settings.apiKey ? '' : '\n\nWskazówka: dodaj klucz Claude API w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
+    bind(b) { box = b; b.innerHTML = ''; if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nPołączenie: Hermes (' + J.state.settings.hermesModel + ').' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
     unbind(b) { if (box === b) box = null; },
     reset() { items = []; },
     add(role, text, silent) {
@@ -529,7 +529,7 @@ J.apps.terminal = {
       neofetch: () => print(`<span class="c">     ◢◤◥◣      </span> <b>jarvis</b>@<b>os</b>
 <span class="c">   ◢◤ ◉◉ ◥◣    </span> ─────────────
 <span class="c">  ◢◤ ◉  ◉ ◥◣   </span> <span class="c">OS</span>: Jarvis OS 2.0 (web)
-<span class="c">  ◥◣ ◉  ◉ ◢◤   </span> <span class="c">Silnik</span>: ${esc(J.state.settings.apiKey ? J.state.settings.model : 'lokalny')}
+<span class="c">  ◥◣ ◉  ◉ ◢◤   </span> <span class="c">Silnik</span>: ${esc(J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel : 'lokalny')}
 <span class="c">   ◥◣ ◉◉ ◢◤    </span> <span class="c">Okna</span>: ${J.wm.count()} · <span class="c">Notatki</span>: ${J.state.notes.length}
 <span class="c">     ◥◣◢◤      </span> <span class="c">Rozdzielczość</span>: ${innerWidth}×${innerHeight}
                   <span class="c">Akcje</span>: ${J.state.stats.actions || 0} · <span class="c">CPU</span>: ${navigator.hardwareConcurrency || '?'} rdzeni`)
@@ -649,13 +649,16 @@ J.apps.settings = {
       <label class="toggle"><div>Pomiń animację startową<small>Szybsze uruchamianie</small></div><span class="switch"><input type="checkbox" data-k="skipBoot"><i></i></span></label>
       <div class="label">Głos</div><select class="input" id="vs"></select>
       <div class="label">Użytkownik</div><div class="row"><input class="input" id="un" maxlength="3" placeholder="Inicjały" style="width:90px"><input class="input" id="city" placeholder="Miasto (pogoda)"><button class="btn" id="cityGo">Zapisz</button></div>
-      <div class="label">Claude AI ${icon('key', 'width="11" height="11" style="vertical-align:-1px"')}</div>
+      <div class="label">Hermes · Nous Research ${icon('key', 'width="11" height="11" style="vertical-align:-1px"')}</div>
       <div class="card col">
-        <div class="muted" style="font-size:11px;line-height:1.5">Z kluczem API Jarvis rozumie dowolne polecenia i sam steruje środowiskiem (otwiera aplikacje, tworzy notatki, zadania, minutniki). Klucz jest przechowywany <b>tylko w tej przeglądarce</b> i wysyłany bezpośrednio do api.anthropic.com.</div>
-        <input class="input" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off">
-        <div class="row"><select class="input" id="md"><option value="claude-opus-5-5">Claude Opus 5.5 (domyślny)</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-4-5">Claude Haiku 4.5</option></select>
-        <button class="btn" id="akTest">Testuj</button><button class="btn ghost danger" id="akDel">Usuń</button></div>
-        <div class="dim" id="akInfo" style="font-size:10.5px"></div>
+        <label class="toggle" style="padding-top:0"><div>Mózg Jarvisa: Hermes<small>Wyłączone = tylko lokalny silnik poleceń</small></div><span class="switch"><input type="checkbox" id="hOn"><i></i></span></label>
+        <select class="input" id="hProv">${Object.entries(J.HERMES_PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('')}</select>
+        <input class="input" id="hUrl" placeholder="Adres API, np. http://localhost:8642/v1" spellcheck="false">
+        <div class="row"><input class="input" id="hModel" placeholder="Model" list="hModels" spellcheck="false"><datalist id="hModels"></datalist><button class="btn ghost" id="hList" title="Pobierz listę modeli">${icon('refresh', 'width="12" height="12"')}</button></div>
+        <input class="input" id="hKey" type="password" placeholder="Klucz API (API_SERVER_KEY / klucz Nous Portal)" autocomplete="off">
+        <div class="row"><button class="btn primary" id="hTest">Połącz i testuj</button><button class="btn ghost danger" id="hDel">Usuń klucz</button></div>
+        <div class="dim" id="hInfo" style="font-size:10.5px;line-height:1.5"></div>
+        <div class="muted" id="hHelp" style="font-size:10.5px;line-height:1.55"></div>
       </div>
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
@@ -674,16 +677,24 @@ J.apps.settings = {
     $('#un', body).value = s.user; $('#city', body).value = s.city;
     $('#un', body).oninput = e => { s.user = e.target.value.toUpperCase() || 'JD'; J.save(); J.emit('settings'); };
     $('#cityGo', body).onclick = async () => { const c = $('#city', body).value.trim(); if (!c) return; try { const g = await J.weather.geocode(c); Object.assign(s, { city: g.city, lat: g.lat, lon: g.lon }); J.save(); J.weather.ts = 0; await J.weather.fetch(); J.toast('Lokalizacja: ' + g.city); } catch (e) { J.toast(e.message); } };
-    const ak = $('#ak', body), md = $('#md', body), info = $('#akInfo', body);
-    ak.value = s.apiKey; md.value = s.model;
-    const inf = () => info.textContent = s.apiKey ? 'Klucz zapisany · model: ' + s.model : 'Brak klucza — działa lokalny silnik poleceń.';
-    inf();
-    ak.onchange = () => { s.apiKey = ak.value.trim(); J.save(); J.emit('settings'); inf(); };
-    md.onchange = () => { s.model = md.value; J.save(); J.emit('settings'); inf(); };
-    $('#akDel', body).onclick = () => { s.apiKey = ''; ak.value = ''; J.save(); J.emit('settings'); inf(); J.brain.reset(); };
-    $('#akTest', body).onclick = async () => { s.apiKey = ak.value.trim(); J.save(); J.emit('settings'); info.textContent = 'Testuję połączenie…'; try { const t = await J.brain.test(); info.textContent = '✓ Połączono: ' + t; J.sfx.notify(); } catch (e) { info.textContent = '✗ ' + e.message; J.sfx.error(); } };
-    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, apiKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.apiKey; Object.assign(J.state, d); J.state.settings.apiKey = key; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
+    const hOn = $('#hOn', body), hProv = $('#hProv', body), hUrl = $('#hUrl', body), hModel = $('#hModel', body), hKey = $('#hKey', body), hInfo = $('#hInfo', body), hHelp = $('#hHelp', body);
+    const fillH = () => { hOn.checked = !!s.hermesOn; hProv.value = s.hermesProvider; hUrl.value = s.hermesUrl; hModel.value = s.hermesModel; hKey.value = s.hermesKey; };
+    const help = () => {
+      hInfo.textContent = s.hermesOn ? 'Aktywne: ' + s.hermesModel + ' @ ' + s.hermesUrl + (s.hermesKey ? ' · klucz zapisany' : ' · bez klucza') : 'Wyłączone — działa lokalny silnik poleceń.';
+      hHelp.innerHTML = s.hermesProvider === 'agent'
+        ? `Uruchom Hermes Agent z włączonym serwerem API. W <code>~/.hermes/.env</code>:<br><code>API_SERVER_ENABLED=true</code><br><code>API_SERVER_KEY=twój-klucz</code><br><code>API_SERVER_CORS_ORIGINS=${esc(location.origin)}</code><br>potem <code>hermes gateway</code> i wpisz ten sam klucz powyżej.`
+        : s.hermesProvider === 'portal' ? 'Klucz API z <b>portal.nousresearch.com</b>. Modele Hermes: Hermes-4-405B, Hermes-4-70B.'
+        : 'Dowolny serwer zgodny z OpenAI z modelem Hermes, np. Ollama: <code>ollama pull hermes3</code>, uruchom z <code>OLLAMA_ORIGINS=' + esc(location.origin) + '</code>.';
+    };
+    const saveH = () => { s.hermesOn = hOn.checked; s.hermesProvider = hProv.value; s.hermesUrl = hUrl.value.trim(); s.hermesModel = hModel.value.trim() || J.HERMES_PRESETS[s.hermesProvider].model; s.hermesKey = hKey.value.trim(); J.save(); J.emit('settings'); help(); };
+    fillH(); help();
+    hProv.onchange = () => { const p = J.HERMES_PRESETS[hProv.value]; hUrl.value = p.url; hModel.value = p.model; hKey.value = ''; saveH(); J.brain.reset(); };
+    hOn.onchange = hUrl.onchange = hModel.onchange = hKey.onchange = () => { saveH(); J.brain.reset(); };
+    $('#hDel', body).onclick = () => { hKey.value = ''; saveH(); };
+    $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
+    $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
+    $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
     $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) J.resetAll(); };
   }
 };

@@ -72,7 +72,8 @@ const KEY = 'jarvis-os:v2';
 const DEFAULTS = () => ({
   settings: {
     accent: '#21d9ff', accent2: '#9a63ff', wall: 'photo', particles: true, sound: true,
-    speech: true, voiceName: '', apiKey: '', model: 'claude-opus-5-5', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
+    speech: true, voiceName: '',
+    hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false
   },
   notes: [
@@ -95,6 +96,7 @@ J.state = (() => {
   const d = DEFAULTS();
   if (!s) return d;
   s.settings = Object.assign(d.settings, s.settings || {});
+  delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
   for (const k of ['notes', 'tasks', 'shortcuts', 'log']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
   return s;
@@ -231,7 +233,7 @@ J.log = (() => {
   const api = (title, text = '', level = '') => {
     const item = { title, text, level, ts: Date.now() };
     J.state.log.unshift(item); J.state.log.length = Math.min(J.state.log.length, 60); J.save();
-    const box = J.$('#log'); if (box) box.prepend(render(item));
+    const box = J.$('#log'); if (box) { box.querySelector('.empty')?.remove(); box.prepend(render(item)); }
     if (!J.$('#logPanel')?.classList.contains('open')) { unread++; api.badge(); }
   };
   api.badge = () => { const b = J.$('#logBadge'); if (!b) return; b.textContent = unread > 9 ? '9+' : unread; b.classList.toggle('hidden', !unread); };
