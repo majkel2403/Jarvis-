@@ -384,8 +384,9 @@ J.apps.market = {
 /* ---------- HARMONOGRAM ---------- */
 J.apps.schedule = {
   title: 'Harmonogram', icon: 'calendar', w: 420, h: 480,
-  mount(body, ctx) {
-    let day = J.today();
+  mount(body, ctx, arg) {
+    const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    let day = isDay(arg) ? arg : J.today();
     body.innerHTML = `<div class="day-strip" id="days"></div>
       <form class="row" id="tf" style="margin-bottom:12px"><input class="input" type="time" id="tt" style="width:100px"><input class="input" id="tx" placeholder="Nowe zadanie…" required><button class="btn primary">${icon('plus', 'width="13" height="13"')}</button></form>
       <div class="tasks" id="tl"></div>`;
@@ -419,12 +420,14 @@ J.apps.schedule = {
     sub(ctx, 'tasks', () => { renderDays(); render(); });
     const iv = setInterval(render, 30e3); ctx.onClose(() => clearInterval(iv));
     ctx.state = () => ({ day });
+    ctx.setDay = d => { if (isDay(d)) { day = d; renderDays(); render(); } };   // nawigacja: „pokaż piątek”
     // import kalendarza .ics (VEVENT → zadania)
     const imp = h('label', { class: 'btn sm ghost', style: 'cursor:pointer;margin-left:auto', title: 'Importuj wydarzenia z pliku .ics' }, icon('download', 'width="12" height="12"') + ' .ics<input type="file" accept=".ics,text/calendar" hidden>');
     $('#tf', body).appendChild(imp);
     $('input[type=file]', imp).onchange = async e => { const f = e.target.files[0]; if (!f) return; const n = J.ics.import(await f.text()); J.toast(n ? 'Zaimportowano ' + n + ' ' + J.pl(n, 'wydarzenie', 'wydarzenia', 'wydarzeń') : 'Brak wydarzeń w pliku'); };
     renderDays(); render();
   },
+  onArg(arg, ctx) { ctx?.setDay?.(arg); },
   state: ctx => ctx?.state?.() || null
 };
 
@@ -676,7 +679,8 @@ J.apps.timer = {
 /* ---------- USTAWIENIA ---------- */
 J.apps.settings = {
   title: 'Ustawienia', icon: 'settings', w: 460, h: 560,
-  mount(body, ctx) {
+  onArg(arg, ctx) { ctx?.goSection?.(arg); },
+  mount(body, ctx, arg) {
     const s = J.state.settings;
     const walls = [['photo', 'Miasto nocą', "url('assets/wallpaper.jpg')"], ['aurora', 'Aurora', 'linear-gradient(135deg,#1b1147,#0b3b5a)'], ['void', 'Pustka', 'radial-gradient(circle,#0a1a30,#01040a)']];
     body.innerHTML = `
@@ -735,6 +739,11 @@ J.apps.settings = {
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
       <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.0 · skróty: <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>Esc</kbd> zamknij okno</div>`;
+    /* nawigacja po sekcjach (polecenie „otwórz ustawienia Jev”): etykiety dostają identyfikatory, okno przewija się do wybranej */
+    const SEC = [['openrouter', /^openrouter/], ['akcent', /^kolor akcentu/], ['tapeta', /^tapeta/], ['interfejs', /^interfejs/], ['glos', /^glos/], ['uzytkownik', /^uzytkownik/], ['hermes', /^hermes/], ['agent', /^agent i proaktywnosc/], ['jev', /^sedzia jev/], ['pamiec', /^pamiec/], ['pliki', /^folder roboczy/], ['dane', /^dane/]];
+    $$('.label', body).forEach(l => { const hit = SEC.find(([, re]) => re.test(J.norm(l.textContent))); if (hit) l.dataset.sec = hit[0]; });
+    const goSection = sec => { const l = $('[data-sec="' + sec + '"]', body); if (!l) return false; l.scrollIntoView({ block: 'start', behavior: 'smooth' }); l.classList.remove('hl'); void l.offsetWidth; l.classList.add('hl'); setTimeout(() => l.classList.remove('hl'), 2200); return true; };
+    ctx.goSection = goSection; if (arg) setTimeout(() => goSection(arg), 80);
     const sw = $('#sw', body);
     const drawSw = () => { sw.innerHTML = ''; Object.entries(J.THEMES).forEach(([n, [a, b]]) => { const e = h('button', { class: 'swatch' + (s.accent === a ? ' on' : ''), title: n, style: `background:linear-gradient(135deg,${a},${b});color:${a}` }); e.onclick = () => { s.accent = a; s.accent2 = b; J.applyTheme(); J.save(); J.emit('settings'); drawSw(); J.sfx.click(); }; sw.appendChild(e); }); };
     drawSw();

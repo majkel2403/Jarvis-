@@ -13,7 +13,8 @@ const norm = s => String(s || '').toLowerCase().replace(/[ąćęłńóśźż]/g,
 J.norm = norm;
 
 /* ---------- koperta wyniku ---------- */
-const ok = (data, text, ui) => ({ ok: true, code: 'OK', data: data ?? null, text: text || 'Gotowe.', ui: ui || null });
+/* undo (opcjonalne): funkcja cofająca skutek; nie jest polem wyliczalnym, więc nie trafia do JSON-a dla modelu ani do logów */
+const ok = (data, text, ui, undo) => { const r = { ok: true, code: 'OK', data: data ?? null, text: text || 'Gotowe.', ui: ui || null }; if (typeof undo === 'function') Object.defineProperty(r, 'undo', { value: undo, enumerable: false }); return r; };
 const fail = (code, text, data) => ({ ok: false, code: code || 'INTERNAL', text: text || 'Nie udało się.', data: data ?? null, ui: null });
 
 /* ---------- język: czas, daty, liczby (PL) ---------- */
@@ -171,24 +172,28 @@ const api = J.registry = {
     const v = coerce(c, input); if (!v.ok) return v;
     const args = v.args;
     if (c.risk === 'blocked' && ctx.source !== 'ui') return fail('DENIED', 'To działanie jest dostępne tylko ręcznie w interfejsie.');
+    /* zaufane: klik w interfejsie, polecenie wpisane ręcznie i zgodne z parserem ('local') albo już potwierdzone.
+       'voice' (mowę łatwo źle usłyszeć), 'jev' (decyzja samego Jeva), 'hermes' i sygnały NIE są zaufane. */
     const trusted = ctx.source === 'ui' || ctx.source === 'local' || ctx.confirmed === true;
     const pre = typeof c.prepare === 'function' ? (c.prepare(args) || {}) : {};
     const dynRisk = c.risk === 'safe' && c.writes.length && !trusted && ctx.judge && ctx.judge.destructive >= (J.judge?.thresholds().destructive ?? .8);   // Jev ocenił wypowiedź jako destrukcyjną
-    if ((c.risk === 'confirm' || dynRisk) && !trusted && !api.allowed(id) && !pre.trusted) {
+    /* forceConfirm (strażnik D9, wykryta wstrzyknięta treść): pytamy zawsze, także gdy narzędzie ma „Zawsze zezwalaj” */
+    const forced = !!ctx.forceConfirm && ctx.source !== 'ui' && ctx.confirmed !== true;
+    if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && !api.allowed(id) && !pre.trusted)) {
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
-      const q = typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
-      const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source });
-      if (dec === 'always') api.allowAlways(id);
-      else if (dec !== 'yes') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
+      const q = forced ? String(ctx.forceConfirm) : typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
+      const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
+      if (dec === 'always' && !forced) api.allowAlways(id);
+      else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
     }
     if (ctx.signal?.aborted) return fail('TIMEOUT', 'Przerwano.');
     try {
       const r = await c.run(args, { ok, fail, ctx, cmd: c });
       J.action(id);
-      if (r == null) return ok(null, 'Gotowe.');
-      if (typeof r === 'string') return ok(null, r);
-      if (typeof r.ok !== 'boolean') return ok(r, 'Gotowe.');
-      return r;
+      const env = r == null ? ok(null, 'Gotowe.') : typeof r === 'string' ? ok(null, r) : typeof r.ok !== 'boolean' ? ok(r, 'Gotowe.') : r;
+      if (env.ok && typeof env.undo === 'function') env.undoEntry = J.undo?.push({ id, label: c.label, text: env.text, undo: env.undo, source: ctx.source }) || null;
+      if (env.undoEntry) Object.defineProperty(env, 'undoEntry', { enumerable: false });
+      return env;
     } catch (e) {
       if (e?.name === 'AbortError') return fail('TIMEOUT', 'Przerwano.');
       if (e?.code) return fail(e.code, e.message);

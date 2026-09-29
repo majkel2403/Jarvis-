@@ -5,7 +5,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 
 const mkEl = (tag = 'div') => {
-  const el = { tagName: tag.toUpperCase(), children: [], style: {}, dataset: {}, attributes: {}, textContent: '', innerHTML: '', value: '', hidden: false, offsetLeft: 0, offsetTop: 0, offsetWidth: 300, offsetHeight: 200, scrollTop: 0, scrollHeight: 0, clientWidth: 300, clientHeight: 200 };
+  const el = { tagName: tag.toUpperCase(), children: [], style: { setProperty(k, v) { this[k] = v; } }, dataset: {}, attributes: {}, textContent: '', innerHTML: '', value: '', hidden: false, offsetLeft: 0, offsetTop: 0, offsetWidth: 300, offsetHeight: 200, scrollTop: 0, scrollHeight: 0, clientWidth: 300, clientHeight: 200 };
   const cls = new Set();
   el.classList = { add: (...a) => a.forEach(c => cls.add(c)), remove: (...a) => a.forEach(c => cls.delete(c)), toggle: (c, f) => { (f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c); return cls.has(c); }, contains: c => cls.has(c) };
   Object.defineProperty(el, 'className', { get: () => [...cls].join(' '), set: v => { cls.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => cls.add(c)); } });
@@ -40,12 +40,14 @@ function load(opts = {}) {
   /* opts.dom: każdy selektor (#id, .klasa) zwraca stały element-atrapę — pozwala uruchomić brain.handle i Process Log bez prawdziwego DOM */
   if (opts.dom) {
     const withQuery = tag => { const e = mkEl(tag), c = {}; e.querySelector = sel => (c[sel] = c[sel] || withQuery()); return e; };   // elementy potomne też odpowiadają na querySelector
-    const cache = {}; ctx.document.querySelector = sel => (cache[sel] = cache[sel] || withQuery()); ctx.document.createElement = withQuery;
+    const cache = {}, created = []; ctx.document.querySelector = sel => (cache[sel] = cache[sel] || withQuery()); ctx.document.createElement = tag => { const e = withQuery(tag); created.push(e); return e; };
+    /* okna: wm.open zdejmuje klasę „focused” z pozostałych przez querySelectorAll('.window.focused') */
+    ctx.document.querySelectorAll = sel => sel === '.window.focused' ? created.filter(e => e.classList.contains('window') && e.classList.contains('focused')) : [];
   }
   ctx.Event = class { constructor(t) { this.type = t; } };
   ctx.alert = () => { }; ctx.confirm = () => true; ctx.prompt = () => '';
   vm.createContext(ctx);
-  const files = opts.files || ['core.js', 'events.js', 'store.js', 'registry.js', 'process.js', 'apps.js', 'widgets.js', 'commands.js', 'context.js', 'judge.js', 'ai.js'];
+  const files = opts.files || ['core.js', 'events.js', 'store.js', 'registry.js', 'undo.js', 'jev-policy.js', 'process.js', 'apps.js', 'widgets.js', 'commands.js', 'context.js', 'judge.js', 'jev-flow.js', 'ai.js'];
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
   ctx.J.__ctx = ctx;
   return ctx.J;

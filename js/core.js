@@ -83,7 +83,7 @@ const DEFAULTS = () => ({
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
-    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivate: true
+    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: ''
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -130,7 +130,7 @@ J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.his
    2) jednorazowo z adresu: index.html?jevKey=sk-or-…&jevOn=1&hermesKey=… — parametry są zapisywane i usuwane z paska adresu.
    Dozwolone klucze ustawień: tylko z listy poniżej. */
 J.bootstrapConfig = () => {
-  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
+  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'jevPrivacy', 'jevBudget', 'jevAutonomy', 'jevShadow', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
   const BOOL = ['jevOn', 'jevPrivate', 'hermesOn', 'wakeWord', 'skipBoot'];
   const apply = (src, from) => { let n = 0; for (const [k, v] of Object.entries(src || {})) { if (!ALLOW.includes(k) || v == null || v === '') continue; J.state.settings[k] = BOOL.includes(k) ? /^(1|true|tak|on|yes)$/i.test(String(v)) : String(v); n++; } if (n) { J.save(); J.configuredFrom = from; } return n; };
   let n = 0;
