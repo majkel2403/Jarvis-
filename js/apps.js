@@ -245,7 +245,8 @@ J.apps.chat = {
   mount(body, ctx, arg) {
     body.innerHTML = `<div class="chat">
       <div class="panel-head" style="font-weight:600"><span class="status"></span> Jarvis <span class="mode-pill" id="modePill"></span>
-        <button class="btn sm ghost" id="chatClear" title="Nowa rozmowa">${icon('refresh', 'width="12" height="12"')}</button></div>
+        <button class="btn sm ghost" id="chatClear" title="Nowa rozmowa">${icon('refresh', 'width="12" height="12"')}</button>
+        <button class="btn sm ghost" id="chatHide" title="Schowaj panel czatu">${icon('close', 'width="12" height="12"')}</button></div>
       <div class="messages" id="messages"></div>
       <div class="suggest" id="suggest"></div>
       <div class="composer">
@@ -265,6 +266,7 @@ J.apps.chat = {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); if (e.key === 'ArrowUp' && !input.value) { input.value = J.chat.lastUser() || ''; } });
     $('#chatMic', body).onclick = () => J.ear.toggle();
     sub(ctx, 'ear', on => $('#chatMic', body)?.classList.toggle('rec', on));
+    $('#chatHide', body).onclick = () => J.chatPanel.hide();
     $('#chatClear', body).onclick = () => { J.brain.reset(); J.chat.reset(); J.chat.bind(box); };
     ctx.onClose(() => J.chat.unbind(box));
     setTimeout(() => input.focus(), 50);

@@ -79,6 +79,14 @@ kbd{font-family:var(--mono);font-size:.85em;padding:1px 6px;border-radius:5px;bo
 /* ---------- DESKTOP ---------- */
 .workspace{position:absolute;inset:56px 0 0;z-index:1;display:grid;grid-template-columns:340px minmax(0,1fr) 0;transition:grid-template-columns .45s cubic-bezier(.2,.9,.3,1.05)}
 .workspace.log-open{grid-template-columns:340px minmax(0,1fr) 380px}
+.workspace.chat-closed{grid-template-columns:0 minmax(0,1fr) 0}
+.workspace.chat-closed.log-open{grid-template-columns:0 minmax(0,1fr) 380px}
+.workspace.chat-closed .chat-panel{border-right-color:transparent}
+.chat-host{width:340px}
+.edge{position:absolute;top:50%;z-index:40;width:18px;height:64px;margin-top:-32px;border:1px solid var(--line);background:rgba(4,12,25,.8);color:var(--accent);font-size:16px;line-height:1;backdrop-filter:blur(10px);transition:.2s}
+.edge:hover{background:rgba(var(--accent-rgb),.18);width:24px}
+.edge-l{left:0;border-left:0;border-radius:0 10px 10px 0}.edge-r{right:0;border-right:0;border-radius:10px 0 0 10px}
+.workspace:not(.chat-closed) .edge-l,.workspace.log-open .edge-r{display:none}
 .desktop{position:relative;min-width:0;min-height:0;overflow:hidden;overflow:clip}
 .chat-panel{position:relative;z-index:30;min-width:0;overflow:hidden;border-right:1px solid var(--line);background:rgba(4,12,25,.8);backdrop-filter:blur(18px) saturate(140%)}
 .chat-host{height:100%}
@@ -457,13 +465,15 @@ select.input option{background:#0a1526}
 /* ---------- RESPONSYWNOŚĆ ---------- */
 @media (max-width:1100px){.search-pill{min-width:0}.search-pill .txt,.search-pill kbd{display:none}}
 @media (max-width:900px){
-  .workspace,.workspace.log-open{grid-template-columns:minmax(0,1fr)}
-  .chat-panel{position:absolute;left:0;top:0;bottom:0;width:min(380px,92vw);z-index:60;transform:translateX(-105%);transition:transform .35s cubic-bezier(.2,.9,.3,1.05);border-right:1px solid var(--line)}
+  .workspace,.workspace.log-open,.workspace.chat-closed,.workspace.chat-closed.log-open{grid-template-columns:minmax(0,1fr)}
+  .chat-panel{position:absolute;left:0;top:0;bottom:84px;width:min(380px,92vw);z-index:60;transform:translateX(-105%);transition:transform .35s cubic-bezier(.2,.9,.3,1.05);border-right:1px solid var(--line)}
   .chat-panel.open{transform:none}
-  .log-panel{position:absolute;right:0;top:0;bottom:0;width:min(380px,92vw);z-index:61;transform:translateX(105%);transition:transform .35s cubic-bezier(.2,.9,.3,1.05);border-left:1px solid var(--line)}
+  .log-panel{position:absolute;right:0;top:0;bottom:84px;width:min(380px,92vw);z-index:61;transform:translateX(105%);transition:transform .35s cubic-bezier(.2,.9,.3,1.05);border-left:1px solid var(--line)}
   .workspace.log-open .log-panel{transform:none}
   .lp-in{width:100%}
   .only-narrow{display:grid}.dock button.only-narrow-flex{display:flex}
+  .edge{display:none}
+  .chat-host{width:100%}
   .tagline,.topbar .divider{display:none}
   .core-wrap{transform:scale(.74)}
   .sys{display:none}

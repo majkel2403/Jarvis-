@@ -104,6 +104,7 @@ const log = (title, text = '', level = '') => {
 /* ---------- panel ---------- */
 const ws = () => $('#workspace');
 const setOpen = on => {
+  if (on && matchMedia('(max-width:900px)').matches) J.chatPanel?.hide();   // na wąskich ekranach jedna szuflada naraz
   ws().classList.toggle('log-open', on); $('#btnLog')?.classList.toggle('on', on);
   if (!on) { clearTimeout(hideT); }
 };

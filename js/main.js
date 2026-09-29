@@ -399,13 +399,17 @@ J.chatPanel = (() => {
   const panel = $('#chatPanel'), host = $('#chatHost'), narrow = matchMedia('(max-width:900px)');
   const ctx = { el: panel, body: host, onClose() { }, setTitle() { }, close() { } };
   J.apps.chat.mount(host, ctx);
+  const set = on => { if (on && narrow.matches) J.proc.close(); panel.classList.toggle('open', on); $('#workspace').classList.toggle('chat-closed', !on); $('#btnChat').classList.toggle('on', on); };
   const focusInput = () => setTimeout(() => $('#chatInput', host)?.focus(), 30);
   const api = {
-    show(arg) { if (narrow.matches) panel.classList.add('open'); focusInput(); if (arg) J.brain.handle(arg); },
-    hide() { panel.classList.remove('open'); },
-    toggle() { if (narrow.matches) { panel.classList.toggle('open'); if (panel.classList.contains('open')) focusInput(); } else focusInput(); $('#btnChat')?.classList.toggle('on', panel.classList.contains('open')); },
-    get isOpen() { return !narrow.matches || panel.classList.contains('open'); }
+    show(arg) { set(true); focusInput(); if (arg) J.brain.handle(arg); },
+    hide() { set(false); },
+    toggle() { set(!api.isOpen); if (api.isOpen) focusInput(); },
+    get isOpen() { return narrow.matches ? panel.classList.contains('open') : !$('#workspace').classList.contains('chat-closed'); }
   };
+  narrow.addEventListener('change', () => set(!narrow.matches));
+  set(!narrow.matches);
+  $('#edgeL').onclick = () => api.show(); $('#edgeR').onclick = () => J.proc.open();
   return api;
 })();
 
