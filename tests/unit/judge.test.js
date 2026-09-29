@@ -21,8 +21,17 @@ const fakeFetch = async (url, init) => {
   }
   return { ok: true, status: 200, json: async () => ({ model: 'jev-1.13.0', answers, usage: { input_tokens: 400, output_tokens: 20, cost: 0.00002 } }) };
 };
-const J = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test' } } });
+const J = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test', jevPrivate: false } } });
 
+test('judge: domyślnie tryb prywatny — bez tytułów notatek, widgetów i profilu', async () => {
+  const P = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test' } } });
+  assert.equal(P.state.settings.jevPrivate, true);
+  calls.length = 0; P.notes.add('Tajna notatka', 'x');
+  await P.judge.decide('otwórz notatnik');
+  const st = calls[0].body.state;
+  assert.equal(st.notes, undefined); assert.equal(st.widgets, undefined); assert.equal(st.user_profile, undefined);
+  assert.ok(!JSON.stringify(calls[0].body).includes('Tajna notatka'), 'tytuł notatki nie wychodzi do zewnętrznego serwisu');
+});
 test('judge: wyłączony bez klucza → null', async () => {
   const J2 = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: '' } } });
   assert.equal(J2.judge.enabled(), false); assert.equal(await J2.judge.decide('otwórz notatnik'), null);

@@ -141,3 +141,11 @@ sw.js                 service worker (offline)
 tests/                testy jednostkowe (Node) i dymne (Playwright)
 docs/ROADMAP.md       plan rozwoju i stan realizacji
 ```
+
+## Bezpieczeństwo i prywatność
+
+- **Klucze API** zostają tylko w tej przeglądarce (`localStorage`). Model nigdy ich nie dostaje (narzędzie ustawień je pomija), a eksport kopii zapasowej je usuwa.
+- **Klucz w adresie:** używaj `index.html#jevKey=sk-or-…&jevOn=1` (po znaku `#`). Ta część adresu nie jest wysyłana do serwera strony. Wariant z `?` nadal działa, ale adres z `?` trafia do serwera hostingu, więc program ostrzeże, że warto wygenerować nowy klucz. Najbezpieczniejszy jest lokalny plik `config.local.js`.
+- **Sędzia Jev** działa domyślnie w trybie prywatnym: nie dostaje tytułów notatek, widgetów ani profilu. Nadal widzi zadania z dnia i to, co powiesz. Tryb wyłączysz w Ustawieniach.
+- **Ryzykowne działania** (usuwanie, zamykanie wszystkich okien, obce adresy, schowek) wymagają zgody, gdy prosi o nie model albo gdy wydajesz polecenie **głosem**. Wpisane ręcznie polecenie jest wykonywane od razu.
+- **Zapis danych:** gdy przeglądarka odmówi zapisu (brak miejsca, tryb prywatny), Jarvis ostrzega jednorazowo zamiast milczeć.

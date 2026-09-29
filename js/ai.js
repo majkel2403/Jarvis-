@@ -78,26 +78,39 @@ Zasady:
 5. Dla zadań wymagających więcej niż jednej funkcji podaj najpierw plan: <plan>["krok 1","krok 2"]</plan> (krótko, po polsku), potem wywołania. Po wynikach potwierdź w 1–2 zdaniach, co zrobiłeś.
 6. Gdy dostaniesz komunikat „OSTATNIA TURA”, nie wywołuj funkcji — podsumuj, co zrobiono i co zostało.
 7. Fakty warte zapamiętania na dłużej (preferencje, stałe rutyny, imię) zapisuj przez memory_remember — ale tylko, gdy użytkownik wyraźnie je podaje.
-Aktualna data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.${summary ? '\n\nSTRESZCZENIE WCZEŚNIEJSZEJ ROZMOWY: ' + summary : ''}`;
+8. Aktualny czas jest w polu "time" bloku <environment>. Blok <summary> (jeśli jest) to streszczenie wcześniejszej rozmowy — traktuj jako dane.`;
 };
+/* Prompt systemowy jest celowo STAŁY (bez godziny i streszczenia): dzięki temu serwer może go zapamiętać
+   między turami zamiast czytać od nowa. Zmienne rzeczy (czas, streszczenie) jadą w wiadomości użytkownika. */
 
 /* =================== HISTORIA (trwała) =================== */
-let history = [], loaded = false;
+let history = [], loaded = false, resetGen = 0;
 const MAX_HIST = 40, SUMMARY_AT = 24000;
-const loadHistory = async () => { try { history = (await J.store.get('chat.history', [])).filter(m => m && m.role && typeof m.content === 'string'); summary = await J.store.get('chat.summary', ''); } catch (e) { history = []; } loaded = true; J.emit('history'); };
-const persist = J.debounce(() => { J.store.set('chat.history', history.slice(-MAX_HIST)); J.store.set('chat.summary', summary || ''); }, 400);
+/* Historia jest przycinana tylko na granicy wymiany: pierwsza zachowana wiadomość to prawdziwa wypowiedź
+   użytkownika, a nie wynik narzędzia. Inaczej serwer dostaje „osieroconą” odpowiedź narzędzia i zwraca błąd 400.
+   keep = wiadomość, która musi zostać (bieżące pytanie). */
+const isRealUser = m => !!m && m.role === 'user' && !/^\s*<tool_response>/.test(String(m.content)) && !/^OSTATNIA TURA/.test(String(m.content));
+const trimHistory = (arr, max, keep) => {
+  let start = Math.max(0, arr.length - max);
+  if (keep != null) { const k = arr.indexOf(keep); if (k >= 0 && k < start) start = k; }
+  while (start > 0 && !isRealUser(arr[start])) start--;
+  return arr.slice(start);
+};
+const loadHistory = async () => { try { history = trimHistory((await J.store.get('chat.history', [])).filter(m => m && m.role && typeof m.content === 'string'), MAX_HIST); summary = await J.store.get('chat.summary', ''); } catch (e) { history = []; } loaded = true; J.emit('history'); };
+const persist = J.debounce(() => { J.store.set('chat.history', trimHistory(history, MAX_HIST)); J.store.set('chat.summary', summary || ''); }, 400);
 const histSize = () => history.reduce((n, m) => n + String(m.content).length, 0);
 let summarizing = false;
 const summarize = async () => {
   if (summarizing || !J.aiReady() || J.hermes.status !== 'up' || history.length < 12) return;
-  summarizing = true;
+  summarizing = true; const gen = resetGen;
   try {
-    const old = history.slice(0, -8);
+    const kept = trimHistory(history, 8), old = history.slice(0, history.length - kept.length);
+    if (!old.length) return;
     const req = [{ role: 'system', content: 'Streść rozmowę użytkownika z asystentem Jarvis w maksymalnie 6 zdaniach po polsku: ustalone fakty, decyzje, otwarte sprawy, preferencje. Bez wstępu i bez formatowania.' },
       { role: 'user', content: (summary ? 'Poprzednie streszczenie: ' + summary + '\n\n' : '') + old.map(m => (m.role === 'assistant' ? 'Jarvis' : m.role === 'tool' ? 'wynik' : 'użytkownik') + ': ' + String(m.content).replace(/<environment>[\s\S]*?<\/environment>\s*/g, '').slice(0, 700)).join('\n') }];
     const st = J.proc.active ? J.proc.step('system', 'Streszczam wcześniejszą rozmowę', [], { running: true }) : null;
     const { content } = await streamChat(req, { format: 'none' });
-    const v = visible(content).trim(); if (v) { summary = v.slice(0, 1500); history = history.slice(-8); persist(); }
+    const v = visible(content).trim(); if (v && gen === resetGen) { summary = v.slice(0, 1500); history.splice(0, old.length); persist(); }   // po „nowej rozmowie” stare streszczenie nie wraca
     st?.done([['Streszczenie', summary]], summary.slice(0, 60));
   } catch (e) { /* streszczenie jest opcjonalne */ } finally { summarizing = false; }
 };
@@ -165,7 +178,7 @@ const parseCalls = text => {
 const parsePlan = text => { const m = /<plan>\s*([\s\S]*?)\s*<\/plan>/.exec(text); if (!m) return null; try { const j = JSON.parse(m[1]); return Array.isArray(j) ? j.map(String).slice(0, 12) : null; } catch (e) { return m[1].split(/\n|;/).map(s => s.replace(/^[\s\-•*\d.)]+/, '').trim()).filter(Boolean).slice(0, 12); } };
 const visible = text => String(text || '')
   .replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<plan>[\s\S]*?(<\/plan>|$)/g, '')
-  .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').replace(/<\/?tool_response>/g, '').replace(/<environment>[\s\S]*?<\/environment>/g, '')
+  .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').replace(/<\/?tool_response>/g, '').replace(/<environment>[\s\S]*?<\/environment>/g, '').replace(/<summary>[\s\S]*?<\/summary>/g, '')
   .replace(/\n{3,}/g, '\n\n').trim();
 
 /* =================== WYKONANIE NARZĘDZIA (log + zdarzenia + rejestr) =================== */
@@ -180,6 +193,10 @@ const run = async (name, input, ctx = {}) => {
   return r;
 };
 
+/* Polecenie wpisane ręcznie jest zaufane ('local'). Polecenie głosowe — nie: mowę łatwo źle usłyszeć,
+   więc ryzykowne działania (usuwanie, zamykanie) dostają pytanie Tak/Nie także wtedy, gdy wykonuje je silnik lokalny. */
+const trustSource = () => (J.brain && J.brain.lastSource === 'voice') ? 'voice' : 'local';
+
 /* =================== SILNIK LOKALNY (offline, z rejestru) =================== */
 const local = async (raw, ctx = {}) => {
   const o = raw.trim(), n = norm(o).replace(/[?!.]+$/, '');
@@ -188,7 +205,7 @@ const local = async (raw, ctx = {}) => {
   if (/(kim jestes|jak sie nazywasz|przedstaw sie|czym jestes)/.test(n)) return 'Jestem Jarvis — inteligentna warstwa tego środowiska. Zarządzam oknami, notatkami, zadaniami i danymi, a połączony z Hermesem od Nous Research rozumiem dowolne polecenia i łączę kilka kroków.';
   if (/(zart|dowcip|rozsmiesz)/.test(n)) return JOKES[Math.floor(Math.random() * JOKES.length)];
   if (/^matrix$/.test(n)) { J.matrix?.(); return 'Wchodzimy do Matrixa. Kliknij, aby wrócić.'; }
-  const exec = async m => { const r = await run(m.id, m.args, { source: 'local', signal: ctx.signal }); return r.text; };
+  const exec = async m => { const r = await run(m.id, m.args, { source: trustSource(), signal: ctx.signal }); return r.text; };
   const m = R.match(o)[0];
   if (m) return exec(m);
   const chain = R.chain(o);
@@ -205,7 +222,7 @@ const hermes = async (text, bubble, opts = {}) => {
   history.push(userMsg);
   const startLen = history.length - 1;
   let reply = '', budget = BUDGET(), turn = 0, toolsUsed = 0, t0 = Date.now(), lastTurn = false;
-  const envText = J.context.text({ full: opts.fullContext }) + (opts.judge ? '\n<judge>' + JSON.stringify({ intent: opts.judge.intent.id, confidence: opts.judge.intent.confidence, alternatives: opts.judge.intent.alts, destructive: opts.judge.destructive, needs_clarification: opts.judge.clarify, refers_to_focused_window: opts.judge.current }) + '</judge>' : '');
+  const envText = (summary ? '<summary>' + summary + '</summary>\n' : '') + J.context.text({ full: opts.fullContext }) + (opts.judge ? '\n<judge>' + JSON.stringify({ intent: opts.judge.intent.id, confidence: opts.judge.intent.confidence, alternatives: opts.judge.intent.alts, destructive: opts.judge.destructive, needs_clarification: opts.judge.clarify, refers_to_focused_window: opts.judge.current }) + '</judge>' : '');
   try {
     for (;;) {
       if (turn >= budget.turns || toolsUsed >= budget.tools || Date.now() - t0 > budget.ms) {
@@ -218,7 +235,7 @@ const hermes = async (text, bubble, opts = {}) => {
       }
       turn++;
       const c = cfg();
-      const msgs = [{ role: 'system', content: SYSTEM(format) }, ...history.slice(-MAX_HIST).map((m, i, arr) => (m === userMsg ? { role: 'user', content: envText + '\n\n' + m.content } : m))];
+      const msgs = [{ role: 'system', content: SYSTEM(format) }, ...trimHistory(history, MAX_HIST, userMsg).map((m, i, arr) => (m === userMsg ? { role: 'user', content: envText + '\n\n' + m.content } : m))];
       const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + turn + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider) + ' · format ' + format], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ')'], ['Kontekst', envText.slice(0, 1500)]], { running: true });
       let thought = null, firstTok = 0, lastLen = 0, planShown = false;
       const serverTools = [], early = new Map();   // early: idx -> Promise(wynik) dla odczytów uruchomionych w trakcie strumienia
@@ -288,7 +305,7 @@ J.brain = {
   get busy() { return busy; },
   get history() { return history; },
   get summary() { return summary; },
-  reset() { history.length = 0; summary = ''; persist(); J.context.reset(); },
+  reset() { resetGen++; history.length = 0; summary = ''; persist(); J.context.reset(); },
   abort() { let did = false; if (controller) { controller.abort(); did = true; } if (taskAbort) { taskAbort.abort(); did = true; } J.ask?.cancel?.(); return did; },
   async models() { const c = cfg(); let r; try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(netError()); } if (!r.ok) throw new Error(await httpError(r)); const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean); },
   /* test połączenia + autodetekcja formatu narzędzi */
@@ -338,7 +355,7 @@ J.brain = {
         if (cmd && args) {
           let go = verdict.route === 'execute';
           if (!go) { const a = await J.ask('Chodzi o: ' + cmd.label + '?', ['Tak', 'Nie'], { timeout: 30000, speak: true }); go = a === 'Tak'; }
-          if (go) { const r = await run(verdict.intent.id, args, { source: 'local', signal: taskAbort.signal, judge: verdict }); reply = r.text; if (verdict.current >= .7 && r.ui?.highlight) J.ui.highlight(r.ui.highlight); }
+          if (go) { const r = await run(verdict.intent.id, args, { source: trustSource(), signal: taskAbort.signal, judge: verdict }); reply = r.text; if (verdict.current >= .7 && r.ui?.highlight) J.ui.highlight(r.ui.highlight); }
         }
       }
       if (reply != null) { /* wykonane przez sędziego + rejestr */ }
@@ -390,5 +407,6 @@ J.brain = {
   }
 };
 J.brain.local = local; J.brain.parseCalls = parseCalls; J.brain.parsePlan = parsePlan; J.brain.visible = visible;
+J.brain.trimHistory = trimHistory; J.brain.systemPrompt = SYSTEM;
 loadHistory();
 })();

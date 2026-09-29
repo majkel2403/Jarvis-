@@ -66,6 +66,12 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.waitForTimeout(1200);
   const persisted = await p.evaluate(async () => ({ hist: (await J.store.get('chat.history', [])).length, facts: (await J.memory.all()).length, notes: J.state.notes.length, widgets: J.widgets.list.length }));
   assert(persisted.hist >= 10 && persisted.facts === 1 && persisted.notes === 2 && persisted.widgets === 1, 'trwałość ' + JSON.stringify(persisted));
+  // historia zadań mieszka w IndexedDB, a główny klucz localStorage jest lekki (bez historii)
+  const store = await p.evaluate(async () => ({ idb: (await J.store.get('proc.history', [])).length, blob: JSON.parse(localStorage.getItem('jarvis-os:v2')).history.length, migrated: J.historyMigrated === true, ready: J.store.ready }));
+  assert(store.idb >= 1 && store.blob === 0 && store.migrated && store.ready, 'historia w IndexedDB ' + JSON.stringify(store));
+  // model nigdy nie dostaje kluczy API (settings_get)
+  const leak = await p.evaluate(async () => { J.state.settings.jevKey = 'sk-or-SEKRET'; J.state.settings.openrouterKey = 'sk-or-SEKRET2'; const r = await J.registry.run('settings_get', {}, { source: 'hermes' }); J.state.settings.jevKey = ''; J.state.settings.openrouterKey = ''; return JSON.stringify(r); });
+  assert(!/SEKRET/.test(leak), 'wyciek kluczy w settings_get');
   if (process.env.SHOT) await p.screenshot({ path: path.join(process.env.SHOT, 'smoke.png') });
   await b.close();
   if (errs.length) { console.error('Błędy w konsoli:', errs); process.exit(1); }

@@ -172,21 +172,8 @@ J.tasks = {
     J.state.tasks.push(task); J.state.tasks.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); J.save(); J.emit('tasks');
     J.log('Dodano zadanie', (t ? t + ' — ' : '') + task.text); return task;
   },
-  today() { return J.state.tasks.filter(t => t.date === J.today()); },
-  check() {
-    const now = J.hhmm(), today = J.today();
-    J.state.tasks.forEach(t => {
-      if (!t.fired && !t.done && t.time && t.date === today && t.time <= now) {
-        t.fired = true; J.save();
-        const late = t.time < now && (parseInt(now) * 60 + +now.slice(3)) - (parseInt(t.time) * 60 + +t.time.slice(3)) > 2;
-        if (late) return; // nie przypominaj o zaległych po starcie
-        J.sfx.notify(); J.toast('⏰ ' + t.time + ' — ' + t.text, 6000);
-        J.log('Przypomnienie', t.time + ' — ' + t.text, 'warn');
-        J.voice.speak('Przypomnienie: ' + t.text);
-        J.notify?.('Jarvis — przypomnienie', t.time + ' ' + t.text);
-      }
-    });
-  }
+  today() { return J.state.tasks.filter(t => t.date === J.today()); }
+  // sprawdzanie terminów (J.tasks.check) mieszka w context.js — dokładny timer + zaległe po powrocie do karty
 };
 
 /* ---------- minutnik (globalny) ---------- */
@@ -738,7 +725,7 @@ J.apps.settings = {
         <input class="input" id="jvKey" type="password" placeholder="Klucz OpenRouter (sk-or-v1-…)" autocomplete="off">
         <div class="row"><select class="input" id="jvModel">${J.judge.MODELS.map(m => `<option value="${m}">${m}</option>`).join('')}</select><button class="btn primary" id="jvTest">Połącz i testuj</button></div>
         <div class="row" style="font-size:11px"><span style="flex:1">Wykonaj bez pytania od</span><input class="input" id="jvExec" type="number" min="0.5" max="1" step="0.05" style="width:80px"><span style="flex:1;text-align:right">Zapytaj od</span><input class="input" id="jvAsk" type="number" min="0.1" max="1" step="0.05" style="width:80px"></div>
-        <label class="toggle"><div>Tryb prywatny<small>Nie wysyłaj tytułów notatek, widgetów i profilu do sędziego</small></div><span class="switch"><input type="checkbox" id="jvPriv"><i></i></span></label>
+        <label class="toggle"><div>Tryb prywatny (zalecany)<small>Nie wysyłaj tytułów notatek, widgetów i profilu do sędziego. Wyłączenie poprawia trafność, ale te dane trafiają do firmy zewnętrznej</small></div><span class="switch"><input type="checkbox" id="jvPriv"><i></i></span></label>
         <div class="dim" id="jvInfo" style="font-size:10.5px;line-height:1.5"></div>
       </div>
       <div class="label">Pamięć Jarvisa</div>
@@ -779,7 +766,7 @@ J.apps.settings = {
     $('#hList', body).onclick = async () => { saveH(); hInfo.textContent = 'Pobieram modele…'; try { const l = await J.brain.models(); $('#hModels', body).innerHTML = l.map(m => `<option value="${esc(m)}">`).join(''); hInfo.textContent = 'Dostępne modele: ' + (l.join(', ') || 'brak'); } catch (e) { hInfo.textContent = '✗ ' + e.message; } };
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
     $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '', jevKey: '', openrouterKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
-    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey, ok = s.openrouterKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.state.settings.openrouterKey = ok; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
+    $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey, jk = s.jevKey, ok = s.openrouterKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.state.settings.jevKey = jk; J.state.settings.openrouterKey = ok; J.saveNow(); J.store.set('proc.history', J.state.history || []); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
     $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) { J.store.clear().finally(() => J.resetAll()); } };
     /* agent */
     const aWake = $('#aWake', body); aWake.checked = !!s.wakeWord && J.ear.supported; aWake.disabled = !J.ear.supported; aWake.onchange = () => J.ear.setStandby(aWake.checked);

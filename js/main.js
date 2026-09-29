@@ -347,8 +347,6 @@ const sysWeather = d => {
 J.on('weather', sysWeather);
 const loadWeather = () => J.weather.fetch().catch(() => { $('#wxTemp').textContent = 'offline'; });
 
-const nodes = () => { };   // (dawny panel węzłów zastąpiony kartami HUD)
-
 /* =================== PULPIT: ikony i dok =================== */
 const BUILTIN = [['chat', 'Czat', 'blue'], ['notes', 'Notatnik', 'dark'], ['market', 'Lista tokenów', 'blue'], ['schedule', 'Harmonogram', 'blue'], ['monitor', 'Wynik zadania', 'teal']];
 const TONES = { chat: 'blue', notes: 'orange', market: 'teal', schedule: 'indigo', monitor: 'green', weather: 'sky', terminal: 'dark', settings: 'dark', calc: 'purple', timer: 'purple', library: 'dark' };
@@ -525,7 +523,10 @@ $('#btnVoice').innerHTML = icon('mic'); $('#btnFocus').innerHTML = icon('focus')
 $('#btnLog').insertAdjacentHTML('afterbegin', icon('history'));
 $('#btnNotif').insertAdjacentHTML('afterbegin', icon('bell'));
 const soundIcon = () => { $('#btnSound').innerHTML = icon(S.sound ? 'sound' : 'mute'); $('#btnSound').classList.toggle('on', S.sound); };
-soundIcon(); J.on('settings', () => { J.hermesPing(); soundIcon(); $('#btnAvatar').textContent = S.user; });
+/* ping Hermesa tylko wtedy, gdy zmieniła się jego konfiguracja (nie przy każdej zmianie koloru czy dźwięku) */
+const hermesSig = () => [S.hermesOn, S.hermesProvider, S.hermesUrl, S.hermesKey, S.openrouterKey, S.hermesModel].join('|');
+let pingSig = hermesSig();
+soundIcon(); J.on('settings', () => { const sg = hermesSig(); if (sg !== pingSig) { pingSig = sg; J.hermesPing(); } soundIcon(); $('#btnAvatar').textContent = S.user; });
 $('#btnNet').innerHTML = icon('wifi'); $('#btnFull').innerHTML = icon('screen');
 const netInfo = () => !navigator.onLine ? 'Brak połączenia z internetem' : (J.aiReady() ? 'Hermes: ' + ({ up: 'połączony', down: 'offline', unknown: 'nie sprawdzono' }[J.hermes.status] || '—') : 'Internet: online · silnik lokalny');
 $('#btnNet').onclick = () => { J.toast(netInfo()); J.hermesPing(); };
@@ -786,11 +787,9 @@ const onboarding = () => {
 ['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
 J.proc.init(); J.hud.init(); renderIcons(); renderDock(); syncStatus();
 clock(); setInterval(clock, 1000);
-setInterval(nodes, 1500);
 loadWeather(); setInterval(loadWeather, 15 * 60e3);
-J.on('action', nodes); J.on('tasks', nodes);
-addEventListener('online', () => { nodes(); J.toast('Połączenie przywrócone'); });
-addEventListener('offline', () => { nodes(); J.toast('Utracono połączenie z internetem'); J.log('Sieć', 'Tryb offline — działają funkcje lokalne.', 'warn'); });
+addEventListener('online', () => { J.toast('Połączenie przywrócone'); });
+addEventListener('offline', () => { J.toast('Utracono połączenie z internetem'); J.log('Sieć', 'Tryb offline — działają funkcje lokalne.', 'warn'); });
 
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').then(reg => {
   reg.addEventListener('updatefound', () => { const w = reg.installing; w?.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) J.notice({ title: 'Nowa wersja Jarvis OS', body: 'odśwież stronę, aby ją załadować', kind: 'agent' }); }); });
@@ -816,6 +815,7 @@ boot().then(() => {
   J.orb.set('idle', msg);
   setTimeout(() => J.voice.speak(msg), 700);
   if (J.configuredFrom) { const src = J.configuredFrom; J.configuredFrom = null; J.toast('Konfiguracja wczytana z ' + (src === 'url' ? 'adresu (usunięta z paska)' : 'config.local.js') + (S.jevKey ? ' · Jev włączony' : ''), 6000); if (S.jevOn && S.jevKey) setTimeout(() => J.judge.test().then(t => J.notice({ title: 'Jev działa', body: t, kind: 'agent' })).catch(e => J.notice({ title: 'Jev: błąd połączenia', body: e.message, kind: 'hermes' })), 1500); }
+  if (J.configViaQuery) { J.configViaQuery = false; setTimeout(() => J.notice({ title: 'Klucz był w adresie strony', body: 'Adres z „?” trafia do serwera, na którym leży strona. Następnym razem użyj znaku # (index.html#jevKey=…) albo pliku config.local.js. Jeśli strona jest publiczna, rozważ wygenerowanie nowego klucza.', kind: 'hermes' }), 3000); }
   const un = J.notifs.unread(); if (un) setTimeout(() => J.toast('Masz ' + un + ' ' + J.pl(un, 'nieprzeczytane powiadomienie', 'nieprzeczytane powiadomienia', 'nieprzeczytanych powiadomień') + ' (Alt+N)', 5000), 2500);
 });
 })();

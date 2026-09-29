@@ -22,7 +22,7 @@ const storage = () => { const m = new Map(); return { getItem: k => m.has(k) ? m
 function load(opts = {}) {
   const ctx = {};
   ctx.window = ctx; ctx.globalThis = ctx; ctx.self = ctx;
-  ctx.console = console; ctx.Math = Math; ctx.Date = Date; ctx.JSON = JSON; ctx.Object = Object; ctx.Array = Array; ctx.String = String; ctx.Number = Number; ctx.Boolean = Boolean; ctx.RegExp = RegExp; ctx.Error = Error; ctx.Map = Map; ctx.Set = Set; ctx.Promise = Promise; ctx.Symbol = Symbol; ctx.Intl = Intl; ctx.parseInt = parseInt; ctx.parseFloat = parseFloat; ctx.isNaN = isNaN; ctx.isFinite = isFinite; ctx.encodeURIComponent = encodeURIComponent; ctx.decodeURIComponent = decodeURIComponent; ctx.URL = URL; ctx.Blob = Blob; ctx.TextDecoder = TextDecoder; ctx.TextEncoder = TextEncoder; ctx.AbortController = AbortController; ctx.AbortSignal = AbortSignal; ctx.Proxy = Proxy; ctx.Reflect = Reflect; ctx.Uint8Array = Uint8Array; ctx.Float32Array = Float32Array; ctx.performance = performance; ctx.structuredClone = structuredClone; ctx.queueMicrotask = queueMicrotask; ctx.WeakMap = WeakMap;
+  ctx.console = console; ctx.Math = Math; ctx.Date = Date; ctx.JSON = JSON; ctx.Object = Object; ctx.Array = Array; ctx.String = String; ctx.Number = Number; ctx.Boolean = Boolean; ctx.RegExp = RegExp; ctx.Error = Error; ctx.Map = Map; ctx.Set = Set; ctx.Promise = Promise; ctx.Symbol = Symbol; ctx.Intl = Intl; ctx.parseInt = parseInt; ctx.parseFloat = parseFloat; ctx.isNaN = isNaN; ctx.isFinite = isFinite; ctx.encodeURIComponent = encodeURIComponent; ctx.decodeURIComponent = decodeURIComponent; ctx.URL = URL; ctx.URLSearchParams = URLSearchParams; ctx.Blob = Blob; ctx.TextDecoder = TextDecoder; ctx.TextEncoder = TextEncoder; ctx.AbortController = AbortController; ctx.AbortSignal = AbortSignal; ctx.Proxy = Proxy; ctx.Reflect = Reflect; ctx.Uint8Array = Uint8Array; ctx.Float32Array = Float32Array; ctx.performance = performance; ctx.structuredClone = structuredClone; ctx.queueMicrotask = queueMicrotask; ctx.WeakMap = WeakMap;
   ctx.setTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; }; ctx.clearTimeout = clearTimeout;
   ctx.setInterval = (fn, ms, ...a) => { const t = setInterval(fn, ms, ...a); t.unref?.(); return t; }; ctx.clearInterval = clearInterval;
   ctx.requestAnimationFrame = () => 0; ctx.cancelAnimationFrame = () => { };
@@ -37,6 +37,11 @@ function load(opts = {}) {
   ctx.innerWidth = 1400; ctx.innerHeight = 800; ctx.devicePixelRatio = 1;
   ctx.addEventListener = () => { }; ctx.removeEventListener = () => { }; ctx.open = () => ({});
   ctx.document = Object.assign(mkEl('html'), { hidden: false, activeElement: null, documentElement: mkEl('html'), body: mkEl('body'), createElement: mkEl, createTextNode: t => ({ textContent: t }), fullscreenElement: null });
+  /* opts.dom: każdy selektor (#id, .klasa) zwraca stały element-atrapę — pozwala uruchomić brain.handle i Process Log bez prawdziwego DOM */
+  if (opts.dom) {
+    const withQuery = tag => { const e = mkEl(tag), c = {}; e.querySelector = sel => (c[sel] = c[sel] || withQuery()); return e; };   // elementy potomne też odpowiadają na querySelector
+    const cache = {}; ctx.document.querySelector = sel => (cache[sel] = cache[sel] || withQuery()); ctx.document.createElement = withQuery;
+  }
   ctx.Event = class { constructor(t) { this.type = t; } };
   ctx.alert = () => { }; ctx.confirm = () => true; ctx.prompt = () => '';
   vm.createContext(ctx);
