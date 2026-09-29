@@ -3,7 +3,7 @@
   "id": "open_app",
   "group": "Aplikacje i okna",
   "label": "Otwórz aplikację",
-  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji.",
+  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki.",
   "args": {
    "type": "object",
    "properties": {
@@ -20,7 +20,8 @@
       "calc",
       "timer",
       "settings",
-      "library"
+      "library",
+      "files"
      ]
     }
    },
@@ -73,6 +74,7 @@
       "timer",
       "settings",
       "library",
+      "files",
       "all",
       "current"
      ]
@@ -150,6 +152,7 @@
       "timer",
       "settings",
       "library",
+      "files",
       "next"
      ]
     }
@@ -201,6 +204,7 @@
       "timer",
       "settings",
       "library",
+      "files",
       "all",
       "current"
      ]
@@ -783,7 +787,7 @@
   "id": "notes_delete",
   "group": "Notatki",
   "label": "Usuń notatkę",
-  "description": "Usuwa notatkę (wymaga potwierdzenia).",
+  "description": "Przenosi notatkę do kosza (30 dni, można przywrócić: notes_restore). Wymaga potwierdzenia.",
   "args": {
    "type": "object",
    "properties": {
@@ -878,6 +882,24 @@
     "in": {
      "type": "string",
      "description": "czas względny, np. \"20 minut\", \"2 godziny\""
+    },
+    "priority": {
+     "type": "string",
+     "enum": [
+      "high",
+      "normal",
+      "low"
+     ]
+    },
+    "repeat": {
+     "type": "object",
+     "description": "{ rule: daily|weekdays|weekly|monthly|every_n_days, days?: [pn..nd], n?, until? }"
+    },
+    "remind": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 1440,
+     "description": "przypomnienie N minut przed"
     },
     "show": {
      "type": "boolean"
@@ -977,6 +999,18 @@
     "snooze_minutes": {
      "type": "integer",
      "minimum": 1
+    },
+    "remind": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 1440
+    },
+    "scope": {
+     "type": "string",
+     "enum": [
+      "this",
+      "series"
+     ]
     }
    },
    "required": [
@@ -1043,7 +1077,7 @@
   "id": "start_timer",
   "group": "Zadania i czas",
   "label": "Minutnik",
-  "description": "Uruchamia minutnik na podaną liczbę sekund.",
+  "description": "Uruchamia minutnik na podaną liczbę sekund. Kilka naraz (maks. 5) — rozróżnia je label; ta sama etykieta restartuje minutnik. preset=pomodoro: 25 min pracy / 5 przerwy ×4, potem 15.",
   "args": {
    "type": "object",
    "properties": {
@@ -1056,17 +1090,18 @@
      "type": "string",
      "maxLength": 40
     },
+    "preset": {
+     "type": "string",
+     "enum": [
+      "pomodoro"
+     ]
+    },
     "show": {
      "type": "boolean"
     }
-   },
-   "required": [
-    "seconds"
-   ]
+   }
   },
-  "required": [
-   "seconds"
-  ],
+  "required": [],
   "risk": "safe",
   "level": "A2",
   "levelDependsOnArgs": false,
@@ -1091,7 +1126,7 @@
   "id": "timer_control",
   "group": "Zadania i czas",
   "label": "Sterowanie minutnikiem",
-  "description": "stop zatrzymuje minutnik, extend dodaje sekundy, status zwraca pozostały czas.",
+  "description": "stop zatrzymuje minutnik, pause/resume wstrzymuje i wznawia, extend dodaje sekundy, status zwraca pozostały czas. label wybiera minutnik (domyślnie najbliższy końca).",
   "args": {
    "type": "object",
    "properties": {
@@ -1099,6 +1134,8 @@
      "type": "string",
      "enum": [
       "stop",
+      "pause",
+      "resume",
       "extend",
       "status"
      ]
@@ -1106,6 +1143,9 @@
     "seconds": {
      "type": "number",
      "minimum": 1
+    },
+    "label": {
+     "type": "string"
     }
    },
    "required": [
@@ -1129,7 +1169,9 @@
    "(zatrzymaj|wylacz|stop) minutnik",
    "ile zostalo [minutnika|czasu]",
    "przedluz minutnik o {seconds}",
-   "dodaj do minutnika {seconds}"
+   "dodaj do minutnika {seconds}",
+   "wstrzymaj minutnik",
+   "wznow minutnik"
   ],
   "needsConfirmText": false
  },
@@ -1357,7 +1399,8 @@
       "calc",
       "timer",
       "settings",
-      "library"
+      "library",
+      "files"
      ]
     },
     "url": {
@@ -1591,18 +1634,13 @@
   "id": "get_crypto_prices",
   "group": "Dane",
   "label": "Kursy krypto",
-  "description": "Aktualne kursy BTC, ETH, SOL, BNB w USD ze zmianą 24h (CoinGecko / Binance).",
+  "description": "Aktualne kursy walut z listy obserwowanych (domyślnie BTC, ETH, SOL, BNB) w USD ze zmianą 24h i krótkim wykresem (spark, 24 punkty) — CoinGecko / Binance.",
   "args": {
    "type": "object",
    "properties": {
     "symbol": {
      "type": "string",
-     "enum": [
-      "BTC",
-      "ETH",
-      "SOL",
-      "BNB"
-     ]
+     "description": "symbol z listy obserwowanych, np. BTC, ETH"
     },
     "show": {
      "type": "boolean"
@@ -1638,12 +1676,7 @@
    "properties": {
     "symbol": {
      "type": "string",
-     "enum": [
-      "BTC",
-      "ETH",
-      "SOL",
-      "BNB"
-     ]
+     "description": "symbol, np. BTC"
     },
     "direction": {
      "type": "string",
@@ -2444,7 +2477,6 @@
   "hermes": true,
   "examples": [
    "przeczytaj plik {name}",
-   "otworz plik {name}",
    "co jest w pliku {name}"
   ],
   "needsConfirmText": false
@@ -2531,7 +2563,7 @@
   "id": "app_view",
   "group": "Nawigacja",
   "label": "Przejdź do widoku w aplikacji",
-  "description": "Otwiera aplikację na konkretnym widoku: notes note|search, schedule day, timer timer|stopwatch, market coin, weather city, settings section, terminal run (tylko wpisuje), calc expr, library apps|shortcuts, monitor section. Nawigacja — niczego nie zmienia.",
+  "description": "Otwiera aplikację na konkretnym widoku: notes note|search|trash|tag|folder, schedule day|week|overdue, files path, timer timer|stopwatch, market coin, weather city, settings section, terminal run (tylko wpisuje), calc expr, library apps|shortcuts, monitor section. Nawigacja — niczego nie zmienia.",
   "args": {
    "type": "object",
    "properties": {
@@ -2548,7 +2580,8 @@
       "calc",
       "timer",
       "settings",
-      "library"
+      "library",
+      "files"
      ]
     },
     "view": {
@@ -2675,7 +2708,8 @@
       "calc",
       "timer",
       "settings",
-      "library"
+      "library",
+      "files"
      ]
     }
    }
@@ -2873,7 +2907,8 @@
       "calc",
       "timer",
       "settings",
-      "library"
+      "library",
+      "files"
      ]
     },
     "icon": {
@@ -3146,7 +3181,8 @@
   "examples": [
    "usun uklad {name}",
    "skasuj uklad {name}",
-   "wywal uklad {name}"
+   "wywal uklad {name}",
+   "usun zapisany uklad {name}"
   ],
   "needsConfirmText": true
  },
@@ -3519,6 +3555,1079 @@
    "przelacz na watek {name}",
    "jakie mam watki",
    "zmien nazwe watku na {name}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_tag",
+  "group": "Notatki",
+  "label": "Tagi notatki",
+  "description": "Dodaje (add) lub usuwa (remove) tagi notatki (małe litery, bez spacji, maks. 10).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    },
+    "add": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 24
+     }
+    },
+    "remove": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "dodaj tag {add} do notatki {note}",
+   "oznacz notatke {note} tagiem {add}",
+   "usun tag {remove} z notatki {note}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_pin",
+  "group": "Notatki",
+  "label": "Przypnij notatkę",
+  "description": "Przypina notatkę na górze listy (on=false odpina).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    },
+    "on": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "przypnij notatke {note}",
+   "odepnij notatke {note}",
+   "przypnij te notatke"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_duplicate",
+  "group": "Notatki",
+  "label": "Duplikuj notatkę",
+  "description": "Tworzy kopię notatki z dopiskiem „(kopia)” (te same tagi i folder).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "zduplikuj notatke {note}",
+   "duplikuj notatke {note}",
+   "zrob kopie notatki {note}",
+   "skopiuj notatke {note}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_trash",
+  "group": "Notatki",
+  "label": "Kosz notatek",
+  "description": "Lista notatek w koszu (usunięte w ciągu 30 dni, można przywrócić). show=true otwiera kosz w Notatniku.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "show": {
+     "type": "boolean"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "co jest w koszu",
+   "pokaz kosz",
+   "kosz notatek",
+   "pokaz usuniete notatki",
+   "ktore notatki usunalem"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_restore",
+  "group": "Notatki",
+  "label": "Przywróć notatkę z kosza",
+  "description": "Przywraca notatkę z kosza.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo tytuł notatki w koszu"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "przywroc notatke {note}",
+   "przywroc z kosza notatke {note}",
+   "odzyskaj notatke {note}",
+   "wyciagnij z kosza notatke {note}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_empty_trash",
+  "group": "Notatki",
+  "label": "Opróżnij kosz",
+  "description": "Trwale usuwa wszystkie notatki z kosza. Nieodwracalne — wymaga potwierdzenia.",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "confirm",
+  "level": "A0",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "oproznij kosz",
+   "oproznij kosz notatek",
+   "usun na zawsze notatki z kosza",
+   "wyczysc kosz"
+  ],
+  "needsConfirmText": true
+ },
+ {
+  "id": "notes_versions",
+  "group": "Notatki",
+  "label": "Wersje notatki",
+  "description": "Lista zapisanych wersji notatki (maks. 20; zapis przed każdą zmianą przez Jarvisa i co ≥ 5 min pisania).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "pokaz wersje notatki {note}",
+   "wersje notatki {note}",
+   "historia zmian notatki {note}",
+   "co sie zmienialo w tej notatce"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_revert",
+  "group": "Notatki",
+  "label": "Przywróć wersję notatki",
+  "description": "Przywraca wersję notatki (version = id wersji albo \"previous\"). Bieżąca treść staje się nową wersją, więc można wrócić.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    },
+    "version": {
+     "type": "string",
+     "description": "id wersji albo \"previous\""
+    }
+   },
+   "required": [
+    "note",
+    "version"
+   ]
+  },
+  "required": [
+   "note",
+   "version"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "przywroc poprzednia wersje notatki {note}",
+   "wroc do starej tresci notatki {note}",
+   "cofnij notatke {note} do poprzedniej wersji"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_to_task",
+  "group": "Notatki",
+  "label": "Zadanie z notatki",
+  "description": "Tworzy zadanie z notatki (treść = tytuł) albo z jej linii (line); zadanie pamięta notatkę (ikona 📝 w Harmonogramie).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    },
+    "line": {
+     "type": "string"
+    },
+    "time": {
+     "type": "string",
+     "format": "time"
+    },
+    "date": {
+     "type": "string",
+     "format": "date"
+    }
+   },
+   "required": [
+    "note"
+   ]
+  },
+  "required": [
+   "note"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "zrob zadanie z notatki {note}",
+   "dodaj notatke {note} do harmonogramu na {date}",
+   "przypomnij mi o notatce {note} o {time}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "notes_folder",
+  "group": "Notatki",
+  "label": "Folder notatki",
+  "description": "Przenosi notatkę do folderu (jeden poziom; folder powstaje sam). folder=\"\" wyjmuje z folderu.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo fragment tytułu notatki; \"current\" = otwarta"
+    },
+    "folder": {
+     "type": "string",
+     "maxLength": 40
+    }
+   },
+   "required": [
+    "note",
+    "folder"
+   ]
+  },
+  "required": [
+   "note",
+   "folder"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "przenies notatke {note} do folderu {folder}",
+   "wloz notatke {note} do {folder}",
+   "wyjmij notatke {note} z folderu"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "tasks_repeat",
+  "group": "Zadania i czas",
+  "label": "Powtarzanie zadania",
+  "description": "Ustawia powtarzanie: daily, weekdays, weekly (days: pn…nd), monthly, every_n_days (n); until = data końca; none = wyłącz. Po odhaczeniu powstaje następne wystąpienie.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string",
+     "description": "id albo fragment treści zadania"
+    },
+    "rule": {
+     "type": "string",
+     "enum": [
+      "none",
+      "daily",
+      "weekdays",
+      "weekly",
+      "monthly",
+      "every_n_days"
+     ]
+    },
+    "days": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "pn",
+       "wt",
+       "sr",
+       "cz",
+       "pt",
+       "so",
+       "nd"
+      ]
+     }
+    },
+    "n": {
+     "type": "integer",
+     "minimum": 2,
+     "maximum": 365
+    },
+    "until": {
+     "type": "string",
+     "format": "date"
+    }
+   },
+   "required": [
+    "task",
+    "rule"
+   ]
+  },
+  "required": [
+   "task",
+   "rule"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "powtarzaj {task} codziennie",
+   "{task} powtarzaj w poniedzialki i czwartki",
+   "przestan powtarzac {task}",
+   "powtarzaj {task} co tydzien"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "tasks_priority",
+  "group": "Zadania i czas",
+  "label": "Priorytet zadania",
+  "description": "Ustawia priorytet zadania: high (pilne, na górze listy), normal, low.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string",
+     "description": "id albo fragment treści zadania"
+    },
+    "priority": {
+     "type": "string",
+     "enum": [
+      "high",
+      "normal",
+      "low"
+     ]
+    }
+   },
+   "required": [
+    "task",
+    "priority"
+   ]
+  },
+  "required": [
+   "task",
+   "priority"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "priorytet wysoki dla {task}",
+   "ustaw wysoki priorytet dla {task}",
+   "{task} jest pilne",
+   "{task} moze poczekac"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "tasks_subtask",
+  "group": "Zadania i czas",
+  "label": "Podzadania",
+  "description": "Dodaje (add), odhacza (check), odznacza (uncheck) lub usuwa (remove) podzadanie (jeden poziom, maks. 20).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "task": {
+     "type": "string",
+     "description": "id albo fragment treści zadania"
+    },
+    "op": {
+     "type": "string",
+     "enum": [
+      "add",
+      "check",
+      "uncheck",
+      "remove"
+     ]
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 120
+    }
+   },
+   "required": [
+    "task",
+    "op",
+    "text"
+   ]
+  },
+  "required": [
+   "task",
+   "op",
+   "text"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "do {task} dodaj podzadanie {text}",
+   "dodaj podzadanie {text} do {task}",
+   "odhacz {text} w {task}",
+   "usun podzadanie {text} z {task}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "tasks_move_many",
+  "group": "Zadania i czas",
+  "label": "Przenieś wiele zadań",
+  "description": "Przenosi zadania z dnia (from: dziś, jutro, data, overdue = zaległe) na inny dzień (to). only_open (domyślnie true) = tylko niezrobione. Jedno „Cofnij” cofa całość.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "from": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string",
+     "format": "date"
+    },
+    "only_open": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "from",
+    "to"
+   ]
+  },
+  "required": [
+   "from",
+   "to"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "przenies (wszystkie )?dzisiejsze na jutro",
+   "przesun zalegle na dzis",
+   "przeloz niezrobione na poniedzialek"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "tasks_clear_done",
+  "group": "Zadania i czas",
+  "label": "Usuń zrobione",
+  "description": "Usuwa zrobione zadania z zakresu (today, week, all). Zbiorowe usuwanie — wymaga zgody; „Cofnij” przez 10 minut.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "range": {
+     "type": "string",
+     "enum": [
+      "today",
+      "week",
+      "all"
+     ]
+    }
+   },
+   "required": [
+    "range"
+   ]
+  },
+  "required": [
+   "range"
+  ],
+  "risk": "confirm",
+  "level": "A0",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "tasks"
+  ],
+  "hermes": true,
+  "examples": [
+   "usun zrobione zadania",
+   "wyczysc zrobione z tego tygodnia",
+   "posprzataj ukonczone",
+   "usun zrobione zadania z tygodnia"
+  ],
+  "needsConfirmText": true
+ },
+ {
+  "id": "tasks_export_ics",
+  "group": "Zadania i czas",
+  "label": "Eksport do kalendarza",
+  "description": "Zapisuje zadania z zakresu (today, week, month, all) jako plik .ics do pobrania (powtarzanie jako RRULE).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "range": {
+     "type": "string",
+     "enum": [
+      "today",
+      "week",
+      "month",
+      "all"
+     ]
+    }
+   },
+   "required": [
+    "range"
+   ]
+  },
+  "required": [
+   "range"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "(wyeksportuj|eksportuj) zadania do (kalendarza|ics)",
+   "zapisz tydzien jako ics",
+   "eksport zadan na miesiac"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "timer_list",
+  "group": "Zadania i czas",
+  "label": "Lista minutników",
+  "description": "Wszystkie działające minutniki (maks. 5) z czasem do końca.",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "lista minutnikow",
+   "jakie minutniki dzialaja",
+   "pokaz liste minutnikow",
+   "ile zostalo na minutnikach"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "market_watchlist",
+  "group": "Dane",
+  "label": "Lista obserwowanych",
+  "description": "Dodaje (add) lub usuwa (remove) kryptowalutę z listy w Monitorze rynku albo ją zwraca (list). Maks. 12. Tylko podgląd — żadnego handlu.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "add",
+      "remove",
+      "list"
+     ]
+    },
+    "symbol": {
+     "type": "string",
+     "maxLength": 12
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  "required": [
+   "op"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "settings"
+  ],
+  "hermes": true,
+  "examples": [
+   "dodaj {symbol} do obserwowanych",
+   "usun {symbol} z rynku",
+   "jakie kryptowaluty obserwuje",
+   "nie chce widziec {symbol} w rynku"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "market_alerts",
+  "group": "Dane",
+  "label": "Alerty kursów",
+  "description": "Lista alertów kursów (list), usunięcie jednego (remove, alert = symbol albo id) albo wszystkich (clear).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "list",
+      "remove",
+      "clear"
+     ]
+    },
+    "alert": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  "required": [
+   "op"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "alerts"
+  ],
+  "hermes": true,
+  "examples": [
+   "jakie mam alerty kursow",
+   "pokaz alerty kursow",
+   "usun alert na {alert}",
+   "wyczysc alerty kursow",
+   "usun wszystkie powiadomienia o cenach"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "memory_edit",
+  "group": "Pamięć",
+  "label": "Popraw zapamiętany fakt",
+  "description": "Zmienia treść zapamiętanego faktu (fact = id albo fragment, text = nowa treść).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "fact": {
+     "type": "string"
+    },
+    "text": {
+     "type": "string",
+     "maxLength": 300
+    }
+   },
+   "required": [
+    "fact",
+    "text"
+   ]
+  },
+  "required": [
+   "fact",
+   "text"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "memory"
+  ],
+  "hermes": true,
+  "examples": [
+   "popraw w pamieci {fact} na {text}",
+   "zmien fakt o {fact} na {text}",
+   "popraw fakt {fact}: {text}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "files_open",
+  "group": "Pliki",
+  "label": "Pokaż plik",
+  "description": "Otwiera podgląd pliku (tekst, Markdown, JSON, CSV, obraz) w oknie Pliki.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "required": [
+   "path"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [
+   "windows"
+  ],
+  "hermes": true,
+  "examples": [
+   "pokaz plik {path}",
+   "podglad pliku {path}",
+   "pokaz co jest w pliku {path}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "dock_order",
+  "group": "Pulpit i widgety",
+  "label": "Kolejność w doku",
+  "description": "Przesuwa aplikację w doku na pozycję (1 = pierwsza).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "item": {
+     "type": "string",
+     "description": "id aplikacji"
+    },
+    "position": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 30
+    }
+   },
+   "required": [
+    "item",
+    "position"
+   ]
+  },
+  "required": [
+   "item",
+   "position"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "settings"
+  ],
+  "hermes": true,
+  "examples": [
+   "przesun {item} na (poczatek|koniec) doku",
+   "{item} na (pierwsze|drugie|trzecie|ostatnie) miejsce w doku",
+   "daj {item} na drugie miejsce"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "widget_duplicate",
+  "group": "Pulpit i widgety",
+  "label": "Duplikuj widget",
+  "description": "Tworzy kopię widgetu obok oryginału.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string",
+     "description": "id albo tytuł; \"current\" = aktywny"
+    }
+   },
+   "required": [
+    "widget"
+   ]
+  },
+  "required": [
+   "widget"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "zduplikuj widget {widget}",
+   "duplikuj widget {widget}",
+   "zrob kopie widgetu {widget}",
+   "zduplikuj ten widget"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "widget_collapse",
+  "group": "Pulpit i widgety",
+  "label": "Zwiń / rozwiń widget",
+  "description": "Zwija widget do paska tytułu albo rozwija (on). widget=\"all\" — wszystkie.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string"
+    },
+    "on": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "widget"
+   ]
+  },
+  "required": [
+   "widget"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "zwin widget {widget}",
+   "rozwin widget {widget}",
+   "zwin wszystkie widgety",
+   "schowaj zawartosc tego widgetu"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "widget_items",
+  "group": "Pulpit i widgety",
+  "label": "Pozycje listy w widgecie",
+  "description": "Na widgecie-liście: dodaje (add), odhacza (check), odznacza (uncheck), zmienia (rename → to), usuwa (remove) pozycję albo usuwa odhaczone (clear_done).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string"
+    },
+    "op": {
+     "type": "string",
+     "enum": [
+      "add",
+      "check",
+      "uncheck",
+      "rename",
+      "remove",
+      "clear_done"
+     ]
+    },
+    "item": {
+     "type": "string"
+    },
+    "to": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "widget",
+    "op"
+   ]
+  },
+  "required": [
+   "widget",
+   "op"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "dopisz {item} do listy {widget}",
+   "odhacz {item} na liscie {widget}",
+   "usun zrobione z listy {widget}"
   ],
   "needsConfirmText": false
  }

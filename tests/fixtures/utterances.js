@@ -31,7 +31,7 @@ module.exports = [
   ['usuń zadanie trening', 'tasks_remove', { task: 'trening' }],
   ['minutnik 5 minut', 'start_timer', { seconds: 300 }],
   ['ustaw minutnik na 25 min', 'start_timer', { seconds: 1500 }],
-  ['pomodoro', 'start_timer', { seconds: 1500 }],
+  ['pomodoro', 'start_timer', { preset: 'pomodoro' }],
   ['zatrzymaj minutnik', 'timer_control', { action: 'stop' }],
   ['ile zostało czasu', 'timer_control', { action: 'status' }],
   ['przedłuż minutnik o 2 minuty', 'timer_control', { action: 'extend', seconds: 120 }],

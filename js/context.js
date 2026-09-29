@@ -25,6 +25,8 @@ J.memory = {
   },
   async recall(query) { const l = await loadFacts(); if (!query) return l.slice(-30); const q = J.norm(query); const words = q.split(' ').filter(w => w.length > 2); return l.filter(f => { const n = J.norm(f.fact); return n.includes(q) || words.some(w => n.includes(w)); }); },
   async forget(q) { const l = await loadFacts(); const n = J.norm(q); const keep = l.filter(f => f.id !== q && !J.norm(f.fact).includes(n)); const removed = l.length - keep.length; if (removed) { facts = keep; await J.store.set('memory.facts', keep); J.emit('memory'); } return removed; },
+  /* poprawka treści faktu (memory_edit, Ustawienia → Pamięć) */
+  async update(id, text) { const l = await loadFacts(); const f = l.find(x => x.id === id); if (!f) return null; f.fact = String(text).trim().slice(0, 300); f.ts = Date.now(); await J.store.set('memory.facts', l); J.emit('memory'); return f; },
   /* synchroniczny wycinek do pakietu (po pierwszym załadowaniu) */
   snapshot() { return (facts || []).slice(-12).map(f => f.fact); }
 };
@@ -85,20 +87,22 @@ let dueTimer = null;
 const schedule = () => {
   clearTimeout(dueTimer);
   const today = J.today(), now = J.hhmm();
-  const next = J.state.tasks.filter(t => !t.fired && !t.done && t.time && t.date === today && t.time > now).sort((a, b) => a.time.localeCompare(b.time))[0];
+  const next = J.state.tasks.filter(t => !t.fired && !t.done && t.time && t.date === today && alarmOf(t) > now).sort((a, b) => alarmOf(a).localeCompare(alarmOf(b)))[0];
   if (!next) return;
-  const [hh, mm] = next.time.split(':').map(Number); const at = new Date(); at.setHours(hh, mm, 0, 0);
+  const [hh, mm] = alarmOf(next).split(':').map(Number); const at = new Date(); at.setHours(hh, mm, 0, 0);
   dueTimer = setTimeout(check, Math.max(500, at - Date.now() + 200));
 };
+/* godzina przypomnienia: termin minus remind (minuty przed) */
+const alarmOf = t => { if (!t.remind) return t.time; const [h, m] = t.time.split(':').map(Number); const v = Math.max(0, h * 60 + m - t.remind); return J.pad(Math.floor(v / 60)) + ':' + J.pad(v % 60); };
 const check = () => {
   const now = J.hhmm(), today = J.today(), nowMin = +now.slice(0, 2) * 60 + +now.slice(3);
   const overdue = [];
   J.state.tasks.forEach(t => {
-    if (t.fired || t.done || !t.time || t.date !== today || t.time > now) return;
+    if (t.fired || t.done || !t.time || t.date !== today || alarmOf(t) > now) return;
     t.fired = true;
-    const late = nowMin - (+t.time.slice(0, 2) * 60 + +t.time.slice(3));
+    const late = nowMin - (+alarmOf(t).slice(0, 2) * 60 + +alarmOf(t).slice(3));
     if (late > 2) { overdue.push(t); return; }
-    J.sfx.notify(); J.toast('⏰ ' + t.time + ' — ' + t.text, 6000);
+    if (J.notifChannel?.(t.priority === 'high' ? 'agent' : 'task').sound !== false || t.priority === 'high') J.sfx.notify(); J.toast('⏰ ' + t.time + ' — ' + t.text + (t.remind ? ' (za ' + t.remind + ' min)' : ''), 6000);
     J.log('Przypomnienie', t.time + ' — ' + t.text, 'warn');
     J.voice.speak('Przypomnienie: ' + t.text, { priority: 2 });
     J.notify?.('Jarvis — przypomnienie', t.time + ' ' + t.text);
@@ -143,9 +147,10 @@ const build = (opts = {}) => {
       shortcuts: J.state.shortcuts.map(x => x.name),
       focus_mode: !!document.querySelector('#app.focus'), theme: Object.keys(J.THEMES).find(k => J.THEMES[k][0] === s.accent) || s.accent, wallpaper: s.wall,
       timer: J.timer.running ? { label: J.timer.label, left_s: Math.round(J.timer.left() / 1000) } : null,
+      timers: J.timers.all().length > 1 ? J.timers.all().map(t => ({ label: t.label, left_s: Math.round(t.left() / 1000) })) : undefined,
       sound: !!s.sound, speech: !!s.speech, proactive: s.proactive || 'quiet'
     },
-    notes: { count: J.state.notes.length, recent: J.state.notes.slice(0, 10).map(n => ({ id: n.id, title: n.title })) },
+    notes: { count: J.notes.live().length, recent: J.notes.live().slice(0, 10).map(n => ({ id: n.id, title: n.title })) },
     tasks: { today: tasks.filter(t => t.date === today).map(t => ({ id: t.id, time: t.time, text: t.text, done: t.done })), overdue: tasks.filter(t => !t.done && (t.date < today || (t.date === today && t.time && t.time < now))).length, tomorrow: tasks.filter(t => t.date === plus1).length },
     alerts: (J.state.alerts || []).map(a => a.symbol + ' ' + (a.direction === 'above' ? '>' : '<') + ' ' + a.price),
     last_task: J.engine.last ? { title: J.engine.last.title, status: J.engine.last.status, summary: String(J.engine.last.result || '').slice(0, 160) } : null,

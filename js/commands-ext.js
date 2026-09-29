@@ -12,8 +12,9 @@ const { findNote, resolveWin, winName, notOpen, cut } = K;
 /* =================== W1 · NAWIGACJA =================== */
 /* widoki w aplikacjach (docs/spec/03-nawigacja.md §3) */
 const VIEWS = {
-  notes: { note: 'notatka (tytuł albo id)', search: 'wyszukiwanie w notatkach' },
-  schedule: { day: 'dzień (data, jutro, piątek)' },
+  notes: { note: 'notatka (tytuł albo id)', search: 'wyszukiwanie w notatkach', trash: 'kosz', tag: 'notatki z tagiem', folder: 'notatki z folderu' },
+  schedule: { day: 'dzień (data, jutro, piątek)', week: 'tydzień', overdue: 'zaległe' },
+  files: { path: 'plik albo folder (ścieżka)' },
   timer: { timer: 'minutnik', stopwatch: 'stoper' },
   market: { coin: 'waluta (BTC, ETH, SOL, BNB)' },
   weather: { city: 'miasto' },
@@ -26,8 +27,8 @@ const VIEWS = {
 };
 const COIN = { bitcoin: 'BTC', btc: 'BTC', ethereum: 'ETH', eth: 'ETH', eter: 'ETH', solana: 'SOL', solane: 'SOL', solany: 'SOL', sol: 'SOL', bnb: 'BNB', binance: 'BNB' };
 const coinOf = t => { const n = norm(t); return COIN[n] || Object.entries(COIN).find(([k]) => new RegExp('\\b' + k).test(n))?.[1] || (/^[a-z]{2,6}$/.test(n) ? n.toUpperCase() : null); };
-const DEFAULT_VIEW = { notes: 'note', schedule: 'day', timer: 'timer', market: 'coin', weather: 'city', settings: 'section', terminal: 'run', calc: 'expr', library: 'apps', monitor: 'section' };
-R.add({ id: 'app_view', group: 'Nawigacja', label: 'Przejdź do widoku w aplikacji', description: 'Otwiera aplikację na konkretnym widoku: notes note|search, schedule day, timer timer|stopwatch, market coin, weather city, settings section, terminal run (tylko wpisuje), calc expr, library apps|shortcuts, monitor section. Nawigacja — niczego nie zmienia.', idempotent: true, writes: ['windows'],
+const DEFAULT_VIEW = { files: 'path', notes: 'note', schedule: 'day', timer: 'timer', market: 'coin', weather: 'city', settings: 'section', terminal: 'run', calc: 'expr', library: 'apps', monitor: 'section' };
+R.add({ id: 'app_view', group: 'Nawigacja', label: 'Przejdź do widoku w aplikacji', description: 'Otwiera aplikację na konkretnym widoku: notes note|search|trash|tag|folder, schedule day|week|overdue, files path, timer timer|stopwatch, market coin, weather city, settings section, terminal run (tylko wpisuje), calc expr, library apps|shortcuts, monitor section. Nawigacja — niczego nie zmienia.', idempotent: true, writes: ['windows'],
   args: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS }, view: { type: 'string' }, target: { type: 'string' } }, required: ['app'] },
   examples: ['pokaz stoper', 'pokaz zakladke stoper [w minutniku]', 'otworz minutnik na stoperze', 'pokaz {target} w rynku', 'otworz terminal z {target}', 'otworz kalkulator z {target}', 'pokaz skroty w bibliotece'],
   parse(raw, n) {
@@ -38,6 +39,10 @@ R.add({ id: 'app_view', group: 'Nawigacja', label: 'Przejdź do widoku w aplikac
     if ((m = /^otworz terminal z\s+(.+)$/.exec(n))) return { args: { app: 'terminal', view: 'run', target: raw.slice(n.indexOf(m[1])) }, score: 40 };
     if ((m = /^otworz kalkulator z\s+(.+)$/.exec(n))) return { args: { app: 'calc', view: 'expr', target: raw.slice(n.indexOf(m[1])) }, score: 40 };
     if (/^pokaz skroty( w bibliotece)?$/.test(n)) return { args: { app: 'library', view: 'shortcuts' }, score: 30 };
+    if (/^pokaz (caly )?tydzien( w harmonogramie)?$|^harmonogram na (ten )?tydzien$/.test(n)) return { args: { app: 'schedule', view: 'week' }, score: 35 };
+    if (/^pokaz (zalegle|zaległe)( zadania)?$|^co mam zalegle$/.test(n)) return { args: { app: 'schedule', view: 'overdue' }, score: 35 };
+    if ((m = /^pokaz notatki z tagiem\s+#?(\S+)$/.exec(n))) return { args: { app: 'notes', view: 'tag', target: m[1] }, score: 35 };
+    if ((m = /^pokaz notatki z folderu\s+(.+)$/.exec(n))) return { args: { app: 'notes', view: 'folder', target: raw.slice(n.lastIndexOf(m[1])) }, score: 35 };
     return null;
   },
   async run({ app, view, target }) {
@@ -45,7 +50,7 @@ R.add({ id: 'app_view', group: 'Nawigacja', label: 'Przejdź do widoku w aplikac
     if (view && !views[view]) return fail('INVALID_ARGS', winName(app) + ' nie ma widoku „' + view + '”.' + (Object.keys(views).length ? ' Są: ' + Object.entries(views).map(([k, v]) => k + ' (' + v + ')').join(', ') + '.' : ''));
     let t = target, label = target;
     if (app === 'notes' && view === 'note' && target) { const f = await findNote(target); if (f.err) return f.err; t = f.note.id; label = f.note.title; }
-    if (app === 'schedule' && target) { t = J.nlp.date(target) || J.nlp.date('w ' + target) || J.nlp.date('za ' + target); if (!t) return fail('INVALID_ARGS', 'Nie rozumiem dnia „' + target + '”.'); label = new Date(t + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }); }
+    if (app === 'schedule' && target && view === 'day') { t = J.nlp.date(target) || J.nlp.date('w ' + target) || J.nlp.date('za ' + target); if (!t) return fail('INVALID_ARGS', 'Nie rozumiem dnia „' + target + '”.'); label = new Date(t + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }); }
     if (app === 'market' && target) { t = coinOf(target); if (!t || !J.market.COINS.some(c => c.sym === t)) return fail('NOT_FOUND', 'Monitor rynku nie ma waluty „' + target + '”. Są: ' + J.market.COINS.map(c => c.sym).join(', ') + '.'); }
     if (app === 'settings' && target) { const sec = R.aliases.section?.find(([id, re]) => id === norm(target) || re.test(norm(target)))?.[0]; if (!sec) return fail('NOT_FOUND', 'Nie ma sekcji ustawień „' + target + '”.'); t = sec; }
     J.wm.open(app, view ? { view, target: t } : undefined); J.emit('app-view');
@@ -103,7 +108,7 @@ const findShortcut = q => { const n = norm(q); return J.state.shortcuts.find(x =
 R.add({ id: 'shortcut_edit', group: 'Pulpit i widgety', label: 'Edytuj skrót', description: 'Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie.', writes: ['shortcuts'],
   args: { type: 'object', properties: { shortcut: { type: 'string', description: 'id albo nazwa skrótu' }, name: { type: 'string', maxLength: 40 }, url: { type: 'string' }, app: { type: 'string', enum: APP_IDS }, icon: { type: 'string' } }, required: ['shortcut'] },
   examples: ['zmien nazwe skrotu {shortcut} na {name}', 'skrot {shortcut} ma sie nazywac {name}', 'zmien adres skrotu {shortcut} na {url}'],
-  parse(raw, n) { let m; if ((m = /^(?:zmien nazwe skrotu|przemianuj skrot)\s+(.+?)\s+na\s+(.+)$/.exec(n)) || (m = /^skrot\s+(.+?)\s+ma sie nazywac\s+(.+)$/.exec(n))) return { args: { shortcut: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length), name: raw.slice(n.lastIndexOf(m[2])) }, score: 30 }; if ((m = /^(?:zmien adres skrotu|skrot)\s+(.+?)\s+(?:na|niech otwiera)\s+([a-z0-9.-]+\.[a-z]{2,}\S*)$/.exec(n))) return { args: { shortcut: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length), url: m[2] }, score: 30 }; return null; },
+  parse(raw, n) { let m; if ((m = /^(?:zmien nazwe skrotu|przemianuj skrot)\s+(.+?)\s+na\s+(.+)$/.exec(n)) || (m = /^skrot\s+(.+?)\s+ma sie nazywac\s+(.+)$/.exec(n))) return { args: { shortcut: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length), name: raw.slice(n.lastIndexOf(m[2])) }, score: 30 }; if ((m = /^(?:zmien adres skrotu|skrot)\s+(.+?)\s+(?:na|niech otwiera)\s+([a-z0-9.-]+\.[a-z]{2,}\S*)$/.exec(n))) return { args: { shortcut: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length), url: m[2] }, score: 30 }; if ((m = /^zmien adres skrotu\s+(\S+)$/.exec(n))) return { args: { shortcut: raw.slice(n.indexOf(m[1])) }, score: 25 }; return null; },
   run({ shortcut, name, url, app, icon }) {
     const s = findShortcut(shortcut); if (!s) return fail('NOT_FOUND', 'Nie ma skrótu „' + shortcut + '”.' + (J.state.shortcuts.length ? ' Są: ' + J.state.shortcuts.map(x => '„' + x.name + '”').join(', ') + '.' : ''));
     const prev = { ...s };
@@ -167,7 +172,7 @@ R.add({ id: 'layout_list', group: 'Aplikacje i okna', label: 'Lista układów', 
   run() { const saved = Object.entries(J.state.layouts || {}).map(([name, l]) => ({ name, apps: l.apps.map(a => a.id), preset: false })), pre = J.layouts.presets().map(name => ({ name, preset: true })); return ok({ layouts: [...pre, ...saved], startup: J.state.settings.layoutStartup || 'none' }, 'Presety: ' + pre.map(x => x.name).join(', ') + '. ' + (saved.length ? 'Zapisane: ' + saved.map(x => x.name + ' (' + x.apps.map(K.winName).join(', ') + ')').join('; ') + '.' : 'Brak zapisanych układów.') + ' Układ startowy: ' + (J.state.settings.layoutStartup || 'none') + '.'); } });
 R.add({ id: 'layout_remove', group: 'Aplikacje i okna', label: 'Usuń układ', description: 'Usuwa zapisany układ okien (presetów nie można usunąć). Wymaga potwierdzenia.', risk: 'confirm', writes: ['layouts'], confirmText: a => 'Usunąć układ „' + a.name + '”?',
   args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-  examples: ['usun uklad {name}', 'skasuj uklad {name}', 'wywal uklad {name}'],
+  examples: ['usun uklad {name}', 'skasuj uklad {name}', 'wywal uklad {name}', 'usun zapisany uklad {name}'],
   run({ name }) { if (J.layouts.isPreset(name)) return fail('DENIED', '„' + name + '” to preset — nie da się go usunąć.'); const k = findLayout(name); if (!k) return fail('NOT_FOUND', 'Nie ma układu „' + name + '”.'); const l = J.state.layouts[k]; delete J.state.layouts[k]; if (J.state.settings.layoutStartup === k) J.state.settings.layoutStartup = 'none'; J.save(); return ok({ name: k }, 'Usunąłem układ „' + k + '”.', null, () => { J.state.layouts[k] = l; J.save(); }); } });
 R.add({ id: 'layout_rename', group: 'Aplikacje i okna', label: 'Zmień nazwę układu', description: 'Zmienia nazwę zapisanego układu okien.', writes: ['layouts'],
   args: { type: 'object', properties: { name: { type: 'string' }, to: { type: 'string', maxLength: 40 } }, required: ['name', 'to'] },

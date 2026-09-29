@@ -103,19 +103,6 @@ Treść notatek **nigdy** nie idzie do Jeva (tylko tytuły na P2). Do Hermesa id
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `notes_tag` | Tagi notatki | A2 | poprzednie tagi | W3 |
-| `notes_pin` | Przypnij notatkę | A2 | odwrotny stan | W3 |
-| `notes_duplicate` | Duplikuj notatkę | A2 | usuń kopię | W3 |
-| `notes_trash` | Kosz notatek | A3 | — | W3 |
-| `notes_restore` | Przywróć notatkę z kosza | A2 | z powrotem do kosza | W3 |
-| `notes_empty_trash` | Opróżnij kosz | A0 | — | W3 |
-| `notes_versions` | Wersje notatki | A3 | — | W3 |
-| `notes_revert` | Przywróć wersję notatki | A2 | wersja sprzed przywrócenia | W3 |
-| `notes_to_task` | Zadanie z notatki | A2 | usuń zadanie | W3 |
-| `notes_folder` | Folder notatki | A2 | poprzedni folder | W3 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

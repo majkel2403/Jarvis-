@@ -89,7 +89,7 @@ test('cofanie: polecenia odwracalne przywracają poprzedni stan', async () => {
     assert.notEqual(snap(), before, id + ' nic nie zmieniło?'); const u = await J.undo.run(); assert.equal(u.ok, true, id); assert.equal(snap(), before, id + ' — cofnięcie nie przywróciło stanu');
   }
   // minutnik: start zastępujący działający + przedłużenie + stop
-  J.timer.start(600, 'Pierwszy'); await run('start_timer', { seconds: 60, label: 'Drugi', show: false }); assert.equal(J.timer.label, 'Drugi'); await J.undo.run(); assert.equal(J.timer.label, 'Pierwszy'); assert.ok(J.timer.left() > 500e3);
+  J.timer.start(600, 'Pierwszy'); await run('start_timer', { seconds: 60, label: 'Drugi', show: false }); assert.deepEqual([...J.timers.all().map(t => t.label)], ['Pierwszy', 'Drugi'], 'drugi minutnik obok pierwszego'); await J.undo.run(); assert.deepEqual([...J.timers.all().map(t => t.label)], ['Pierwszy']); assert.equal(J.timer.label, 'Pierwszy'); assert.ok(J.timer.left() > 500e3);
   await run('timer_control', { action: 'extend', seconds: 120 }); const ext = J.timer.left(); await J.undo.run(); assert.ok(ext - J.timer.left() > 110e3);
   await run('timer_control', { action: 'stop' }); assert.equal(J.timer.running, false); await J.undo.run(); assert.equal(J.timer.running, true); J.timer.stop();
   // pamięć: nowy fakt da się cofnąć, istniejący nie jest usuwany przez cofnięcie duplikatu

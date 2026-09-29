@@ -96,8 +96,8 @@ test('cofanie: kilka naraz, wszystko z ostatnich minut, kolizja z późniejszą 
 test('usuwanie ma „Cofnij”: notatka (to samo miejsce), zadanie, skrót, widget, fakt w pamięci', async () => {
   const J = mk();
   J.notes.add('A', ''); J.notes.add('B', ''); J.notes.add('C', ''); const order = J.state.notes.map(n => n.title).join();
-  const before = J.state.notes.length; await run(J, 'notes_delete', { note: 'B' }); assert.equal(J.state.notes.length, before - 1);
-  await J.undo.run(); assert.equal(J.state.notes.map(n => n.title).join(), order);
+  const before = J.notes.live().length; await run(J, 'notes_delete', { note: 'B' }); assert.equal(J.notes.live().length, before - 1);
+  await J.undo.run(); assert.equal(J.notes.live().map(n => n.title).join(), order);
   await run(J, 'add_task', { text: 'trening', time: '18:00' }); await run(J, 'tasks_remove', { task: 'trening' }); assert.equal(J.state.tasks.length, 0); await J.undo.run(); assert.equal(J.state.tasks[0].text, 'trening');
   J.shortcuts.add('GitHub', { url: 'https://github.com' }); await run(J, 'shortcut_remove', { name: 'github' }); assert.equal(J.state.shortcuts.length, 0); await J.undo.run(); assert.equal(J.state.shortcuts[0].name, 'GitHub');
   const w = J.widgets.create('list', { title: 'Lista', items: ['x'] }); await run(J, 'widgets_remove', { widget: 'Lista' }); assert.equal(J.widgets.list.length, 0);

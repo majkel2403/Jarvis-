@@ -62,6 +62,7 @@ J.widgets = {
           if (!w._silent && J.undo) { const e = J.undo.push({ id: 'widgets_remove', label: 'Usuń widget', text: 'Usunięto widget „' + w.title + '”', undo: () => J.widgets.restoreOne(copy, pos), source: 'ui' }); J.undo.offer(e); }
         });
         mounts[w.type](body, w);
+        J.widgets.applyCollapse(w);
       }
     };
     J.widgets.list.push(w);
@@ -92,6 +93,25 @@ J.widgets = {
   remove(id, opts = {}) { const key = 'w:' + id; const w0 = J.widgets.list.find(x => x.id === id); if (w0 && opts.silent) w0._silent = true; if (J.wm.isOpen(key)) J.wm.close(key); else { J.widgets.list = J.widgets.list.filter(x => x.id !== id); J.state.widgets = J.state.widgets.filter(x => x.id !== id); delete J.apps[key]; J.save(); } },
   /* odśwież zawartość po zmianie danych (np. przez narzędzie) */
   refresh(id) { const key = 'w:' + id, w = J.widgets.list.find(x => x.id === id), ctx = J.wm.ctx(key); if (w && ctx) { ctx.body.innerHTML = ''; mounts[w.type](ctx.body, w); ctx.setTitle(w.title); } },
+  /* kopia obok oryginału (widget_duplicate) */
+  duplicate(id) {
+    const s = J.widgets.list.find(x => x.id === id); if (!s) return null;
+    const c = { id: J.uid(), type: s.type, title: String(s.title + ' (kopia)').slice(0, 60), data: JSON.parse(JSON.stringify(s.data)) };
+    const p = J.state.winPos['w:' + s.id]; if (p) J.state.winPos['w:' + c.id] = { ...p, x: (p.x || 0) + 24, y: (p.y || 0) + 24 };
+    J.state.widgets.push(c); J.save(); const key = J.widgets.register(c); J.wm.open(key); return c;
+  },
+  /* zwinięcie do paska tytułu (stan zapisany w widgecie, odtwarzany po starcie) */
+  collapse(id, on = true) {
+    const w = J.widgets.list.find(x => x.id === id); if (!w) return false;
+    w.collapsed = !!on; const st = J.state.widgets.find(x => x.id === id); if (st && st !== w) st.collapsed = w.collapsed; J.save();
+    J.widgets.applyCollapse(w); return true;
+  },
+  applyCollapse(w) {
+    const el = J.wm.ctx('w:' + w.id)?.el; if (!el) return;
+    el.classList.toggle('collapsed', !!w.collapsed);
+    if (w.collapsed) { if (!el.dataset.fullH) el.dataset.fullH = el.style.height || ''; el.style.height = 'auto'; }
+    else if (el.dataset.fullH != null) { el.style.height = el.dataset.fullH; delete el.dataset.fullH; }
+  },
   menu(x, y) { return J.widgets._menu?.(x, y); }
 };
 })();

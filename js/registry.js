@@ -22,6 +22,18 @@ const WORDNUM = { zero: 0, jeden: 1, jedna: 1, jedno: 1, dwa: 2, dwie: 2, trzy: 
 const numIn = s => { const m = /(\d+(?:[.,]\d+)?)/.exec(s); if (m) return parseFloat(m[1].replace(',', '.')); const w = Object.keys(WORDNUM).find(k => new RegExp('\\b' + k + '\\b').test(s)); return w != null ? WORDNUM[w] : null; };
 J.nlp = {
   norm, numIn,
+  /* „codziennie”, „w dni robocze”, „w poniedziałki i czwartki”, „co tydzień”, „co miesiąc”, „co 3 dni” → reguła powtarzania albo null */
+  repeat(text) {
+    const n = norm(text), D = { poniedzialki: 'pn', poniedzialek: 'pn', wtorki: 'wt', wtorek: 'wt', srody: 'sr', sroda: 'sr', czwartki: 'cz', czwartek: 'cz', piatki: 'pt', piatek: 'pt', soboty: 'so', sobota: 'so', niedziele: 'nd', niedziela: 'nd' };
+    if (/\b(codziennie|kazdego dnia|co dzien)\b/.test(n)) return { rule: 'daily' };
+    if (/\b(w dni robocze|w dni powszednie|od poniedzialku do piatku)\b/.test(n)) return { rule: 'weekdays' };
+    let m = /\bco (\d+|dwa|trzy|cztery|piec|szesc|siedem|osiem|dziewiec|dziesiec) dni\b/.exec(n); if (m) return { rule: 'every_n_days', n: +m[1] || numIn(m[1]) };
+    if (/\b(co miesiac|kazdego miesiaca|raz w miesiacu)\b/.test(n)) return { rule: 'monthly' };
+    const days = [...n.matchAll(/\b(poniedzialki|wtorki|srody|czwartki|piatki|soboty|niedziele)\b/g)].map(x => D[x[1]]);
+    if (days.length) return { rule: 'weekly', days: [...new Set(days)] };
+    if (/\b(co tydzien|kazdego tygodnia|raz w tygodniu)\b/.test(n)) return { rule: 'weekly' };
+    return null;
+  },
   /* „18:30”, „18.30”, „o 18”, „o osiemnastej” → HH:MM albo null */
   time(text) {
     const n = norm(text);

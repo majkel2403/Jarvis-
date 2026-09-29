@@ -28,7 +28,7 @@ const boot = () => new Promise(resolve => {
   const lines = [
     'BIOS v2.0.26 · weryfikacja rdzenia…', 'ładowanie jądra neuronowego  <span class="ok">[OK]</span>', 'montowanie warstwy pulpitu  <span class="ok">[OK]</span>',
     'kalibracja reaktora łukowego… 3.2 GJ/s', 'moduł mowy pl-PL  <span class="ok">[OK]</span>', 'synchronizacja: pogoda · rynek · harmonogram',
-    'przywracanie pamięci użytkownika (' + J.state.notes.length + ' notatek, ' + J.state.tasks.length + ' zadań)', 'uruchamianie interfejsu holograficznego…', 'wszystkie systemy online  <span class="ok">✓</span>'
+    'przywracanie pamięci użytkownika (' + J.notes.live().length + ' notatek, ' + J.state.tasks.length + ' zadań)', 'uruchamianie interfejsu holograficznego…', 'wszystkie systemy online  <span class="ok">✓</span>'
   ];
   const log = $('#bootLog'), bar = $('#bootBar');
   let i = 0; let done = false;
@@ -370,7 +370,7 @@ const renderIcons = () => {
 };
 J.on('shortcuts', renderIcons);
 
-const PINNED = ['chat', 'notes', 'market', 'schedule', 'monitor'];
+const PINNED = J.DOCK_DEFAULT = ['chat', 'notes', 'market', 'schedule', 'monitor'];
 const LABEL = { chat: 'Czat', notes: 'Notatnik', market: 'Tokeny', schedule: 'Harmonogram', weather: 'Pogoda', terminal: 'Terminal', monitor: 'Wynik', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Menu' };
 const renderDock = () => {
   const d = $('#dock'); d.innerHTML = '';
@@ -384,8 +384,9 @@ const renderDock = () => {
   };
   const lib = h('button', { class: 'plain', title: 'Wszystkie aplikacje' }, icon('grid')); lib.onclick = () => J.wm.toggle('library'); d.appendChild(lib);
   d.appendChild(h('span', { class: 'sep' }));
-  PINNED.forEach(id => d.appendChild(btn(id)));
-  const extra = J.wm.list().filter(id => !PINNED.includes(id) && id !== 'library');
+  const order = (J.state.settings.dockOrder || []).filter(id => J.apps[id] && !J.apps[id].widget), pinned = order.length ? order : PINNED;
+  pinned.forEach(id => d.appendChild(btn(id)));
+  const extra = J.wm.list().filter(id => !pinned.includes(id) && id !== 'library');
   extra.forEach(id => d.appendChild(btn(id)));
   d.appendChild(h('span', { class: 'sep' }));
   const w = h('button', { class: 'plain', title: 'Nowy widget na pulpicie' }, icon('plus')); w.onclick = () => { const r = w.getBoundingClientRect(); widgetMenu(r.left, r.top - 130); }; d.appendChild(w);
@@ -427,7 +428,7 @@ const palette = (() => {
     { g: 'Akcje', ic: 'code', t: 'Matrix', run: () => J.matrix() },
     ...J.registry.list(c => c.palette !== false && !['open_app'].includes(c.id) && !(c.args.required || []).length).map(c => ({ g: c.group, ic: c.id.startsWith('notes') ? 'notes' : c.id.startsWith('tasks') || c.id === 'add_task' ? 'calendar' : c.id.startsWith('wm') || c.id.startsWith('layout') ? 'max' : c.id.startsWith('memory') ? 'star' : c.id.startsWith('files') ? 'folder' : c.id.includes('weather') ? 'weather' : c.id.includes('crypto') || c.id.includes('market') ? 'market' : 'bolt', t: c.label, k: c.examples.join(' '), run: () => J.registry.run(c.id, {}, { source: 'ui' }).then(r => J.toast(r.text)) })),
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
-    ...J.state.notes.slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
+    ...J.notes.live().slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
   ];
   const TYPE_G = { apps: ['Aplikacje', null], notes: ['Notatki', 'notes'], tasks: ['Zadania', 'calendar'], widgets: ['Widgety', 'list'], shortcuts: ['Skróty', 'link'], settings: ['Ustawienia', 'settings'], commands: ['Polecenia', 'bolt'], memory: ['Pamięć', 'brain'], chat: ['Rozmowy', 'chat'], files: ['Pliki', 'doc'] };
   const hitItem = hit => ({ g: TYPE_G[hit.type][0], ic: TYPE_G[hit.type][1] || J.apps[hit.id]?.icon || 'star', t: hit.title, s: hit.sub, key: hit.type + ':' + hit.id, open: hit.open, run: () => J.search.open(hit) });
@@ -521,6 +522,7 @@ const winMenu = (id, x, y) => {
     ...[['S', 'Rozmiar: mały'], ['M', 'Rozmiar: średni'], ['L', 'Rozmiar: duży'], ['half', 'Pół ekranu']].map(size),
     ...[['left', 'Przyciągnij w lewo'], ['right', 'Przyciągnij w prawo'], ['center', 'Wyśrodkuj']].map(([m, t]) => ({ ic: 'grid', t, run: () => J.uiRun('wm_arrange', { mode: m, app: id }) })),
     ...(isW ? [] : [{ ic: 'link', t: 'Kopiuj link do tego widoku', run: () => { const st = J.apps[id]?.state?.(J.wm.ctx(id)); const url = location.origin + location.pathname + '#go=' + [id, st?.view, st?.target].filter(Boolean).map(encodeURIComponent).join('/'); navigator.clipboard?.writeText(url).then(() => J.toast('Skopiowano link'), () => J.toast(url)); } }]),
+    ...(isW ? (() => { const w = J.widgets.list.find(x => 'w:' + x.id === id); return w ? [{ ic: 'min', t: w.collapsed ? 'Rozwiń widget' : 'Zwiń widget', run: () => J.uiRun('widget_collapse', { widget: w.id, on: !w.collapsed }) }, { ic: 'plus', t: 'Duplikuj widget', run: () => J.uiRun('widget_duplicate', { widget: w.id }) }] : []; })() : []),
     { ic: 'save', t: 'Zapisz układ…', run: () => { const n = prompt('Nazwa układu:'); if (n && n.trim()) J.uiRun('layout_save', { name: n.trim() }); } },
     '-',
     ...(isW ? [] : [{ ic: 'close', t: 'Zamknij pozostałe', run: () => J.uiRun('wm_close_others', { app: id }) }]),

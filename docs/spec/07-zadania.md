@@ -87,17 +87,6 @@ Pełna tabela: [02-obiekty-akcje.md](02-obiekty-akcje.md) §4. Uwaga 🟡: dziś
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `add_task` (rozszerzenie) | Dodaj zadanie (rozszerzenie: priorytet, powtarzanie, przypomnienie przed) | A2 | usuń zadanie | W3 |
-| `tasks_update` (rozszerzenie) | Zmień zadanie (rozszerzenie: przypomnienie, seria) | A2 | poprzednie wartości | W3 |
-| `tasks_repeat` | Powtarzanie zadania | A2 | poprzednia reguła | W3 |
-| `tasks_priority` | Priorytet zadania | A2 | poprzedni priorytet | W3 |
-| `tasks_subtask` | Podzadania | A2 | poprzednie podzadania | W3 |
-| `tasks_move_many` | Przenieś wiele zadań | A1 | poprzednie daty wszystkich | W3 |
-| `tasks_clear_done` | Usuń zrobione | A0 | przywróć usunięte (10 min) | W3 |
-| `tasks_export_ics` | Eksport do kalendarza | A1 | — | W3 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

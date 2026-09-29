@@ -83,7 +83,7 @@ test('L1: odczyt schowka wybrany TYLKO przez Jeva wymaga zgody (i bez zgody nie 
 test('nieodwracalne: wpisane ręcznie + zgodny parser → jak dotąd bez pytania; głosem → pytanie', async () => {
   const { J, st, say } = await setup([{ re: /usun notatke/, intent: 'notes_delete', conf: .95 }]);
   J.notes.add('Alfa', 'x'); J.notes.add('Beta', 'y');
-  await say('usuń notatkę Alfa'); assert.equal(st.confirmed.length, 0); assert.ok(!J.state.notes.some(n => n.title === 'Alfa'));
+  await say('usuń notatkę Alfa'); assert.equal(st.confirmed.length, 0); assert.ok(!J.notes.live().some(n => n.title === 'Alfa'));
   st.confirms.push('no'); const r = await say('usuń notatkę Beta', { voice: true, source: 'voice' });
   assert.equal(st.confirmed.length, 1); assert.match(r, /odmówił/); assert.ok(J.state.notes.some(n => n.title === 'Beta'));
 });
@@ -91,7 +91,7 @@ test('D4 „to/tu”: „usuń tę notatkę” podstawia aktywną notatkę i pyt
   const { J, st, say } = await setup([{ re: /te notatke/, intent: 'notes_delete', conf: .95, current: .92 }]);
   const n = J.notes.add('Zakupy', 'mleko'); J.wm.open('notes', n.id);
   st.confirms.push('yes'); await say('usuń tę notatkę');
-  assert.match(st.confirmed[0], /Zakupy/, 'pytanie pokazuje tytuł, nie id'); assert.ok(!J.state.notes.some(x => x.id === n.id));
+  assert.match(st.confirmed[0], /Zakupy/, 'pytanie pokazuje tytuł, nie id'); assert.ok(!J.notes.live().some(x => x.id === n.id));
 });
 test('niejednoznaczny cel → chipy z kandydatami zamiast błędu AMBIGUOUS', async () => {
   const { J, st, say } = await setup([{ re: /dopisz/, intent: 'notes_append', conf: .95 }]);

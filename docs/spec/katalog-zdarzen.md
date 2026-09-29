@@ -35,8 +35,9 @@
 | ui | `judge` | judge.js |
 | ui | `market` | apps.js |
 | ui | `market-alert` | context.js |
+| ui | `market-list` | apps.js |
 | ui | `memory` | context.js |
-| ui | `notes` | apps.js, commands.js |
+| ui | `notes` | apps.js, commands-data.js, commands.js |
 | ui | `plan` | events.js |
 | ui | `proc-end` | process.js |
 | ui | `settings` | apps.js, commands-ext.js, commands.js, core.js, main.js |
@@ -44,7 +45,7 @@
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |
 | ui | `task-overdue` | context.js |
-| ui | `tasks` | apps.js, commands.js |
+| ui | `tasks` | apps.js, commands-data.js, commands.js |
 | ui | `thread` | apps.js, commands-ext.js |
 | ui | `timer` | apps.js, commands.js |
 | ui | `timer-ended` | apps.js |
@@ -55,5 +56,5 @@
 | ui | `voice` | core.js |
 | ui | `voice-command` | core.js |
 | ui | `weather` | apps.js |
-| ui | `wm` | core.js, main.js |
+| ui | `wm` | commands-data.js, core.js, main.js |
 | ui | `wm-resize` | core.js |

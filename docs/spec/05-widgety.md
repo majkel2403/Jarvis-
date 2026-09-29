@@ -142,9 +142,6 @@ Pełna tabela: [02-obiekty-akcje.md](02-obiekty-akcje.md) §2. Nowe polecenia: `
 | `widget_build` | Zbuduj widget z opisu | A2 | usuń widget | W4 |
 | `widget_edit` | Zmień widget zdaniem | A2 | poprzedni opis | W4 |
 | `widget_refresh` | Odśwież widget | A3 | — | W4 |
-| `widget_duplicate` | Duplikuj widget | A2 | usuń kopię | W3 |
-| `widget_collapse` | Zwiń / rozwiń widget | A3 | odwrotny stan | W3 |
-| `widget_items` | Pozycje listy w widgecie | A2 | poprzednia lista | W3 |
 
 Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
 

@@ -121,16 +121,6 @@ Aplikacja:
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `timer_list` | Lista minutników | A3 | — | W3 |
-| `start_timer` (rozszerzenie) | Minutnik (rozszerzenie: kilka naraz, pomodoro) | A2 | zatrzymaj ten minutnik | W3 |
-| `market_watchlist` | Lista obserwowanych | A2 | odwrotna operacja | W3 |
-| `market_alerts` | Alerty kursów | A2 | przywróć alert | W3 |
-| `memory_edit` | Popraw zapamiętany fakt | A2 | poprzednia treść | W3 |
-| `files_open` | Pokaż plik | A3 | — | W3 |
-| `dock_order` | Kolejność w doku | A2 | poprzednia kolejność | W3 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

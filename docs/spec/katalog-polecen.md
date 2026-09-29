@@ -2,32 +2,32 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **87** · odwracalnych: 40 · wymagających zgody (ryzyko ≠ safe): 14 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **112** · odwracalnych: 59 · wymagających zgody (ryzyko ≠ safe): 16 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 46 |
-| A2 sam + Cofnij | 23 |
-| A1 pyta „Chodzi o…?” | 6 |
-| A0 zawsze zgoda | 12 |
+| A3 sam, po cichu | 51 |
+| A2 sam + Cofnij | 40 |
+| A1 pyta „Chodzi o…?” | 7 |
+| A0 zawsze zgoda | 14 |
 
 ## Aplikacje i okna
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
-| `open_app` | Otwórz aplikację — Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda,  | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library | safe | A3 | — | „otworz {app}”, „uruchom {app}”, „pokaz {app}” |
-| `close_app` | Zamknij okno — Zamyka okno aplikacji (da się cofnąć: wm_reopen). app="all" zamyka wszystkie okna (wymaga potwierdzenia). | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|all\|… | confirm | A3 (zależy od arg.) | tak | „zamknij {app}”, „wylacz {app}”, „zamknij (wszystko\|wszystkie okna\|okna)” |
+| `open_app` | Otwórz aplikację — Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda,  | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files | safe | A3 | — | „otworz {app}”, „uruchom {app}”, „pokaz {app}” |
+| `close_app` | Zamknij okno — Zamyka okno aplikacji (da się cofnąć: wm_reopen). app="all" zamyka wszystkie okna (wymaga potwierdzenia). | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | confirm | A3 (zależy od arg.) | tak | „zamknij {app}”, „wylacz {app}”, „zamknij (wszystko\|wszystkie okna\|okna)” |
 | `wm_list` | Lista okien — Zwraca otwarte okna z pozycją, rozmiarem, stanem i tym, które jest aktywne. | — | safe | A3 | — | „jakie okna sa otwarte”, „lista okien”, „co jest otwarte” |
-| `wm_focus` | Aktywuj okno — Przenosi okno na wierzch (przywraca, jeśli zminimalizowane). app="next" = następne okno. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|next | safe | A3 | — | „przelacz na {app}”, „aktywuj {app}”, „nastepne okno” |
-| `wm_minimize` | Minimalizuj — Minimalizuje okno do doku. app="all" pokazuje pulpit. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|all\|… | safe | A3 | — | „zminimalizuj {app}”, „schowaj {app}”, „pokaz pulpit” |
+| `wm_focus` | Aktywuj okno — Przenosi okno na wierzch (przywraca, jeśli zminimalizowane). app="next" = następne okno. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | safe | A3 | — | „przelacz na {app}”, „aktywuj {app}”, „nastepne okno” |
+| `wm_minimize` | Minimalizuj — Minimalizuje okno do doku. app="all" pokazuje pulpit. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | safe | A3 | — | „zminimalizuj {app}”, „schowaj {app}”, „pokaz pulpit” |
 | `wm_arrange` | Ułóż okna — Układa okna: tile (kafelki z otwartych okien), left/right/top/bottom (przyciąga aktywne okno do krawędzi), max (maksymalizuje), center; layout=nazwa zapisanego  | **mode**: tile\|left\|right\|top\|bottom\|max\|center\|layout\|split; layout: string; app: string; apps: string[] | safe | A3 | tak | „uloz okna”, „rozmiesc okna”, „kafelkuj okna” |
 | `wm_move` | Przesuń / zmień rozmiar okna — Przesuwa okno lub widget (app: id aplikacji, w:<id> widgetu, "current"): x,y w pikselach albo direction (left/right/up/down) + amount (small/medium/large); zmie | **app**: string; x: number; y: number; w: number; h: number; direction: left\|right\|up\|down; amount: small\|medium\|large; size: S\|M\|L\|XL\|half\|third\|quarter\|bigger\|smaller | safe | A2 | tak | „przesun {app} (troche\|bardziej\|mocno)? w (lewo\|prawo\|gore\|dol)”, „(powieksz\|zmniejsz) {app}”, „zrob {app} (maly\|maly\|sredni\|duzy\|wiekszy\|mniejszy)” |
 | `nav_back` | Wróć do poprzedniego okna — Wraca do poprzednio aktywnego okna (historia nawigacji); otwiera je, jeśli zostało zamknięte. | — | safe | A3 | — | „wroc”, „cofnij okno”, „wroc do poprzedniego okna” |
 | `layout_save` | Zapisz układ okien — Zapisuje bieżący układ otwartych okien pod nazwą (do wm_arrange mode=layout). | **name**: string | safe | A2 | tak | „zapisz uklad [jako] {name}”, „zapamietaj uklad [jako] {name}” |
 | `wm_pin` | Zawsze na wierzchu — Przypina okno lub widget nad innymi (on=false odpina). Maks. 3 przypięte. | **app**: string; on: boolean | safe | A2 | tak | „przypnij {app} [na wierzchu]”, „odepnij {app}”, „{app} zawsze na wierzchu” |
-| `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich. | app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library | safe | A3 | tak | „otworz ponownie zamkniete [okno]”, „przywroc zamkniete okno”, „przywroc ostatnio zamkniete okno” |
+| `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich. | app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files | safe | A3 | tak | „otworz ponownie zamkniete [okno]”, „przywroc zamkniete okno”, „przywroc ostatnio zamkniete okno” |
 | `wm_restore` | Przywróć okna — Przywraca zminimalizowane okno albo wszystkie (app="all") — odwrotność „pokaż pulpit”. | **app**: string | safe | A3 | tak | „przywroc okna”, „przywroc wszystkie okna”, „pokaz z powrotem [wszystkie] okna” |
 | `wm_close_others` | Zamknij pozostałe — Zamyka wszystkie okna poza wskazanym (widgety zostają). Da się cofnąć. | **app**: string | safe | A1 | tak | „zostaw tylko {app}”, „zamknij pozostale [okna]”, „zamknij wszystko (poza\|oprocz) {app}” |
 | `layout_list` | Lista układów — Presety i zapisane układy okien z listą aplikacji oraz układ startowy. | — | safe | A3 | — | „jakie mam uklady”, „lista ukladow”, „pokaz [moje] zapisane uklady” |
@@ -41,13 +41,20 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `schedule_day` | Pokaż dzień w harmonogramie — Otwiera Harmonogram na wskazanym dniu (data YYYY-MM-DD, jutro, piątek…) — nawigacja, niczego nie zmienia. | **date**: string (date) | safe | A3 | — | — |
 | `tasks_list` | Lista zadań — Zwraca zadania: range=today (domyślnie), tomorrow, week, all, overdue. | range: today\|tomorrow\|week\|all\|overdue | safe | A3 | — | „[pokaz] (zadania\|plan\|harmonogram) na (dzis\|dzisiaj)”, „co mam (dzis\|dzisiaj) do zrobienia”, „jakie mam zadania” |
-| `add_task` | Dodaj zadanie / przypomnienie — Dodaje zadanie do Harmonogramu; o podanej godzinie Jarvis przypomni głosem. Obsługuje czas względny przez pole "in" (np. "20 minut"). | **text**: string; time: string (time); date: string (date); in: string; show: boolean | safe | A2 | tak | „przypomnij [mi] {text}”, „dodaj zadanie {text}”, „zaplanuj {text}” |
+| `add_task` | Dodaj zadanie / przypomnienie — Dodaje zadanie do Harmonogramu; o podanej godzinie Jarvis przypomni głosem. Obsługuje czas względny przez pole "in" (np. "20 minut"). | **text**: string; time: string (time); date: string (date); in: string; priority: high\|normal\|low; repeat: object; remind: integer; show: boolean | safe | A2 | tak | „przypomnij [mi] {text}”, „dodaj zadanie {text}”, „zaplanuj {text}” |
 | `tasks_complete` | Odhacz zadanie — Oznacza zadanie jako wykonane (done=false cofa). | **task**: string; done: boolean | safe | A2 | tak | „odhacz {task}”, „zrobione {task}”, „oznacz {task} jako (zrobione\|wykonane\|ukonczone)” |
-| `tasks_update` | Zmień zadanie — Zmienia treść, godzinę lub datę zadania. Do przesunięcia o czas użyj snooze_minutes. | **task**: string; text: string; time: string (time); date: string (date); snooze_minutes: integer | safe | A2 | tak | „przesun {task} na {time}”, „przeloz {task} na {date}”, „odloz {task} o {snooze_minutes} minut” |
+| `tasks_update` | Zmień zadanie — Zmienia treść, godzinę lub datę zadania. Do przesunięcia o czas użyj snooze_minutes. | **task**: string; text: string; time: string (time); date: string (date); snooze_minutes: integer; remind: integer; scope: this\|series | safe | A2 | tak | „przesun {task} na {time}”, „przeloz {task} na {date}”, „odloz {task} o {snooze_minutes} minut” |
 | `tasks_remove` | Usuń zadanie — Usuwa zadanie z Harmonogramu (wymaga potwierdzenia). | **task**: string | confirm | A0 | tak | „usun zadanie {task}”, „skasuj zadanie {task}”, „usun przypomnienie {task}” |
-| `start_timer` | Minutnik — Uruchamia minutnik na podaną liczbę sekund. | **seconds**: number; label: string; show: boolean | safe | A2 | tak | „minutnik {seconds}”, „ustaw minutnik na {seconds}”, „odliczaj {seconds}” |
-| `timer_control` | Sterowanie minutnikiem — stop zatrzymuje minutnik, extend dodaje sekundy, status zwraca pozostały czas. | **action**: stop\|extend\|status; seconds: number | safe | A2 | tak | „(zatrzymaj\|wylacz\|stop) minutnik”, „ile zostalo [minutnika\|czasu]”, „przedluz minutnik o {seconds}” |
+| `start_timer` | Minutnik — Uruchamia minutnik na podaną liczbę sekund. Kilka naraz (maks. 5) — rozróżnia je label; ta sama etykieta restartuje minutnik. preset=pomodoro: 25 min pracy / 5  | seconds: number; label: string; preset: pomodoro; show: boolean | safe | A2 | tak | „minutnik {seconds}”, „ustaw minutnik na {seconds}”, „odliczaj {seconds}” |
+| `timer_control` | Sterowanie minutnikiem — stop zatrzymuje minutnik, pause/resume wstrzymuje i wznawia, extend dodaje sekundy, status zwraca pozostały czas. label wybiera minutnik (domyślnie najbliższy k | **action**: stop\|pause\|resume\|extend\|status; seconds: number; label: string | safe | A2 | tak | „(zatrzymaj\|wylacz\|stop) minutnik”, „ile zostalo [minutnika\|czasu]”, „przedluz minutnik o {seconds}” |
 | `get_datetime` | Data i godzina — Zwraca aktualną datę, godzinę, dzień tygodnia i strefę czasową. | — | safe | A3 | — | „ktora [jest] godzina”, „jaki [jest] (dzis\|dzisiaj) dzien”, „jaka [jest] [dzis] data” |
+| `tasks_repeat` | Powtarzanie zadania — Ustawia powtarzanie: daily, weekdays, weekly (days: pn…nd), monthly, every_n_days (n); until = data końca; none = wyłącz. Po odhaczeniu powstaje następne wystąp | **task**: string; **rule**: none\|daily\|weekdays\|weekly\|monthly\|every_n_days; days: string[]; n: integer; until: string (date) | safe | A2 | tak | „powtarzaj {task} codziennie”, „{task} powtarzaj w poniedzialki i czwartki”, „przestan powtarzac {task}” |
+| `tasks_priority` | Priorytet zadania — Ustawia priorytet zadania: high (pilne, na górze listy), normal, low. | **task**: string; **priority**: high\|normal\|low | safe | A2 | tak | „priorytet wysoki dla {task}”, „ustaw wysoki priorytet dla {task}”, „{task} jest pilne” |
+| `tasks_subtask` | Podzadania — Dodaje (add), odhacza (check), odznacza (uncheck) lub usuwa (remove) podzadanie (jeden poziom, maks. 20). | **task**: string; **op**: add\|check\|uncheck\|remove; **text**: string | safe | A2 | tak | „do {task} dodaj podzadanie {text}”, „dodaj podzadanie {text} do {task}”, „odhacz {text} w {task}” |
+| `tasks_move_many` | Przenieś wiele zadań — Przenosi zadania z dnia (from: dziś, jutro, data, overdue = zaległe) na inny dzień (to). only_open (domyślnie true) = tylko niezrobione. Jedno „Cofnij” cofa cał | **from**: string; **to**: string (date); only_open: boolean | safe | A2 | tak | „przenies (wszystkie )?dzisiejsze na jutro”, „przesun zalegle na dzis”, „przeloz niezrobione na poniedzialek” |
+| `tasks_clear_done` | Usuń zrobione — Usuwa zrobione zadania z zakresu (today, week, all). Zbiorowe usuwanie — wymaga zgody; „Cofnij” przez 10 minut. | **range**: today\|week\|all | confirm | A0 | tak | „usun zrobione zadania”, „wyczysc zrobione z tego tygodnia”, „posprzataj ukonczone” |
+| `tasks_export_ics` | Eksport do kalendarza — Zapisuje zadania z zakresu (today, week, month, all) jako plik .ics do pobrania (powtarzanie jako RRULE). | **range**: today\|week\|month\|all | safe | A1 | — | „(wyeksportuj\|eksportuj) zadania do (kalendarza\|ics)”, „zapisz tydzien jako ics”, „eksport zadan na miesiac” |
+| `timer_list` | Lista minutników — Wszystkie działające minutniki (maks. 5) z czasem do końca. | — | safe | A3 | — | „lista minutnikow”, „jakie minutniki dzialaja”, „pokaz liste minutnikow” |
 
 ## Interfejs
 
@@ -82,7 +89,17 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `create_note` | Nowa notatka — Tworzy notatkę. show=false nie otwiera Notatnika. | title: string; **content**: string; show: boolean | safe | A2 | tak | „zanotuj {content}”, „zapisz notatke {content}”, „utworz notatke {content}” |
 | `notes_append` | Dopisz do notatki — Dopisuje tekst na końcu istniejącej notatki (po id lub tytule). | **note**: string; **text**: string; show: boolean | safe | A2 | tak | „dopisz do notatki {note}: {text}”, „dodaj do notatki {note}: {text}”, „dopisz do {note}: {text}” |
 | `notes_update` | Zmień notatkę — Zmienia tytuł i/lub zastępuje całą treść notatki. | **note**: string; title: string; content: string | safe | A2 | tak | „zmien tytul notatki {note} na {title}”, „przemianuj notatke {note} na {title}” |
-| `notes_delete` | Usuń notatkę — Usuwa notatkę (wymaga potwierdzenia). | **note**: string | confirm | A0 | tak | „usun notatke {note}”, „skasuj notatke {note}”, „wyrzuc notatke {note}” |
+| `notes_delete` | Usuń notatkę — Przenosi notatkę do kosza (30 dni, można przywrócić: notes_restore). Wymaga potwierdzenia. | **note**: string | confirm | A0 | tak | „usun notatke {note}”, „skasuj notatke {note}”, „wyrzuc notatke {note}” |
+| `notes_tag` | Tagi notatki — Dodaje (add) lub usuwa (remove) tagi notatki (małe litery, bez spacji, maks. 10). | **note**: string; add: string[]; remove: string[] | safe | A2 | tak | „dodaj tag {add} do notatki {note}”, „oznacz notatke {note} tagiem {add}”, „usun tag {remove} z notatki {note}” |
+| `notes_pin` | Przypnij notatkę — Przypina notatkę na górze listy (on=false odpina). | **note**: string; on: boolean | safe | A2 | tak | „przypnij notatke {note}”, „odepnij notatke {note}”, „przypnij te notatke” |
+| `notes_duplicate` | Duplikuj notatkę — Tworzy kopię notatki z dopiskiem „(kopia)” (te same tagi i folder). | **note**: string | safe | A2 | tak | „zduplikuj notatke {note}”, „duplikuj notatke {note}”, „zrob kopie notatki {note}” |
+| `notes_trash` | Kosz notatek — Lista notatek w koszu (usunięte w ciągu 30 dni, można przywrócić). show=true otwiera kosz w Notatniku. | show: boolean | safe | A3 | — | „co jest w koszu”, „pokaz kosz”, „kosz notatek” |
+| `notes_restore` | Przywróć notatkę z kosza — Przywraca notatkę z kosza. | **note**: string | safe | A2 | tak | „przywroc notatke {note}”, „przywroc z kosza notatke {note}”, „odzyskaj notatke {note}” |
+| `notes_empty_trash` | Opróżnij kosz — Trwale usuwa wszystkie notatki z kosza. Nieodwracalne — wymaga potwierdzenia. | — | confirm | A0 | — | „oproznij kosz”, „oproznij kosz notatek”, „usun na zawsze notatki z kosza” |
+| `notes_versions` | Wersje notatki — Lista zapisanych wersji notatki (maks. 20; zapis przed każdą zmianą przez Jarvisa i co ≥ 5 min pisania). | **note**: string | safe | A3 | — | „pokaz wersje notatki {note}”, „wersje notatki {note}”, „historia zmian notatki {note}” |
+| `notes_revert` | Przywróć wersję notatki — Przywraca wersję notatki (version = id wersji albo "previous"). Bieżąca treść staje się nową wersją, więc można wrócić. | **note**: string; **version**: string | safe | A2 | tak | „przywroc poprzednia wersje notatki {note}”, „wroc do starej tresci notatki {note}”, „cofnij notatke {note} do poprzedniej wersji” |
+| `notes_to_task` | Zadanie z notatki — Tworzy zadanie z notatki (treść = tytuł) albo z jej linii (line); zadanie pamięta notatkę (ikona 📝 w Harmonogramie). | **note**: string; line: string; time: string (time); date: string (date) | safe | A2 | tak | „zrob zadanie z notatki {note}”, „dodaj notatke {note} do harmonogramu na {date}”, „przypomnij mi o notatce {note} o {time}” |
+| `notes_folder` | Folder notatki — Przenosi notatkę do folderu (jeden poziom; folder powstaje sam). folder="" wyjmuje z folderu. | **note**: string; **folder**: string | safe | A2 | tak | „przenies notatke {note} do folderu {folder}”, „wloz notatke {note} do {folder}”, „wyjmij notatke {note} z folderu” |
 
 ## Pulpit i widgety
 
@@ -92,25 +109,31 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `widgets_list` | Lista widgetów — Zwraca widgety na pulpicie z id, typem, tytułem i skrótem treści. | — | safe | A3 | — | „jakie mam widgety”, „lista widgetow” |
 | `widgets_update` | Zmień widget — Zmienia tytuł, treść (note/result) lub dodaje/odhacza pozycje listy (add_items, check_item). | **widget**: string; title: string; content: string; add_items: string[]; check_item: string; uncheck_item: string | safe | A2 | tak | „dodaj do listy {widget} {add_items}”, „odhacz na liscie {widget} {check_item}” |
 | `widgets_remove` | Usuń widget — Usuwa widget z pulpitu (wymaga potwierdzenia). | **widget**: string | confirm | A0 | tak | „usun widget {widget}”, „zamknij widget {widget}” |
-| `add_shortcut` | Skrót na pulpicie — Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). | **name**: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library; url: string | safe | A2 | tak | „dodaj skrot {name}”, „utworz skrot do {name}”, „nowa ikona {name}” |
+| `add_shortcut` | Skrót na pulpicie — Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). | **name**: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; url: string | safe | A2 | tak | „dodaj skrot {name}”, „utworz skrot do {name}”, „nowa ikona {name}” |
 | `shortcut_remove` | Usuń skrót — Usuwa skrót z pulpitu (wymaga potwierdzenia). | **name**: string | confirm | A0 | tak | „usun skrot {name}”, „usun ikone {name}” |
 | `set_theme` | Motyw kolorystyczny — Zmienia kolor akcentu interfejsu. | **color**: jarvis\|cyjan\|niebieski\|fiolet\|zielony\|złoty\|czerwony\|różowy | safe | A3 | tak | „motyw {color}”, „ustaw motyw {color}”, „zmien motyw na {color}” |
 | `set_wallpaper` | Tapeta — Zmienia tapetę: photo (jezioro w górach), aurora, void (pustka). Bez argumentu — następna. | wallpaper: photo\|aurora\|void | safe | A3 | tak | „tapeta {wallpaper}”, „zmien tapete [na] {wallpaper}”, „zmien tapete” |
 | `focus_mode` | Tryb skupienia — Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło). | **on**: boolean | safe | A3 | — | „tryb skupienia”, „wlacz (tryb skupienia\|skupienie\|focus)”, „wylacz (tryb skupienia\|skupienie\|focus)” |
-| `shortcut_edit` | Edytuj skrót — Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie. | **shortcut**: string; name: string; url: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library; icon: string | safe | A2 | tak | „zmien nazwe skrotu {shortcut} na {name}”, „skrot {shortcut} ma sie nazywac {name}”, „zmien adres skrotu {shortcut} na {url}” |
+| `shortcut_edit` | Edytuj skrót — Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie. | **shortcut**: string; name: string; url: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; icon: string | safe | A2 | tak | „zmien nazwe skrotu {shortcut} na {name}”, „skrot {shortcut} ma sie nazywac {name}”, „zmien adres skrotu {shortcut} na {url}” |
+| `dock_order` | Kolejność w doku — Przesuwa aplikację w doku na pozycję (1 = pierwsza). | **item**: string; **position**: integer | safe | A2 | tak | „przesun {item} na (poczatek\|koniec) doku”, „{item} na (pierwsze\|drugie\|trzecie\|ostatnie) miejsce w doku”, „daj {item} na drugie miejsce” |
+| `widget_duplicate` | Duplikuj widget — Tworzy kopię widgetu obok oryginału. | **widget**: string | safe | A2 | tak | „zduplikuj widget {widget}”, „duplikuj widget {widget}”, „zrob kopie widgetu {widget}” |
+| `widget_collapse` | Zwiń / rozwiń widget — Zwija widget do paska tytułu albo rozwija (on). widget="all" — wszystkie. | **widget**: string; on: boolean | safe | A3 | tak | „zwin widget {widget}”, „rozwin widget {widget}”, „zwin wszystkie widgety” |
+| `widget_items` | Pozycje listy w widgecie — Na widgecie-liście: dodaje (add), odhacza (check), odznacza (uncheck), zmienia (rename → to), usuwa (remove) pozycję albo usuwa odhaczone (clear_done). | **widget**: string; **op**: add\|check\|uncheck\|rename\|remove\|clear_done; item: string; to: string | safe | A2 | tak | „dopisz {item} do listy {widget}”, „odhacz {item} na liscie {widget}”, „usun zrobione z listy {widget}” |
 
 ## Dane
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
 | `get_weather` | Pogoda — Aktualna pogoda i prognoza (Open-Meteo). Bez miasta — lokalizacja użytkownika. show=false nie otwiera okna. | city: string; days: integer; show: boolean | safe | A3 | — | „[jaka jest] pogoda”, „pogoda w {city}”, „jaka [jest] pogoda w {city}” |
-| `get_crypto_prices` | Kursy krypto — Aktualne kursy BTC, ETH, SOL, BNB w USD ze zmianą 24h (CoinGecko / Binance). | symbol: BTC\|ETH\|SOL\|BNB; show: boolean | safe | A3 | — | „kurs (bitcoina\|btc\|ethereum\|eth\|solany\|sol\|bnb)”, „ile kosztuje (bitcoin\|ethereum\|solana\|bnb)”, „kursy krypto” |
-| `market_watch` | Alert kursu — Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. | symbol: BTC\|ETH\|SOL\|BNB; direction: above\|below; price: number; remove: boolean | safe | A2 | tak | „powiadom gdy (bitcoin\|btc\|eth\|ethereum\|sol\|solana\|bnb) (przekroczy\|spadnie ponizej) {price}”, „alert (bitcoin\|btc\|eth\|sol\|bnb) {price}”, „jakie mam alerty” |
+| `get_crypto_prices` | Kursy krypto — Aktualne kursy walut z listy obserwowanych (domyślnie BTC, ETH, SOL, BNB) w USD ze zmianą 24h i krótkim wykresem (spark, 24 punkty) — CoinGecko / Binance. | symbol: string; show: boolean | safe | A3 | — | „kurs (bitcoina\|btc\|ethereum\|eth\|solany\|sol\|bnb)”, „ile kosztuje (bitcoin\|ethereum\|solana\|bnb)”, „kursy krypto” |
+| `market_watch` | Alert kursu — Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. | symbol: string; direction: above\|below; price: number; remove: boolean | safe | A2 | tak | „powiadom gdy (bitcoin\|btc\|eth\|ethereum\|sol\|solana\|bnb) (przekroczy\|spadnie ponizej) {price}”, „alert (bitcoin\|btc\|eth\|sol\|bnb) {price}”, „jakie mam alerty” |
 | `calculate` | Oblicz — Dokładnie liczy wyrażenie (+ - * / ^ % nawiasy sqrt sin cos log ln pi) i procenty. | **expression**: string | safe | A3 | — | „oblicz {expression}”, „policz {expression}”, „ile to {expression}” |
 | `open_url` | Otwórz stronę — Otwiera stronę WWW w nowej karcie. Znane serwisy: youtube, google, github, gmail, spotify, netflix, facebook, twitter, wikipedia, mapy, linkedin, reddit, allegr | **url**: string | confirm | A0 | — | „otworz strone {url}”, „wejdz na {url}”, „otworz (youtube\|google\|github\|gmail\|spotify\|netflix\|wikipedia\|mapy\|reddit\|allegro\|linkedin)” |
 | `web_search` | Szukaj w Google — Otwiera wyszukiwanie Google z zapytaniem w nowej karcie. | **query**: string | safe | A1 | — | „wyszukaj {query}”, „szukaj {query}”, „wygoogluj {query}” |
 | `clipboard_write` | Skopiuj do schowka — Kopiuje tekst do schowka systemowego. | **text**: string | safe | A1 | — | „skopiuj {text}”, „skopiuj do schowka {text}” |
 | `clipboard_read` | Odczytaj schowek — Zwraca tekst ze schowka (wymaga zgody przeglądarki). | — | confirm · zewn. | A0 | — | „co mam w schowku”, „odczytaj schowek”, „wklej ze schowka” |
+| `market_watchlist` | Lista obserwowanych — Dodaje (add) lub usuwa (remove) kryptowalutę z listy w Monitorze rynku albo ją zwraca (list). Maks. 12. Tylko podgląd — żadnego handlu. | **op**: add\|remove\|list; symbol: string | safe | A2 | tak | „dodaj {symbol} do obserwowanych”, „usun {symbol} z rynku”, „jakie kryptowaluty obserwuje” |
+| `market_alerts` | Alerty kursów — Lista alertów kursów (list), usunięcie jednego (remove, alert = symbol albo id) albo wszystkich (clear). | **op**: list\|remove\|clear; alert: string | safe | A2 | tak | „jakie mam alerty kursow”, „pokaz alerty kursow”, „usun alert na {alert}” |
 
 ## Pamięć
 
@@ -119,21 +142,23 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `memory_remember` | Zapamiętaj — Zapisuje trwały fakt o użytkowniku lub preferencję (np. "pracuję zdalnie", "lubię kawę o 9"). Fakty trafiają do kontekstu każdej rozmowy. | **fact**: string; scope: profile\|preference\|project\|other | safe | A2 | tak | „zapamietaj [ze] {fact}”, „zapamietaj sobie {fact}”, „pamietaj [ze] {fact}” |
 | `memory_recall` | Przypomnij fakty — Zwraca zapamiętane fakty pasujące do zapytania (bez zapytania — wszystkie). | query: string | safe | A3 | — | „co o mnie wiesz”, „co pamietasz”, „co pamietasz o {query}” |
 | `memory_forget` | Zapomnij — Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia. | **fact**: string | confirm | A0 | tak | „zapomnij [ze] {fact}”, „zapomnij o {fact}” |
+| `memory_edit` | Popraw zapamiętany fakt — Zmienia treść zapamiętanego faktu (fact = id albo fragment, text = nowa treść). | **fact**: string; **text**: string | safe | A2 | tak | „popraw w pamieci {fact} na {text}”, „zmien fakt o {fact} na {text}”, „popraw fakt {fact}: {text}” |
 
 ## Pliki
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
 | `files_list` | Pliki w folderze — Lista plików w folderze roboczym Jarvisa (File System Access, Chrome/Edge). | — | safe | A3 | — | „[pokaz] [moje] pliki”, „co jest w folderze”, „lista plikow” |
-| `files_read` | Przeczytaj plik — Zwraca treść pliku tekstowego z folderu roboczego. | **name**: string | safe · zewn. | A3 | — | „przeczytaj plik {name}”, „otworz plik {name}”, „co jest w pliku {name}” |
+| `files_read` | Przeczytaj plik — Zwraca treść pliku tekstowego z folderu roboczego. | **name**: string | safe · zewn. | A3 | — | „przeczytaj plik {name}”, „co jest w pliku {name}” |
 | `files_write` | Zapisz plik — Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. | **name**: string; **text**: string; append: boolean | confirm | A0 | — | „zapisz plik {name}: {text}”, „zapisz do pliku {name} {text}” |
 | `files_export_note` | Eksportuj notatkę do pliku — Zapisuje notatkę jako plik .md w folderze roboczym. | **note**: string | safe | A1 | — | „eksportuj notatke {note} [do pliku]”, „zapisz notatke {note} jako plik” |
+| `files_open` | Pokaż plik — Otwiera podgląd pliku (tekst, Markdown, JSON, CSV, obraz) w oknie Pliki. | **path**: string | safe | A3 | — | „pokaz plik {path}”, „podglad pliku {path}”, „pokaz co jest w pliku {path}” |
 
 ## Nawigacja
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
-| `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku: notes note\|search, schedule day, timer timer\|stopwatch, market coin, weather city, settings section, terminal run (tylko | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library; view: string; target: string | safe | A3 | — | „pokaz stoper”, „pokaz zakladke stoper [w minutniku]”, „otworz minutnik na stoperze” |
+| `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku: notes note\|search\|trash\|tag\|folder, schedule day\|week\|overdue, files path, timer timer\|stopwatch, market coin, weather c | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; view: string; target: string | safe | A3 | — | „pokaz stoper”, „pokaz zakladke stoper [w minutniku]”, „otworz minutnik na stoperze” |
 | `nav_forward` | Dalej (po „wróć”) — Idzie do przodu w historii okien i widoków — odwrotność nav_back. | — | safe | A3 | — | „dalej”, „naprzod”, „idz dalej” |
 | `search_all` | Szukaj wszędzie — Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, rozmowach, ustawieniach, poleceniach i plikach. Zwraca wyniki z typem; show=true otwie | **query**: string; types: string[]; limit: integer; show: boolean | safe | A3 | — | „szukaj wszedzie {query}”, „znajdz wszystko o {query}”, „gdzie mam cos o {query}” |
 | `recent_list` | Ostatnio otwierane — Lista ostatnio otwieranych okien i widoków (do szybkiego powrotu przez app_view). | limit: integer | safe | A3 | — | „ostatnio otwierane”, „co ostatnio otwieralem”, „ostatnie okna” |

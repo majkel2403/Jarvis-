@@ -112,10 +112,10 @@ test('głos: ryzykowne polecenia pytają o zgodę, wpisane ręcznie — nie', as
   assert.equal(asked, 1, 'głos → pytanie'); assert.match(denied, /odmówił/); assert.equal(K.state.notes.some(n => n.title === 'Testowa'), true, 'notatka została');
   answer = 'yes';
   const done = await K.brain.local('usuń notatkę Testowa');
-  assert.equal(asked, 2); assert.match(done, /Usunąłem/); assert.equal(K.state.notes.some(n => n.title === 'Testowa'), false);
+  assert.equal(asked, 2); assert.match(done, /do kosza/); assert.equal(K.notes.live().some(n => n.title === 'Testowa'), false);
   K.notes.add('Druga', 'x'); K.brain.lastSource = 'user';
   const typed = await K.brain.local('usuń notatkę Druga');
-  assert.equal(asked, 2, 'tekst wpisany ręcznie nie pyta'); assert.match(typed, /Usunąłem/);
+  assert.equal(asked, 2, 'tekst wpisany ręcznie nie pyta'); assert.match(typed, /do kosza/);
 });
 test('trimHistory: przycięcie zawsze zaczyna się od prawdziwej wypowiedzi użytkownika', () => {
   const h = []; for (let i = 0; i < 25; i++) { h.push({ role: 'user', content: 'u' + i }, { role: 'assistant', content: '', tool_calls: [{ id: 'c' + i }] }, { role: 'tool', tool_call_id: 'c' + i, content: '{}' }, { role: 'assistant', content: 'ok' }); }

@@ -50,7 +50,7 @@ const PROMPTS = { seconds: 'Na ile minut ustawić minutnik?', text: 'Co mam zapi
 const ENUM_PROMPTS = { app: 'Którą aplikację?', color: 'Jaki kolor?', wallpaper: 'Którą tapetę?', range: 'Z jakiego zakresu pokazać zadania?', mode: 'Jak ułożyć okna?', layout: 'Który układ?', action: 'Co zrobić z minutnikiem?', type: 'Jaki rodzaj widgetu?', symbol: 'Który symbol?', direction: 'W którą stronę?', scope: 'Jaki to rodzaj faktu?' };
 const promptFor = (cmd, k) => PROMPTS[k] || ENUM_PROMPTS[k] || cmd.args.properties[k]?.description || ('Podaj wartość: ' + k);
 /* kandydaci lokalni (bez wysyłania niczego na zewnątrz): notatki, zadania, widgety */
-const candidatesFor = k => k === 'note' ? J.state.notes.slice(0, 6).map(n => ({ id: n.id, label: n.title || 'Bez tytułu' }))
+const candidatesFor = k => k === 'note' ? J.notes.live().slice(0, 6).map(n => ({ id: n.id, label: n.title || 'Bez tytułu' }))
   : k === 'task' ? J.state.tasks.filter(t => !t.done).slice(0, 6).map(t => ({ id: t.id, label: (t.time || '--:--') + ' ' + t.text }))
   : k === 'widget' ? J.widgets.list.slice(0, 6).map(w => ({ id: w.id, label: w.title })) : [];
 const parseFree = (k, prop, a) => {
