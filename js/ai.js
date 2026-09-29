@@ -368,15 +368,15 @@ const hermes = async (text, bubble) => {
       const prefix = reply ? reply + '\n\n' : '';
       const c = cfg();
       const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
-      let thought = null, firstTok = 0;
+      let thought = null, firstTok = 0, lastLen = 0;
       let raw;
       const serverTools = [];   // narzędzia Hermesa zgłoszone w tej turze (SSE hermes.tool.progress)
       J.ev.emit('model.started', { model: c.model, turn: turn + 1 }, 'hermes');
       try {
         raw = await streamChat(msgs,
-          acc => { if (!firstTok) firstTok = Date.now(); const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
+          acc => { if (!firstTok) firstTok = Date.now(); J.engine.feed(acc.length - lastLen); lastLen = acc.length; const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
           tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
-          r => { if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
+          r => { J.engine.feed(r.length); J.engine.thinkChars += r.length; if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
       } catch (e) {
         thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message);
         serverTools.forEach(t => J.ev.emit('tool.failed', { tool: t, source: 'hermes' }, 'hermes'));

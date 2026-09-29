@@ -67,6 +67,9 @@ const P = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   pin: '<path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/>',
   list: '<path d="M9 6h12M9 12h12M9 18h12M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
+  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10.5 10.5 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0"/><path d="M12 19.5h.01"/>',
+  screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  grid: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'
 };
 J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${P[name] || P.star}</svg>`;
@@ -75,7 +78,7 @@ J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="cur
 const KEY = 'jarvis-os:v2';
 const DEFAULTS = () => ({
   settings: {
-    accent: '#21d9ff', accent2: '#9a63ff', wall: 'photo', particles: true, sound: true,
+    accent: '#3d8bff', accent2: '#a25cff', look: 3, wall: 'photo', particles: true, sound: true,
     speech: true, voiceName: '',
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false
@@ -93,7 +96,7 @@ const DEFAULTS = () => ({
   log: [],
   history: [],
   widgets: [],
-  ui: { chatClosed: false, logPinned: false },
+  ui: { chatClosed: true, logPinned: false },
   winPos: {},
   stats: { actions: 0 }
 });
@@ -103,6 +106,7 @@ J.state = (() => {
   const d = DEFAULTS();
   if (!s) return d;
   s.settings = Object.assign(d.settings, s.settings || {});
+  if (s.settings.look !== 3) { s.settings.look = 3; if (s.settings.accent === '#21d9ff') { s.settings.accent = '#3d8bff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd: domyślny akcent niebiesko-fioletowy
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
   for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
@@ -259,7 +263,7 @@ J.applyTheme = () => {
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#050d1a');
 };
 J.THEMES = {
-  cyjan: ['#21d9ff', '#9a63ff'], niebieski: ['#3d8bff', '#21d9ff'], fiolet: ['#b07cff', '#ff5ec4'],
+  jarvis: ['#3d8bff', '#a25cff'], cyjan: ['#21d9ff', '#9a63ff'], niebieski: ['#3d8bff', '#21d9ff'], fiolet: ['#b07cff', '#ff5ec4'],
   zielony: ['#39e59a', '#21d9ff'], złoty: ['#ffc24d', '#ff6a3d'], czerwony: ['#ff4d6d', '#ffb84d'], różowy: ['#ff5ec4', '#9a63ff']
 };
 

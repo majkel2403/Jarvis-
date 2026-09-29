@@ -6,11 +6,11 @@
 'use strict';
 (() => {
 const { $, $$, h, esc } = J;
-const MAX_HISTORY = 30, CAP = 6000, AUTOHIDE_MS = 8000;
+const MAX_HISTORY = 30, CAP = 6000;
 
 let cur = null;          // aktywne zadanie {id,title,ts,status,steps[],result}
 let viewing = null;      // zadanie pokazywane w panelu (aktywne albo z historii)
-let tab = 'task', pinned = false, hideT = null, tick = null, hover = false, seq = 0;
+let tab = 'task', pinned = false, tick = null, seq = 0;
 
 const KIND = {
   input:  { g: '›', label: 'Polecenie' },
@@ -57,6 +57,7 @@ const step = (kind, title, fields = [], opts = {}) => {
   if (!cur) return { set() { }, done() { }, append() { }, fail() { } };
   const s = { id: ++seq, kind, title, fields, status: opts.running ? 'run' : (opts.status || 'ok'), ts: Date.now(), preview: opts.preview || '' };
   const task = cur; task.steps.push(s);
+  chip();
   if (viewing === task) { const box = stepsBox(); box.querySelector('.lp-empty')?.remove(); box.appendChild(paintStep(s, task.ts)); stick(box); }
   let raf = 0;
   // po zakończeniu zadania panel pokazuje wersję „saved” z _live === task
@@ -73,12 +74,12 @@ const step = (kind, title, fields = [], opts = {}) => {
 
 /* ---------- zadanie ---------- */
 const start = title => {
-  clearTimeout(hideT);
   cur = { id: J.uid(), title: String(title).slice(0, 200), ts: Date.now(), status: 'run', steps: [], result: '' };
   viewing = cur; tab = 'task';
   step('input', 'Polecenie użytkownika', [['Treść', title]], { preview: String(title).slice(0, 70) });
   cur.steps[0].dur = 0;
-  render(); if (!matchMedia('(max-width:900px)').matches) setOpen(true);   // na wąskich ekranach panel zasłaniałby czat — otwierany ręcznie
+  render(); chip();
+  if (pinned && !matchMedia('(max-width:900px)').matches) setOpen(true);   // przypięty = otwiera się sam przy każdym zadaniu; inaczej wystarczy chip
   clearInterval(tick); tick = setInterval(meta, 250);
   return cur;
 };
@@ -92,7 +93,7 @@ const end = (status, result) => {
     steps: t.steps.map(s => ({ id: s.id, kind: s.kind, title: s.title, status: s.status, ts: s.ts, dur: s.dur, preview: s.preview, fields: (s.fields || []).map(f => [f[0], cap(f[1]), f[2]]) })) };
   J.state.history.unshift(saved); J.state.history.length = Math.min(J.state.history.length, MAX_HISTORY); J.save();
   cur = null; viewing = saved; Object.defineProperty(saved, '_live', { value: t, enumerable: false });   // panel dalej pokazuje ten sam log (z żywymi elementami)
-  render(); scheduleHide();
+  render(); chip();
   J.emit('proc-end', saved);
 };
 // wpisy J.log() (systemowe) trafiają do aktywnego zadania jako kroki; poza zadaniem nie tworzą szumu
@@ -106,13 +107,15 @@ const ws = () => $('#workspace');
 const setOpen = on => {
   if (on && matchMedia('(max-width:900px)').matches) J.chatPanel?.hide();   // na wąskich ekranach jedna szuflada naraz
   ws().classList.toggle('log-open', on); $('#btnLog')?.classList.toggle('on', on);
-  if (!on) { clearTimeout(hideT); }
 };
 const isOpen = () => ws().classList.contains('log-open');
-const scheduleHide = () => {
-  clearTimeout(hideT);
-  if (pinned) return;
-  hideT = setTimeout(() => { if (hover || pinned || cur) return scheduleHide(); setOpen(false); }, AUTOHIDE_MS);
+/* chip „Process Log” (gdy panel zwinięty): kropka = stan, liczba = kroki bieżącego zadania */
+const chip = () => {
+  const d = $('#logChipDot'), n = $('#logChipN'); if (!d) return;
+  const t = cur || viewing;
+  d.dataset.s = cur ? 'run' : t ? (t.status === 'ok' ? 'ok' : t.status === 'abort' ? 'abort' : 'err') : 'idle';
+  n.textContent = t && (cur || t.steps) ? (t.steps.length + ' ' + J.pl(t.steps.length, 'krok', 'kroki', 'kroków')) : '';
+  $('#logChip')?.classList.toggle('run', !!cur);
 };
 const statusText = { run: 'wykonuję…', ok: 'zakończono', err: 'błąd', abort: 'przerwano' };
 const meta = () => {
@@ -170,20 +173,20 @@ J.proc = {
   start, end, step, log,
   get current() { return cur; },
   get active() { return !!cur; },
-  open: () => { clearTimeout(hideT); setOpen(true); },
+  open: () => setOpen(true),
   close: () => setOpen(false),
   toggle: () => { if (isOpen()) { setOpen(false); } else { setOpen(true); if (!viewing && J.state.history[0]) { viewing = J.state.history[0]; render(); } } },
   get isOpen() { return isOpen(); },
   init() {
     $('#lpClose').innerHTML = J.icon('close'); $('#lpPin').innerHTML = J.icon('pin');
     $('#lpClose').onclick = () => setOpen(false);
+    $('#logChip').onclick = () => { setOpen(true); if (!viewing && J.state.history[0]) { viewing = J.state.history[0]; render(); } };
+    $('#logChipIc').innerHTML = J.icon('monitor');
     pinned = !!J.state.ui.logPinned; $('#lpPin').classList.toggle('on', pinned);
-    $('#lpPin').onclick = () => { pinned = !pinned; J.state.ui.logPinned = pinned; J.save(); $('#lpPin').classList.toggle('on', pinned); if (pinned) clearTimeout(hideT); else if (!cur) scheduleHide(); };
+    $('#lpPin').onclick = () => { pinned = !pinned; J.state.ui.logPinned = pinned; J.save(); $('#lpPin').classList.toggle('on', pinned); J.toast(pinned ? 'Process Log będzie otwierał się przy każdym zadaniu' : 'Process Log otwierasz z chipa w rogu'); };
     $$('.lp-tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
-    const panel = $('#logPanel');
-    panel.addEventListener('pointerenter', () => { hover = true; }); panel.addEventListener('pointerleave', () => { hover = false; if (!cur) scheduleHide(); });
     stepsBox().addEventListener('scroll', e => { const b = e.target; b.dataset.follow = (b.scrollHeight - b.scrollTop - b.clientHeight < 40) ? '1' : '0'; });
-    render();
+    render(); chip();
   }
 };
 J.log = log;

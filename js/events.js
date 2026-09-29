@@ -70,6 +70,10 @@ const engine = J.engine = {
   packets: [],          // {node, dir:'in'|'out', t0}
   flash: { t: 0, kind: '' },   // puls zakończenia zadania
   listening: false,
+  title: '', turns: 0, toolsStarted: 0, toolsFinished: 0, toolsFailed: 0, toolNames: [], ext: { started: 0, active: 0, finished: 0, last: '' }, thinkChars: 0, hudUntil: 0,
+  wave: new Array(56).fill(0), _pend: 0,
+  /* realny przepływ znaków ze strumienia modelu → fala w karcie Model AI */
+  feed(n) { this._pend += n; },
   last: null,           // podsumowanie ostatniego zadania {task_id,title,tools,nodes,dur,status,result}
   get state() { return this; },
   /* kolor Core zależny od stanu (r,g,b) albo null = kolor motywu */
@@ -91,7 +95,7 @@ const recompute = () => {
   else { setMode('THINKING'); engine.activity = .3; }   // między krokami zadania
 };
 const node = id => engine.nodes[id] || (engine.nodes[id] = { id, label: LABEL[id] || id, status: 'active', active: 0, calls: 0, spawn: Date.now(), doneAt: 0 });
-const packet = (id, dir) => { engine.packets.push({ node: id, dir, t0: Date.now() }); if (engine.packets.length > 60) engine.packets.shift(); };
+const packet = (id, dir, src) => { engine.packets.push({ node: id, dir, src, t0: Date.now() }); if (engine.packets.length > 60) engine.packets.shift(); };
 
 const reduce = e => {
   const p = e.payload;
@@ -99,15 +103,20 @@ const reduce = e => {
     case 'task.created':
       if (!p.replay) J.ev.stopReplay();
       engine.taskId = e.task_id; engine.nodes = {}; engine.packets = []; engine.startedAt = e.timestamp; engine.toolCalls = 0;
+      Object.assign(engine, { title: p.title || '', turns: 0, toolsStarted: 0, toolsFinished: 0, toolsFailed: 0, toolNames: [], ext: { started: 0, active: 0, finished: 0, last: '' }, thinkChars: 0, hudUntil: 0 });
       setMode('THINKING'); engine.activity = .35; break;
-    case 'model.started': { const n = node('model'); n.status = 'active'; n.active++; n.calls++; packet('model', 'out'); recompute(); break; }
-    case 'model.completed': case 'model.failed': { const n = node('model'); n.active = Math.max(0, n.active - 1); if (!n.active) { n.status = e.type === 'model.failed' ? 'failed' : 'done'; n.doneAt = e.timestamp; } packet('model', 'in'); recompute(); break; }
-    case 'tool.started': { const n = node(p.node || J.ev.nodeFor(p.tool)); n.status = 'active'; n.active++; n.calls++; n.lastTool = p.tool; engine.toolCalls++; packet(n.id, 'out'); recompute(); break; }
+    case 'model.started': { const n = node('model'); n.status = 'active'; n.active++; n.calls++; engine.turns++; packet('model', 'out', e.source); recompute(); break; }
+    case 'model.completed': case 'model.failed': { const n = node('model'); n.active = Math.max(0, n.active - 1); if (!n.active) { n.status = e.type === 'model.failed' ? 'failed' : 'done'; n.doneAt = e.timestamp; } packet('model', 'in', e.source); recompute(); break; }
+    case 'tool.started': { const n = node(p.node || J.ev.nodeFor(p.tool)); n.status = 'active'; n.active++; n.calls++; n.lastTool = p.tool; engine.toolCalls++; engine.toolsStarted++;
+      if (p.tool && !engine.toolNames.includes(p.tool)) engine.toolNames.push(p.tool);
+      if (e.source === 'hermes') { engine.ext.started++; engine.ext.active++; engine.ext.last = p.tool || ''; }
+      packet(n.id, 'out', e.source); recompute(); break; }
     case 'tool.completed': case 'tool.failed': {
       const n = node(p.node || J.ev.nodeFor(p.tool)); n.active = Math.max(0, n.active - 1);
-      if (e.type === 'tool.failed') n.failed = true;
+      engine.toolsFinished++; if (e.type === 'tool.failed') { n.failed = true; engine.toolsFailed++; }
+      if (e.source === 'hermes') { engine.ext.active = Math.max(0, engine.ext.active - 1); engine.ext.finished++; }
       if (!n.active) { n.status = n.failed ? 'failed' : 'done'; n.doneAt = e.timestamp; }
-      packet(n.id, 'in'); recompute(); break;
+      packet(n.id, 'in', e.source); recompute(); break;
     }
     case 'task.completed': case 'task.failed': case 'task.cancelled': {
       const ok = e.type === 'task.completed';
@@ -115,7 +124,7 @@ const reduce = e => {
       engine.flash = { t: e.timestamp, kind: ok ? 'ok' : e.type === 'task.failed' ? 'err' : 'cancel' };
       if (!p.replay) engine.last = { task_id: e.task_id, title: p.title || '', status: e.type.slice(5), tools: engine.toolCalls || 0, nodes: Object.keys(engine.nodes).filter(k => k !== 'model').length, dur: e.timestamp - (engine.startedAt || e.timestamp), result: p.result || '' };
       setMode(ok ? 'COMPLETED' : e.type === 'task.failed' ? 'ERROR' : 'IDLE'); engine.activity = ok ? .2 : .3;
-      engine.taskId = null;
+      engine.taskId = null; engine.hudUntil = e.timestamp + 9000;
       setTimeout(() => { if (engine.taskId === null && (engine.mode === 'COMPLETED' || engine.mode === 'ERROR')) setMode(engine.listening ? 'LISTENING' : 'IDLE'); }, 3600);
       break;
     }
@@ -124,6 +133,9 @@ const reduce = e => {
 
 /* mikrofon = LISTENING (tylko gdy nie trwa zadanie) */
 J.on('ear', on => { engine.listening = on; if (!engine.taskId) setMode(on ? 'LISTENING' : 'IDLE'); if (on && !engine.taskId) engine.activity = .2; });
+
+/* fala: jedna próbka co 90 ms z faktycznie odebranych znaków (bez ruchu = płaska linia) */
+setInterval(() => { const v = Math.min(1, engine._pend / 26); engine._pend = 0; engine.wave.push(v); engine.wave.shift(); }, 90);
 
 /* płynne opadanie aktywności w spoczynku */
 setInterval(() => { if (!engine.taskId && (engine.mode === 'IDLE')) engine.activity += (.06 - engine.activity) * .2; }, 250);
