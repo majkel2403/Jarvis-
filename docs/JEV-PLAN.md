@@ -28,7 +28,7 @@ Dokument jest napisany prostym językiem. Terminy techniczne są w słowniku na 
 6. **Argumenty (liczby, daty, godziny, teksty) czyta lokalny parser, nie Jev.** Jev nie liczy i traktuje daty jak tekst. Wyjątek: wartości z zamkniętej listy (aplikacja, kolor, tapeta, zakres).
 7. **Minimum danych.** Jev dostaje tylko to, czego potrzebuje do danej decyzji (sekcja 9).
 8. **Każda decyzja jest zapisywana** (lokalnie), żeby dało się zmierzyć trafność i poprawiać progi.
-9. **Najpierw mierzymy, potem dajemy autonomię.** Nowa możliwość wchodzi najpierw w „trybie cienia" (Jev liczy, ale nic nie robi).
+9. **Mierzymy, gdy tylko to możliwe.** Nowa możliwość może wejść w „trybie cienia" (Jev liczy, ale nic nie robi). Pomiar wymaga klucza, więc do czasu pomiaru progi autonomii są ostrożniejsze niż docelowe.
 10. **Wszystko, co robi Jev, da się wyłączyć jednym przełącznikiem** i użytkownik widzi, co on zdecydował (Process Log, karta „Logika i decyzje").
 
 ---
@@ -159,7 +159,7 @@ Pozostałe decyzje (D11, D13, D14, D17, D18) mają analogiczne karty i zostaną 
 | Nawigacja po oknach | `open_app`, `wm_focus`, `wm_minimize`, `wm_arrange`, `wm_list`, `palette_open`, `notifications_open` | safe | **A3** | odwracalne w 1 klik |
 | Odczyt danych | `notes_list/read/search`, `tasks_list`, `get_datetime`, `get_weather`, `get_crypto_prices`, `widgets_list`, `memory_recall`, `files_list/read`, `settings_get`, `get_status`, `help` | safe | **A3** | wyniki z notatek/plików idą przez D10 |
 | Wygląd i tryby | `set_theme`, `set_wallpaper`, `focus_mode`, `sound_toggle` | safe | **A3** | |
-| Odwracalne zapisy | `create_note`, `notes_append`, `notes_update`, `add_task`, `tasks_complete`, `tasks_update`, `start_timer`, `timer_control`, `create_widget`, `widgets_update`, `add_shortcut`, `market_watch`, `layout_save`, `clipboard_write`, `wm_move`, `memory_remember` | safe | **A2** (najpierw A1 przez 2 tygodnie) | wymagają stosu cofania; `memory_remember` przechodzi przez D12 |
+| Odwracalne zapisy | `create_note`, `notes_append`, `notes_update`, `add_task`, `tasks_complete`, `tasks_update`, `start_timer`, `timer_control`, `create_widget`, `widgets_update`, `add_shortcut`, `market_watch`, `layout_save`, `clipboard_write`, `wm_move`, `memory_remember` | safe | **A2** od wejścia F2 (decyzja użytkownika, sekcja 17) | wymagają stosu cofania, bez niego A2 się nie włącza; `memory_remember` przechodzi przez D12 |
 | Na zewnątrz | `web_search`, `open_url` (znane domeny) | safe / confirm | A2 / **A1** | obca domena zawsze potwierdzenie |
 | Nieodwracalne | `notes_delete`, `tasks_remove`, `widgets_remove`, `shortcut_remove`, `memory_forget`, `close_app`, `files_write` | confirm | **A0** | zawsze pytanie, także głosem |
 | Wrażliwe | `clipboard_read`, `open_url` (obca domena) | confirm | **A0** | naprawa luki L1 |
@@ -298,7 +298,7 @@ Testowalna bez sieci: te same dane wejściowe zawsze dają ten sam wynik.
 |---|---|---|
 | T_ask | od tej pewności warto zapytać „Chodzi o X?" | 0,50 |
 | T_exec(A3) | wykonaj po cichu: odczyty i nawigacja | 0,80 |
-| T_exec(A2) | wykonaj z „Cofnij": odwracalne zapisy | 0,90 |
+| T_exec(A2) | wykonaj z „Cofnij": odwracalne zapisy | **0,92** (ostrożniej niż 0,90, bo autonomia startuje przed pomiarem; po pomiarze do korekty) |
 | T_destr | ryzyko destrukcyjne → wymuś potwierdzenie | 0,80 (głos: 0,60) |
 | T_guard | strażnik D9: (a) poniżej → pytanie; (b) powyżej → pytanie | 0,50 / 0,60 |
 | T_inj | D10 wstrzyknięcie | 0,60 |
@@ -391,7 +391,7 @@ Reguła: **żadna awaria Jeva nie obniża poziomu zabezpieczeń** — potwierdze
 
 - Dziś jedno wywołanie D1 to około **3 tys. tokenów** (62 opisy poleceń + stan) → około **0,012 centa**; tysiąc poleceń ≈ **12 centów** (cena wejściowa ok. 0,042 USD / mln tokenów, wyjście darmowe; wg [OpenRouter](https://openrouter.ai/typesafe/jev-1.13) z opisu wyszukiwarki, do potwierdzenia na fakturze).
 - Dokładane decyzje D8, D16 w tym samym wywołaniu dodają niewiele. D9 i D10 to osobne, małe wywołania.
-- **Budżet miesięczny w Ustawieniach** (domyślnie 1 USD) i licznik w pasku. Po przekroczeniu: pauza i powiadomienie.
+- **Budżet miesięczny w Ustawieniach** (domyślnie **5 USD**, decyzja użytkownika) i licznik w pasku. Po przekroczeniu: pauza i powiadomienie.
 - Cel: szybka ścieżka (parser pewny) omija Jeva w ≥ 40% poleceń.
 
 ---
@@ -434,7 +434,7 @@ Ocena po każdej fazie. Jeśli kryteria nie są spełnione, faza nie przechodzi 
 | Faza | Zakres | Warunek zakończenia |
 |---|---|---|
 | **F0 — naprawy i podstawy** | L1: wykonanie „tylko Jev" nie jest zaufane dla ryzyka ≠ safe. L2: `terminal_run` z listą dozwolonych podpoleceń albo potwierdzeniem dla mutujących. L3: bezpiecznik i limity czasu. L4: użyć lub usunąć nieużywane odpowiedzi. Dziennik decyzji. Tryb cienia (przełącznik). `routeDecision` jako czysta funkcja z testami R1–R14. | testy luk zielone; zachowanie użytkownika bez Jeva bez zmian |
-| **F1 — pomiar** | rozbudowa zbioru do ≥ 400 zdań; uruchomienie sondy z kluczem; krzywa zaufania; eksperymenty E1–E3; wybór progów; rozpoczęcie trybu cienia | raport trafności; progi ustawione na danych; decyzja „idziemy dalej / Jev tylko doradza" |
+| **F1 — pomiar** *(odłożony do czasu, aż będzie klucz; do tego czasu progi ostrożne)* | rozbudowa zbioru do ≥ 400 zdań; uruchomienie sondy z kluczem; krzywa zaufania; eksperymenty E1–E3; wybór progów; rozpoczęcie trybu cienia | raport trafności; progi ustawione na danych; decyzja „idziemy dalej / Jev tylko doradza" |
 | **F2 — szybka ścieżka v2** | parser pierwszy + Jev równolegle; D8 (wartości z listy); slot-ask; D3/D4 (cel niejednoznaczny, „to/tu"); „Chodzi o…?" z alternatywami; stos cofania; A3, potem A2 | KPI z sekcji 13 dla trafności, odsetka bez Hermesa i opóźnienia |
 | **F3 — ochrona i dialog** | D9 strażnik; D10 wstrzyknięcia; D12 pamięć; D15 klasyfikacja odpowiedzi; D6 z nowym progiem | test wstrzyknięcia i zerowa liczba nieuprawnionych wykonań |
 | **F4 — nawigacja i proaktywność** | historia nawigacji i „wróć"; D17, D18; D13, D14, D16; D11 wybór modelu | KPI kosztu i satysfakcji; brak regresji |
@@ -462,18 +462,19 @@ Szacunek pracy (bez rezerwy): F0 1–2 dni, F1 2–3 dni + czas na zbieranie dan
 
 ---
 
-## 17. Decyzje do podjęcia (z rekomendacją)
+## 17. Decyzje (zatwierdzone 29.09.2026)
 
-| # | Decyzja | Rekomendacja |
-|---|---|---|
-| 1 | Poziom prywatności domyślny | **P1** (zgodnie z obecnym trybem prywatnym), P2 na świadomą zgodę |
-| 2 | Czy Jev może uruchamiać po cichu odwracalne zapisy (A2)? | **Nie na start**; najpierw A1 przez 2 tygodnie, potem A2 z „Cofnij" |
-| 3 | Tryb cienia przed autonomią | **Tak**, 1–2 tygodnie |
-| 4 | Miesięczny budżet | **1 USD** z licznikiem |
-| 5 | Od czego zaczynamy | **F0 (naprawy L1–L4) i F1 (pomiar)**; wymaga klucza do pomiaru |
-| 6 | Czy potwierdzać także polecenia wpisane ręcznie, jeśli źródłem był tylko Jev? | **Tak** (naprawa L1) |
-| 7 | D20 (nasłuch bez słowa „Jarvis") | **Nie robimy** |
-| 8 | Zakres F4 (nawigacja, wybór modelu) | wraca do decyzji po pomiarach z F1–F2 |
+| # | Decyzja | Rozstrzygnięcie | Uwagi |
+|---|---|---|---|
+| 1 | Od czego zaczynamy | **Tylko F0: naprawy L1–L4.** Pomiar (F1) po dostarczeniu klucza | rekomendacja była szersza (F0 + F1); pomiar odłożony, więc progi zostają ostrożne |
+| 2 | Poziom prywatności domyślny | **P1** (zdanie, aktywna aplikacja, okna, dzisiejsze zadania, minutnik; bez tytułów notatek i profilu) | zgodne z rekomendacją |
+| 3 | Autonomia odwracalnych zapisów (A2) | **Od razu z przyciskiem „Cofnij" (8 s)** | rekomendacja była ostrożniejsza (2 tygodnie pytań). Łagodzenie: A2 nie włączy się, dopóki nie działa stos cofania (F2); próg startowy 0,92; przełącznik „zawsze pytaj" w Ustawieniach; po pierwszym pomiarze próg do korekty |
+| 4 | Miesięczny budżet | **5 USD** z licznikiem i pauzą po przekroczeniu | luz na nowe decyzje |
+| 5 | Potwierdzać polecenia wpisane ręcznie, gdy źródłem był tylko Jev | **Tak** (naprawa L1) | wchodzi w F0 |
+| 6 | D20 (nasłuch bez słowa „Jarvis") | **Nie robimy** | prywatność |
+| 7 | Zakres F4 (nawigacja, wybór modelu) | wraca do decyzji po F2 | |
+
+Otwarte, ale nie blokują F0: czy chcemy tryb cienia mimo wczesnej autonomii (rekomendacja: tak, jako przełącznik diagnostyczny) oraz kiedy udostępnić klucz do pomiaru.
 
 ---
 
