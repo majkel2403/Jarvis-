@@ -610,6 +610,10 @@ J.layouts = (() => {
 
 /* ---------- licznik akcji (tool calls) ---------- */
 J.action = (label) => {
-  J.state.stats.actions = (J.state.stats.actions || 0) + 1; J.save();
+  J.state.stats.actions = (J.state.stats.actions || 0) + 1;
+  /* dzienna historia (wykres aktywności, stats_series): 30 dni */
+  const dh = J.state.stats.daily = J.state.stats.daily || {}, d = J.today(); dh[d] = dh[d] || { actions: 0, cost: 0 }; dh[d].actions++;
+  const ks = Object.keys(dh).sort(); while (ks.length > 30) delete dh[ks.shift()];
+  J.save();
   J.emit('action', label);
 };

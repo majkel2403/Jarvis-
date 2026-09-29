@@ -137,12 +137,6 @@ Pełna tabela: [02-obiekty-akcje.md](02-obiekty-akcje.md) §2. Nowe polecenia: `
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `widget_build` | Zbuduj widget z opisu | A2 | usuń widget | W4 |
-| `widget_edit` | Zmień widget zdaniem | A2 | poprzedni opis | W4 |
-| `widget_refresh` | Odśwież widget | A3 | — | W4 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

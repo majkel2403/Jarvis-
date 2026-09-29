@@ -81,7 +81,7 @@
   <main class="desktop" id="desktop">
     <canvas id="flowCanvas" aria-hidden="true"></canvas>
     <div class="icon-rail" id="iconRail"></div>
-    <div class="task-banner" id="task"><span class="live"></span><b>Jarvis</b><span id="taskText">gotowy</span><button class="task-stop hidden" id="taskStop" title="Przerwij zadanie (Esc)">■ Stop</button></div>
+    <div class="task-banner" id="task"><span class="live"></span><b>Jarvis</b><span id="taskText">gotowy</span><button class="task-stop plan hidden" id="taskPause" title="Wstrzymaj po bieżącym kroku">‖</button><button class="task-stop plan hidden" id="taskSkip" title="Pomiń następny krok">⤼</button><button class="task-stop hidden" id="taskStop" title="Przerwij zadanie (Esc)">■ Stop</button></div>
 
     <section class="center-stage">
       <div class="core-wrap" id="coreWrap" data-state="idle">
@@ -194,10 +194,13 @@
 <script src="js/process.js"></script>
 <script src="js/apps.js"></script>
 <script src="js/widgets.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/widget-spec.js"></script>
 <script src="js/commands.js"></script>
 <script src="js/search.js"></script>
 <script src="js/commands-ext.js"></script>
 <script src="js/commands-data.js"></script>
+<script src="js/commands-w4.js"></script>
 <script src="js/context.js"></script>
 <script src="js/judge.js"></script>
 <script src="js/jev-flow.js"></script>

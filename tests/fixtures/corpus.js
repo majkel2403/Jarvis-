@@ -215,5 +215,26 @@ C.push(['pokaż co jest w pliku raport', 'files_open', 'para']);
 C.push(['notatnik na pierwsze miejsce w doku', 'dock_order', 'local']);
 C.push(['przestaw kolejność w doku', 'dock_order', 'para']);
 
+/* ---- przeniesione z planu (widget_build, widget_edit, widget_refresh, chart_show, routine_create, routine_run, routine_list, routine_remove, plan_control) ---- */
+C.push(['zrób mi kafelek z kursem ethereum', 'widget_build', 'para']);
+C.push(['stwórz widget z listą zadań na jutro', 'widget_build', 'para']);
+C.push(['widget z odliczaniem do piątku', 'widget_build', 'para']);
+C.push(['w tym widgecie pokaż też solanę', 'widget_edit', 'para']);
+C.push(['zamień tabelę na wykres słupkowy', 'widget_edit', 'para']);
+C.push(['odśwież dane w widgetach', 'widget_refresh', 'local']);
+C.push(['niech widget krypto pobierze nowe ceny', 'widget_refresh', 'para']);
+C.push(['wykres ethereum z miesiąca', 'chart_show', 'local']);
+C.push(['narysuj ile miałem zadań w tym tygodniu', 'chart_show', 'para']);
+C.push(['utwórz rutynę wieczór', 'routine_create', 'local']);
+C.push(['co piątek o 16 rób mi podsumowanie tygodnia', 'routine_create', 'para']);
+C.push(['uruchom rutynę wieczór', 'routine_run', 'local']);
+C.push(['odpal mój poranek', 'routine_run', 'para']);
+C.push(['pokaż rutyny', 'routine_list', 'local']);
+C.push(['co mam zautomatyzowane', 'routine_list', 'para']);
+C.push(['usuń rutynę wieczór', 'routine_remove', 'local']);
+C.push(['wyłącz na stałe automatyzację poranną', 'routine_remove', 'para']);
+C.push(['pauza zadania', 'plan_control', 'local']);
+C.push(['poczekaj chwilę z tym planem', 'plan_control', 'para']);
+
 /* powtórzenia (np. z generatora) usuwamy — każde zdanie liczy się raz */
 module.exports = C.filter((x, i) => C.findIndex(y => y[0] === x[0]) === i);

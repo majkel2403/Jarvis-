@@ -401,7 +401,9 @@ $('#dock').addEventListener('keydown', e => {
 J.on('wm', () => { const l = $$('#dock button'); l.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1); });
 
 /* =================== WIDGETY: menu tworzenia =================== */
-const widgetMenu = (x, y) => ctxMenu(x, y, Object.entries(J.widgets.TYPES).map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })));
+const widgetMenu = (x, y) => ctxMenu(x, y, [...Object.entries(J.widgets.TYPES).filter(([k]) => k !== 'spec').map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
+  { ic: 'bolt', t: 'Widget z opisu…', run: async () => { const d = prompt('Opisz widget (np. „top 5 tokenów”, „mini wykres BTC”, „pogoda i zadania na dziś”, „odliczanie do urlopu 15 października”):'); if (!d || !d.trim()) return; const r = await J.uiRun('widget_build', { prompt: d.trim() }, { quiet: true }); if (!r.ok) { if (J.aiReady()) J.brain.handle('Zbuduj widget na pulpicie (widget_build): ' + d.trim()); else J.toast(r.text); } } },
+  { ic: 'chart', t: 'Wykres…', run: () => ctxMenu(x, y, [['crypto', 'Kurs BTC'], ['weather_hours', 'Temperatura'], ['tasks_week', 'Zadania w tygodniu'], ['activity', 'Aktywność'], ['cost', 'Koszt Hermesa'], ['jev_confidence', 'Pewność Jeva']].map(([s, t]) => ({ ic: 'chart', t, run: () => J.uiRun('chart_show', { source: s }) }))) }]);
 
 /* =================== PALETA POLECEŃ =================== */
 const palette = (() => {
@@ -784,11 +786,18 @@ J.on('hermes', syncStatus); J.on('settings', syncStatus);
   const chip = $('#resultChip'), stop = $('#taskStop'); let chipT;
   const pl = J.pl;
   const fmtD = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  stop.onclick = () => J.brain.abort();
-  J.ev.on('task.created', e => { if (e.payload.replay) return; stop.classList.remove('hidden'); chip.classList.remove('show'); clearTimeout(chipT); });
+  const pauseB = $('#taskPause'), skipB = $('#taskSkip');
+  stop.onclick = () => { if (J.plan && (J.plan.paused || J.userRoutines?.running)) J.plan.set('stop'); else J.brain.abort(); };
+  pauseB.onclick = () => J.uiRun('plan_control', { op: J.plan.paused ? 'resume' : 'pause' }, { quiet: true });
+  skipB.onclick = () => J.uiRun('plan_control', { op: 'skip' }, { quiet: true });
+  const syncPlan = () => { const on = !stop.classList.contains('hidden'); pauseB.classList.toggle('hidden', !on); skipB.classList.toggle('hidden', !on); pauseB.textContent = J.plan?.paused ? '▶' : '‖'; pauseB.title = J.plan?.paused ? 'Wznów' : 'Wstrzymaj po bieżącym kroku'; };
+  J.on('plan', syncPlan);
+  J.on('routine-step', e => { stop.classList.remove('hidden'); syncPlan(); $('#taskText').textContent = e.name + ' · krok ' + (e.i + 1) + '/' + e.n + ': ' + e.text; $('#task').classList.add('show'); });
+  J.ev.on('routine.completed', () => { if (!J.brain.busy) { stop.classList.add('hidden'); syncPlan(); $('#task').classList.remove('show'); } });
+  J.ev.on('task.created', e => { if (e.payload.replay) return; stop.classList.remove('hidden'); syncPlan(); chip.classList.remove('show'); clearTimeout(chipT); });
   ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, e => {
     if (e.payload.replay) return;
-    stop.classList.add('hidden');
+    if (!J.userRoutines?.running) stop.classList.add('hidden'); syncPlan();
     const l = J.engine.last; if (!l || (l.status === 'completed' && l.tools < 2 && l.nodes < 2)) return;   // proste polecenia i zwykłe odpowiedzi nie tworzą karty wyniku
     const ok = l.status === 'completed';
     chip.dataset.s = l.status;
@@ -1021,7 +1030,7 @@ try {
   bc.postMessage({ t: 'hello', id: me });
 } catch (e) { /* brak BroadcastChannel — bez ochrony dwóch kart */ }
 boot().then(() => {
-  J.widgets.restore();
+  J.widgets.restore(); setTimeout(() => J.userRoutines?.fire('startup'), 4000);
   /* tryb przestrzeni i układ startowy */
   { const m = J.state.ui.mode === 'present' ? 'work' : (J.state.ui.mode || S.startMode || 'work'); if (m !== 'work') J.uiMode.set(m); else J.state.ui.mode = 'work'; }
   { const ls = S.layoutStartup || 'none'; if (ls === 'last') { let l = []; try { l = JSON.parse(localStorage.getItem('jarvis-os:openAtExit') || '[]'); } catch (e) { } l.forEach(id => J.apps[id] && J.wm.open(id)); } else if (ls !== 'none') J.layouts.apply(ls); }

@@ -139,7 +139,7 @@ const streamChat = async (messages, o = {}) => {
     break;
   }
   if (!r.ok) { const er = new Error(r.status === 429 ? 'Hermes jest przeciążony (429) — spróbuj za chwilę.' : await httpError(r)); er.net = [401, 403, 404, 502, 503, 429].includes(r.status); er.status = r.status; er.code = r.status === 429 ? 'RATE_LIMITED' : undefined; throw er; }
-  const noteUsage = u => { if (!u) return; const d = hermesDay(); d.calls++; d.cost = +(d.cost + (+u.cost || 0)).toFixed(6); J.save(); };
+  const noteUsage = u => { if (!u) return; const d = hermesDay(); d.calls++; d.cost = +(d.cost + (+u.cost || 0)).toFixed(6); const dh = J.state.stats.daily = J.state.stats.daily || {}; dh[d.d] = dh[d.d] || { actions: 0, cost: 0 }; dh[d.d].cost = d.cost; J.save(); };
   const native = new Map();   // index -> {id, name, args}
   const finishNative = () => [...native.values()].map(t => { let args = {}; try { args = JSON.parse(t.args || '{}'); } catch (e) { args = null; } return { id: t.id, name: t.name, args, ok: args !== null, raw: t.args }; });
   if (!r.body || !(r.headers.get('content-type') || '').includes('event-stream')) {
@@ -324,13 +324,17 @@ const hermes = async (text, bubble, opts = {}) => {
       const results = [], seen = new Map();
       for (const call of calls) {
         let r;
+        /* plan_control: pauza czeka przed kolejnym narzędziem, „pomiń” odpuszcza jedno, „stop” przerywa */
+        const gate = J.plan ? await J.plan.gate(opts.signal) : 'go';
+        if (gate === 'stop') throw Object.assign(new Error('przerwano'), { name: 'AbortError' });
+        if (gate === 'skip') { r = R.fail('DENIED', 'Użytkownik pominął ten krok (' + call.name + ') — nie wykonuj go ponownie, przejdź dalej.'); J.chat.add('action', '⤼ ' + call.name + ' → pominięto'); lastResults.push({ name: call.name, ok: false, code: 'DENIED', text: 'pominięto' }); const pl = { name: call.name, ok: false, code: 'DENIED', text: r.text }; if (format === 'openai') history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(pl) }); else results.push('<tool_response>\n' + JSON.stringify(pl) + '\n</tool_response>'); continue; }
         if (!call.ok) { J.proc.step('error', 'Nieprawidłowe wywołanie narzędzia', [['Surowy tekst', call.raw]], { status: 'err', preview: 'INVALID_JSON' }); r = R.fail('INVALID_ARGS', 'INVALID_JSON: nie udało się odczytać argumentów wywołania — wyślij poprawny JSON.'); }
         else {
           const key = call.name + JSON.stringify(call.args || {}), cmd = R.get(call.name);
           if (seen.has(key) && cmd && cmd.writes.length && !cmd.idempotent) r = { ...seen.get(key), code: 'DUPLICATE', text: 'Powtórzone wywołanie w tej samej turze — wykonano raz. ' + seen.get(key).text };
           else {
             const force = early.has(call.idx) ? null : await guardCall(call, cmd, text, opts, injected);
-            r = early.has(call.idx) ? await early.get(call.idx) : await run(call.name, call.args, { source: 'hermes', signal: opts.signal, judge: opts.judge, forceConfirm: force });
+            r = opts.readOnly && cmd && cmd.writes.length ? R.fail('DENIED', 'Tryb sprawdzania: bez narzędzi zapisujących.') : early.has(call.idx) ? await early.get(call.idx) : await run(call.name, call.args, { source: opts.origin === 'signal' ? 'signal' : 'hermes', signal: opts.signal, judge: opts.judge, forceConfirm: force });
             seen.set(key, r);
             if (cmd && cmd.external && r.ok && await externalFlagged(call.name, r)) injected = true;
           }
@@ -420,11 +424,17 @@ J.brain = {
       if (reply != null) { /* załatwione bez Hermesa: cofnięcie albo szybka ścieżka */ }
       else if (J.aiReady() && !skipNet) {
         try {
-          reply = await hermes(text, bubble, { signal: taskAbort.signal, fullContext: fromSignal, judge: verdict }); setStatus('up');
+          reply = await hermes(text, bubble, { signal: taskAbort.signal, fullContext: fromSignal, judge: verdict, origin: opts.source }); setStatus('up');
           if (J.judge?.available() && J.judge.allowed('verify') && (lastResults.length || J.state.settings.hermesPreset === 'max') && lastResults.length && reply) {
             J.ev.emit('task.verifying', { results: lastResults.length });
-            const p = await J.judge.verify(reply, lastResults);
+            let p = await J.judge.verify(reply, lastResults);
             J.ev.emit('task.verified', { p });
+            /* jedna automatyczna poprawka (docs/spec/11-agent.md §7): Hermes sprawdza odpowiedź z wynikami, bez narzędzi zapisujących */
+            if (p != null && p < J.judge.thresholds().verify && !opts.noRecheck) {
+              const results0 = lastResults.slice();
+              J.proc.step('system', 'Weryfikacja: odpowiedź nie zgadza się z wynikami — proszę Hermesa o sprawdzenie', [['Zgodność', Math.round(p * 100) + '%']], { status: 'err' });
+              try { const fixed = await hermes('Sprawdź swoją poprzednią odpowiedź z wynikami narzędzi i popraw ją, jeśli się nie zgadza. Nie wywołuj narzędzi, które cokolwiek zmieniają.', bubble, { signal: taskAbort.signal, readOnly: true }); if (fixed) { reply = fixed; lastResults.push(...results0.filter(x => !lastResults.includes(x))); p = await J.judge.verify(reply, results0); J.ev.emit('task.verified', { p, recheck: true }); } } catch (e) { if (e.name === 'AbortError') throw e; }
+            }
             if (p != null && p < J.judge.thresholds().verify) { reply += '\n\n⚠ Weryfikacja Jev: odpowiedź może nie zgadzać się z wynikami narzędzi (' + Math.round(p * 100) + '% zgodności) — sprawdź w Process Log.'; J.sfx.error(); }
           }
         }

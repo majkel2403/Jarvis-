@@ -111,14 +111,6 @@ Zasady:
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `routine_create` | Utwórz rutynę | A1 | usuń rutynę | W4 |
-| `routine_run` | Uruchom rutynę | A1 | cofnij kroki odwracalne | W4 |
-| `routine_list` | Lista rutyn | A3 | — | W4 |
-| `routine_remove` | Usuń rutynę | A0 | przywróć rutynę (10 min) | W4 |
-| `plan_control` | Sterowanie planem | A3 | — | W4 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->

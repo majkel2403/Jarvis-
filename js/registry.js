@@ -191,12 +191,18 @@ const api = J.registry = {
     const dynRisk = c.risk === 'safe' && c.writes.length && !trusted && ctx.judge && ctx.judge.destructive >= (J.judge?.thresholds().destructive ?? .8);   // Jev ocenił wypowiedź jako destrukcyjną
     /* forceConfirm (strażnik D9, wykryta wstrzyknięta treść): pytamy zawsze, także gdy narzędzie ma „Zawsze zezwalaj” */
     const forced = !!ctx.forceConfirm && ctx.source !== 'ui' && ctx.confirmed !== true;
-    if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && !api.allowed(id) && !pre.trusted)) {
+    if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && (ctx.source === 'routine' || !api.allowed(id)) && !pre.trusted)) {   // rutyna: „zawsze zezwalaj” z czatu nie obowiązuje (11-agent.md §4)
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
       const q = forced ? String(ctx.forceConfirm) : typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
       const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
       if (dec === 'always' && !forced) api.allowAlways(id);
       else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
+    }
+    /* proaktywność (docs/spec/11-agent.md §6): Jarvis sam z siebie (źródło „signal”) niczego nie zmienia ani nie przełącza okien —
+       tylko proponuje; kliknięcie propozycji = polecenie użytkownika (źródło „ui”) */
+    if (ctx.source === 'signal' && c.writes.length) {
+      J.notice?.({ title: 'Propozycja Jarvisa', body: c.label + (Object.keys(args).length ? ': ' + Object.values(args).filter(v => typeof v !== 'object').join(', ').slice(0, 80) : ''), kind: 'agent', actions: [{ label: 'Zrób to', cmd: id, args }] });
+      return ok({ proposed: true, id, args }, 'Zaproponowałem użytkownikowi: ' + c.label + ' (sam z siebie nie zmieniam niczego).');
     }
     if (ctx.signal?.aborted) return fail('TIMEOUT', 'Przerwano.');
     if (J.state.settings.offlineMode && (c.reads || []).includes('internet')) return fail('OFFLINE', 'Tryb bez sieci jest włączony — „' + c.label + '” potrzebuje internetu.');

@@ -38,8 +38,10 @@
 | ui | `market-list` | apps.js |
 | ui | `memory` | context.js |
 | ui | `notes` | apps.js, commands-data.js, commands.js |
-| ui | `plan` | events.js |
+| ui | `plan` | commands-w4.js, events.js |
 | ui | `proc-end` | process.js |
+| ui | `routine-step` | commands-w4.js |
+| ui | `routines` | commands-w4.js |
 | ui | `settings` | apps.js, commands-ext.js, commands.js, core.js, main.js |
 | ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |

@@ -143,12 +143,16 @@ const build = (opts = {}) => {
     desktop: {
       focused: focusedId ? { app: focusedId, title: J.apps[focusedId]?.title, state: appState } : null,
       windows: J.wm.info().map(w => ({ app: w.id, min: w.min })),
-      widgets: J.widgets.list.map(w => ({ id: w.id, type: w.type, title: w.title, preview: w.type === 'list' ? w.data.items.length + ' poz., ' + w.data.items.filter(i => i.done).length + ' ✓' : String(w.data.text || '').slice(0, 60) })),
+      widgets: J.widgets.list.map(w => ({ id: w.id, type: w.type, title: w.title, preview: w.type === 'list' ? w.data.items.length + ' poz., ' + w.data.items.filter(i => i.done).length + ' ✓' : w.type === 'spec' ? 'z opisu: ' + w.spec.blocks.map(b => b.kind).join(', ') : String(w.data.text || '').slice(0, 60) })),
       shortcuts: J.state.shortcuts.map(x => x.name),
       focus_mode: !!document.querySelector('#app.focus'), theme: Object.keys(J.THEMES).find(k => J.THEMES[k][0] === s.accent) || s.accent, wallpaper: s.wall,
       timer: J.timer.running ? { label: J.timer.label, left_s: Math.round(J.timer.left() / 1000) } : null,
       timers: J.timers.all().length > 1 ? J.timers.all().map(t => ({ label: t.label, left_s: Math.round(t.left() / 1000) })) : undefined,
-      sound: !!s.sound, speech: !!s.speech, proactive: s.proactive || 'quiet'
+      sound: !!s.sound, speech: !!s.speech, proactive: s.proactive || 'quiet',
+      ui_mode: J.state.ui.mode || 'work', pinned: J.wm.info().filter(w => J.wm.isPinned?.(w.id)).map(w => w.id),
+      chat_thread: J.threads?.current?.() || 'main', undo_available: J.undo ? J.undo.list().length : 0,
+      routines: (J.state.routines || []).map(r => r.name + (r.enabled === false ? ' (wył.)' : '')),
+      plan: J.plan?.paused ? 'paused' : undefined
     },
     notes: { count: J.notes.live().length, recent: J.notes.live().slice(0, 10).map(n => ({ id: n.id, title: n.title })) },
     tasks: { today: tasks.filter(t => t.date === today).map(t => ({ id: t.id, time: t.time, text: t.text, done: t.done })), overdue: tasks.filter(t => !t.done && (t.date < today || (t.date === today && t.time && t.time < now))).length, tomorrow: tasks.filter(t => t.date === plus1).length },

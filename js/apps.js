@@ -1110,6 +1110,9 @@ J.apps.settings = {
         <div class="row"><div style="flex:1;font-size:12px">Podsumowanie dnia</div><input class="input" type="time" id="aSu" style="width:100px"><button class="btn sm ghost" id="aSuNow" title="Uruchom teraz">▶</button></div>
         <div class="row"><div style="flex:1;font-size:12px">Format narzędzi Hermesa<small class="dim" style="display:block;font-size:10px">auto wykrywa przy „Połącz i testuj”</small></div><select class="input" id="aFmt" style="width:130px"><option value="auto">auto</option><option value="hermes">&lt;tool_call&gt;</option><option value="openai">tool_calls</option></select></div>
         <div class="row"><div style="flex:1;font-size:12px">Zawsze dozwolone bez pytania<small class="dim" id="aAllow" style="display:block;font-size:10px"></small></div><button class="btn sm ghost" id="aAllowClr">Wyczyść</button></div>
+        <div class="row" style="margin-top:6px"><div style="flex:1;font-size:12px">Rutyny<small class="dim" style="display:block;font-size:10px">kroki po kolei; kroki wymagające zgody pytają zawsze · maks. 30 rutyn, 12 kroków</small></div></div>
+        <div id="rtList" class="col"></div>
+        <form class="row" id="rtForm"><input class="input" id="rtNew" placeholder="np. zrób rutynę poranek: pogoda, zadania na dziś i układ praca" maxlength="300"><button class="btn sm primary">Utwórz</button></form>
       </div>
       <div class="label">Sędzia Jev · OpenRouter ${icon('bolt', 'width="11" height="11" style="vertical-align:-1px"')}</div>
       <div class="card col">
@@ -1242,6 +1245,23 @@ J.apps.settings = {
     $('#aSuNow', body).onclick = () => J.brain.handle('Rutyna: podsumowanie dnia. Sprawdź zadania (tasks_list today) i notatki (notes_list) i podsumuj w 3 zdaniach, co zrobiono, a co przechodzi na jutro.', { source: 'routine', routine: 'summary', silentWindow: true });
     const aFmt = $('#aFmt', body); aFmt.value = s.toolFormat || 'auto'; aFmt.onchange = () => { s.toolFormat = aFmt.value; J.hermes.format = null; J.save(); J.brain.reset(); };
     const drawAllow = () => { const l = J.state.ui.allowAlways || []; $('#aAllow', body).textContent = l.length ? l.map(id => J.registry.get(id)?.label || id).join(', ') : 'brak — ryzykowne narzędzia zawsze pytają'; };
+    /* rutyny użytkownika: włącz/wyłącz, uruchom teraz, kroki (kolejność ↑↓), usuń; tworzenie zdaniem */
+    const drawRt = () => {
+      const box = $('#rtList', body); if (!box) return; box.innerHTML = ''; const l = J.state.routines || [];
+      if (!l.length) box.appendChild(h('div', { class: 'dim', style: 'font-size:11px' }, 'Brak własnych rutyn.'));
+      l.forEach(r => {
+        const trig = !r.trigger || r.trigger.kind === 'manual' ? 'na żądanie' : r.trigger.kind === 'time' ? 'o ' + r.trigger.at + (r.trigger.days?.length ? ' (' + r.trigger.days.join(', ') + ')' : '') : r.trigger.kind === 'phrase' ? '„' + r.trigger.phrase + '”' : r.trigger.event;
+        const c = h('div', { class: 'rt-card' }, '<div class="row"><label class="switch"><input type="checkbox"><i></i></label><b></b><small class="dim"></small><span class="sp"></span><button class="btn sm ghost" data-a="run" title="Uruchom teraz">▶</button><button class="btn sm ghost danger" data-a="x" title="Usuń">×</button></div><ol class="rt-steps"></ol>');
+        $('b', c).textContent = r.name; $('small', c).textContent = trig + (r.lastRun ? ' · ostatnio ' + new Date(r.lastRun).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + (r.history?.[0] && !r.history[0].ok ? ' ⚠' : '') : '');
+        $('input', c).checked = r.enabled !== false; $('input', c).onchange = e => { r.enabled = e.target.checked; J.save(); };
+        $('[data-a=run]', c).onclick = () => J.uiRun('routine_run', { name: r.id }, { quiet: false });
+        $('[data-a=x]', c).onclick = () => J.uiRun('routine_remove', { name: r.id });
+        r.steps.forEach((st, i) => { const li = h('li', {}, '<span></span><button class="btn sm ghost" data-a="up" title="Wyżej">↑</button><button class="btn sm ghost" data-a="rm" title="Usuń krok">×</button>'); $('span', li).textContent = st.say ? '„' + st.say + '”' : (J.registry.get(st.command)?.label || st.command) + (Object.keys(st.args || {}).length ? ' (' + Object.values(st.args).filter(v => typeof v !== 'object').join(', ') + ')' : ''); $('[data-a=up]', li).disabled = !i; $('[data-a=up]', li).onclick = () => { [r.steps[i - 1], r.steps[i]] = [r.steps[i], r.steps[i - 1]]; J.save(); drawRt(); }; $('[data-a=rm]', li).disabled = r.steps.length < 2; $('[data-a=rm]', li).onclick = () => { r.steps.splice(i, 1); J.save(); drawRt(); }; $('.rt-steps', c).appendChild(li); });
+        box.appendChild(c);
+      });
+    };
+    $('#rtForm', body).onsubmit = async e => { e.preventDefault(); const v = $('#rtNew', body).value.trim(); if (!v) return; const p = J.cmdKit.parseRoutine?.(v.startsWith('zrób') || v.startsWith('zrob') || /^kiedy|^codziennie|^w dni/.test(v) ? v : 'zrób rutynę ' + v); if (!p) return J.toast('Nie rozumiem — napisz np. „zrób rutynę poranek: pogoda, zadania na dziś”'); const r = await J.uiRun('routine_create', p); if (r.ok) { $('#rtNew', body).value = ''; J.toast(r.text); } };
+    drawRt(); sub(ctx, 'routines', drawRt);
     drawAllow(); $('#aAllowClr', body).onclick = () => { J.state.ui.allowAlways = []; J.save(); drawAllow(); J.sfx.click(); };
     /* OpenRouter: wspólny klucz */
     const orKey = $('#orKey', body), orBrain = $('#orBrain', body), orJudge = $('#orJudge', body), orInfo = $('#orInfo', body);

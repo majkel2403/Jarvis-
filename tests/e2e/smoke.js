@@ -160,6 +160,21 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.evaluate(async () => { const w = J.widgets.create('list', { title: 'Lista W3', items: ['a'] }); await new Promise(r => setTimeout(r, 100)); await J.uiRun('widget_collapse', { widget: w.id, on: true }); window.__w3 = w.id; }); await p.waitForTimeout(200);
   assert(await p.evaluate(() => document.querySelector('.window[data-app="w:' + window.__w3 + '"]').classList.contains('collapsed') && getComputedStyle(document.querySelector('.window[data-app="w:' + window.__w3 + '"] .win-body')).display === 'none'), 'zwinięty widget');
   await p.evaluate(() => { J.widgets.remove(window.__w3, { silent: true }); J.wm.closeAll(); });
+  // ===== W4: widget z opisu (bez HTML z opisu), wykres, rutyna z paskiem kroków =====
+  await p.evaluate(async () => { await J.uiRun('widget_build', { spec: { v: 1, title: 'Test W4', tone: 'purple', blocks: [{ kind: 'text', text: '<img src=x onerror=window.__pwned=1>' }, { kind: 'markdown', text: '**gruby** i [link](https://example.com)' }, { kind: 'countdown', until: '2099-01-01T00:00', label: 'do końca' }, { kind: 'buttons', buttons: [{ label: 'Otwórz notatnik', command: 'open_app', args: { app: 'notes' } }] }] } }, { offer: false }); });
+  await p.waitForTimeout(500);
+  const w4 = await p.evaluate(() => { const w = J.widgets.list.find(x => x.title === 'Test W4'), el = document.querySelector('.window[data-app="w:' + w.id + '"]'); return { img: !!el.querySelector('img'), pwned: !!window.__pwned, txt: el.querySelector('.ws-text').textContent, strong: el.querySelector('.md strong')?.textContent, clock: el.querySelector('.ws-clock').textContent, id: w.id }; });
+  assert(!w4.img && !w4.pwned && /onerror/.test(w4.txt) && w4.strong === 'gruby' && /\d+ d \d\d:\d\d:\d\d/.test(w4.clock), 'widget z opisu ' + JSON.stringify(w4));
+  await p.evaluate(id => [...document.querySelectorAll('.window[data-app="w:' + id + '"] .ws-btns button')].find(b => /notatnik/.test(b.textContent)).click(), w4.id); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.wm.isOpen('notes')), 'przycisk w widgecie uruchamia polecenie');
+  await p.evaluate(async () => { J.tasks.add('09:00', 'W4 a', J.today()); await J.uiRun('chart_show', { source: 'tasks_week' }, { offer: false }); }); await p.waitForTimeout(600);
+  const cw = await p.evaluate(() => { const w = J.widgets.list.filter(x => x.type === 'spec').pop(); const c = document.querySelector('.window[data-app="w:' + w.id + '"] canvas.ws-chart'); return c ? c.width : -1; });
+  assert(cw > 0, 'wykres narysowany na canvas: ' + cw);
+  const rt = await p.evaluate(async () => { const r = await J.uiRun('routine_create', J.cmdKit.parseRoutine('zrób rutynę test w4: otwórz kalkulator i otwórz minutnik'), { offer: false }); if (!r.ok) return r.text; const r2 = await J.uiRun('routine_run', { name: 'test w4' }, { offer: false }); return r2.text + '|' + J.wm.isOpen('calc') + J.wm.isOpen('timer'); });
+  assert(/truetrue$/.test(rt), 'rutyna w przeglądarce: ' + rt);
+  await p.evaluate(() => J.wm.open('settings', { view: 'section', target: 'agent' })); await p.waitForTimeout(400);
+  assert(await p.evaluate(() => /test w4/.test(document.querySelector('#rtList').textContent)), 'rutyna w Ustawieniach');
+  await p.evaluate(() => { J.widgets.list.filter(x => x.type === 'spec').forEach(w => J.widgets.remove(w.id, { silent: true })); J.state.routines = []; J.wm.closeAll(); });
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {

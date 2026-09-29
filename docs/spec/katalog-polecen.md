@@ -2,16 +2,16 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **112** · odwracalnych: 59 · wymagających zgody (ryzyko ≠ safe): 16 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **122** · odwracalnych: 64 · wymagających zgody (ryzyko ≠ safe): 17 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 51 |
-| A2 sam + Cofnij | 40 |
-| A1 pyta „Chodzi o…?” | 7 |
-| A0 zawsze zgoda | 14 |
+| A3 sam, po cichu | 55 |
+| A2 sam + Cofnij | 43 |
+| A1 pyta „Chodzi o…?” | 9 |
+| A0 zawsze zgoda | 15 |
 
 ## Aplikacje i okna
 
@@ -78,6 +78,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `notif_channel` | Kanał powiadomień — Włącza/wyłącza rodzaj powiadomień (task=zadania, timer=minutnik, market=rynek, network=sieć, agent=agent, files=pliki, hermes=Hermes, routine=rutyny), dźwięk al | **kind**: task\|timer\|market\|network\|agent\|files\|hermes\|routine; on: boolean; sound: boolean; per_hour: integer | safe | A2 | tak | „wylacz powiadomienia (z rynku\|o sieci\|z zadan)”, „wlacz powiadomienia z rynku”, „bez dzwieku przy zadaniach” |
 | `keys_set` | Zmień skrót klawiszowy — Przypisuje skrót do akcji (np. palette, chat, log, notifications, voice, undo, reopen, desktop, tile, present, back, forward). keys="reset" przywraca domyślny;  | **action**: string; **keys**: string | safe | A2 | tak | „(paleta\|czat\|log\|powiadomienia) pod {keys}”, „zmien skrot (palety\|czatu) na {keys}”, „przywroc domyslne skroty” |
 | `settings_reset` | Przywróć ustawienia sekcji — Przywraca domyślne wartości jednej sekcji ustawień: wyglad, glos, agent, jev, hermes, skroty, powiadomienia. Klucze API zostają. Wymaga potwierdzenia. | **section**: wyglad\|glos\|agent\|jev\|hermes\|skroty\|powiadomienia | confirm | A0 | tak | „przywroc domyslny wyglad”, „zresetuj ustawienia (glosu\|jeva\|agenta)”, „domyslne ustawienia (jeva\|glosu)” |
+| `chart_show` | Pokaż wykres — Skrót do widget_build: wykres z danych polecenia A3 — crypto (symbol), weather_hours, tasks_week, activity, cost, jev_confidence; kind: line, bar, area, spark. | **source**: crypto\|tasks_week\|activity\|cost\|jev_confidence\|weather_hours; symbol: string; range: 1h\|24h\|7d\|30d; kind: line\|bar\|area\|spark | safe | A2 | tak | „pokaz wykres bitcoina”, „wykres zadan w tym tygodniu”, „pokaz na wykresie temperature na dzis” |
 
 ## Notatki
 
@@ -119,6 +120,9 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `widget_duplicate` | Duplikuj widget — Tworzy kopię widgetu obok oryginału. | **widget**: string | safe | A2 | tak | „zduplikuj widget {widget}”, „duplikuj widget {widget}”, „zrob kopie widgetu {widget}” |
 | `widget_collapse` | Zwiń / rozwiń widget — Zwija widget do paska tytułu albo rozwija (on). widget="all" — wszystkie. | **widget**: string; on: boolean | safe | A3 | tak | „zwin widget {widget}”, „rozwin widget {widget}”, „zwin wszystkie widgety” |
 | `widget_items` | Pozycje listy w widgecie — Na widgecie-liście: dodaje (add), odhacza (check), odznacza (uncheck), zmienia (rename → to), usuwa (remove) pozycję albo usuwa odhaczone (clear_done). | **widget**: string; **op**: add\|check\|uncheck\|rename\|remove\|clear_done; item: string; to: string | safe | A2 | tak | „dopisz {item} do listy {widget}”, „odhacz {item} na liscie {widget}”, „usun zrobione z listy {widget}” |
+| `widget_build` | Zbuduj widget z opisu — Tworzy widget z opisu (spec JSON wg docs/spec/widget.schema.json: v=1, title, blocks[text\|markdown\|kpi\|table\|list\|checklist\|chart\|badge\|progress\|clock\|countdown | spec: object; prompt: string | safe | A2 | tak | „zrob widget z top 5 tokenow i zmiana 24h”, „zrob karte z checklista na dzis”, „mini wykres btc na pulpicie” |
+| `widget_edit` | Zmień widget zdaniem — Zmienia opis widgetu z opisu: patch = JSON Merge Patch do spec (np. {"title":"Krypto"} albo nowe "blocks"), instruction = zdanie (lokalnie: tytuł, „odświeżaj co | **widget**: string; patch: object; instruction: string | safe | A2 | tak | „zmien ten widget na wykres”, „zmien tytul widgetu na {instruction}”, „odswiezaj ten widget co minute” |
+| `widget_refresh` | Odśwież widget — Pobiera od nowa dane widgetów z opisu (wszystkich albo jednego). | widget: string | safe | A3 | — | „odswiez widgety”, „odswiez widget {widget}”, „zaktualizuj ten widget” |
 
 ## Dane
 
@@ -134,6 +138,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `clipboard_read` | Odczytaj schowek — Zwraca tekst ze schowka (wymaga zgody przeglądarki). | — | confirm · zewn. | A0 | — | „co mam w schowku”, „odczytaj schowek”, „wklej ze schowka” |
 | `market_watchlist` | Lista obserwowanych — Dodaje (add) lub usuwa (remove) kryptowalutę z listy w Monitorze rynku albo ją zwraca (list). Maks. 12. Tylko podgląd — żadnego handlu. | **op**: add\|remove\|list; symbol: string | safe | A2 | tak | „dodaj {symbol} do obserwowanych”, „usun {symbol} z rynku”, „jakie kryptowaluty obserwuje” |
 | `market_alerts` | Alerty kursów — Lista alertów kursów (list), usunięcie jednego (remove, alert = symbol albo id) albo wszystkich (clear). | **op**: list\|remove\|clear; alert: string | safe | A2 | tak | „jakie mam alerty kursow”, „pokaz alerty kursow”, „usun alert na {alert}” |
+| `stats_series` | Dane do wykresu — Seria punktów {x, y} do wykresu: tasks_week (zadania na 7 dni), activity (akcje dziennie, 14 dni), cost (koszt Hermesa dziennie, 14 dni), jev_confidence (pewnoś | **kind**: tasks_week\|activity\|cost\|jev_confidence | safe | A3 | — | „dane do wykresu aktywnosci”, „seria zadan na tydzien” |
 
 ## Pamięć
 
@@ -170,6 +175,11 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `undo` | Cofnij — Cofa ostatnią akcję (count = ile ostatnich, minutes = wszystko z ostatnich N minut). force=true cofa mimo późniejszej zmiany obiektu. | count: integer; minutes: integer; force: boolean | safe | A3 | — | „cofnij”, „cofnij (dwie\|trzy) ostatnie [rzeczy]”, „cofnij wszystko z ostatnich {minutes} minut” |
 | `undo_list` | Historia do cofnięcia — Lista ostatnich akcji, które da się cofnąć (10 minut). | — | safe | A3 | — | „co moge cofnac”, „historia do cofniecia”, „historia zmian” |
+| `plan_control` | Sterowanie planem — Pauza (pause), wznowienie (resume), pominięcie kroku (skip) albo zatrzymanie (stop) trwającego zadania wieloetapowego lub rutyny. | **op**: pause\|resume\|skip\|stop | safe | A3 | — | „wstrzymaj”, „pomin ten krok”, „dokoncz” |
+| `routine_create` | Utwórz rutynę — Rutyna = nazwa + wyzwalacz ({kind:"time",at:"07:30",days:["pn",…]} \| {kind:"event",event:"task-overdue\|market-alert\|timer-ended\|startup\|online"} \| {kind:"phrase | **name**: string; trigger: object; **steps**: object[] | safe | A1 | tak | „zrob rutyne poranek: pogoda, zadania na dzis i uklad praca”, „codziennie o 18 pokaz podsumowanie dnia”, „kiedy mowie start pracy, otworz notatnik i wlacz skupienie” |
+| `routine_run` | Uruchom rutynę — Uruchamia rutynę teraz (kroki po kolei; „wstrzymaj”, „pomiń ten krok”, „stop” działają w trakcie). Zdanie uruchamiające rutyny też ją uruchamia. | **name**: string | safe | A1 | — | „uruchom rutyne {name}”, „odpal rutyne {name}”, „zrob moj {name}” |
+| `routine_list` | Lista rutyn — Rutyny użytkownika z wyzwalaczami, krokami i ostatnim uruchomieniem (plus wbudowane: briefing, podsumowanie dnia). | — | safe | A3 | — | „jakie mam rutyny”, „lista rutyn”, „pokaz automatyzacje” |
+| `routine_remove` | Usuń rutynę — Usuwa rutynę (wymaga zgody; „Cofnij” przez 10 minut). | **name**: string | confirm | A0 | tak | „usun rutyne {name}”, „skasuj automatyzacje {name}”, „nie potrzebuje juz rutyny {name}” |
 
 ## Czat
 

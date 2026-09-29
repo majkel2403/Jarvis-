@@ -4630,5 +4630,411 @@
    "usun zrobione z listy {widget}"
   ],
   "needsConfirmText": false
+ },
+ {
+  "id": "widget_build",
+  "group": "Pulpit i widgety",
+  "label": "Zbuduj widget z opisu",
+  "description": "Tworzy widget z opisu (spec JSON wg docs/spec/widget.schema.json: v=1, title, blocks[text|markdown|kpi|table|list|checklist|chart|badge|progress|clock|countdown|divider|buttons], sources{nazwa:{command A3, args, refresh ≥15 s, event}}, odnośniki \"$źródło.ścieżka\" i \"{{$…}}\"). Bez dowolnego HTML/JS. Bez spec — próbuje zbudować z prompt (przepisy lokalne: top N krypto, wykres waluty, pogoda+zadania, checklista na dziś, odliczanie do daty).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "spec": {
+     "type": "object",
+     "description": "opis widgetu (schemat widget.schema.json)"
+    },
+    "prompt": {
+     "type": "string",
+     "maxLength": 300,
+     "description": "oryginalne zdanie użytkownika"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "zrob widget z top 5 tokenow i zmiana 24h",
+   "zrob karte z checklista na dzis",
+   "mini wykres btc na pulpicie",
+   "widget z pogoda i zadaniami na dzis",
+   "zrob odliczanie do urlopu 15 pazdziernika"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "widget_edit",
+  "group": "Pulpit i widgety",
+  "label": "Zmień widget zdaniem",
+  "description": "Zmienia opis widgetu z opisu: patch = JSON Merge Patch do spec (np. {\"title\":\"Krypto\"} albo nowe \"blocks\"), instruction = zdanie (lokalnie: tytuł, „odświeżaj co minutę”, „na wykres słupkowy”). „Cofnij” przywraca poprzedni opis.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string",
+     "description": "id albo tytuł; \"current\" = aktywny"
+    },
+    "patch": {
+     "type": "object"
+    },
+    "instruction": {
+     "type": "string",
+     "maxLength": 300
+    }
+   },
+   "required": [
+    "widget"
+   ]
+  },
+  "required": [
+   "widget"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "zmien ten widget na wykres",
+   "zmien tytul widgetu na {instruction}",
+   "odswiezaj ten widget co minute",
+   "zmien widget {widget} na wykres slupkowy"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "widget_refresh",
+  "group": "Pulpit i widgety",
+  "label": "Odśwież widget",
+  "description": "Pobiera od nowa dane widgetów z opisu (wszystkich albo jednego).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "widget": {
+     "type": "string"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "odswiez widgety",
+   "odswiez widget {widget}",
+   "zaktualizuj ten widget"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "stats_series",
+  "group": "Dane",
+  "label": "Dane do wykresu",
+  "description": "Seria punktów {x, y} do wykresu: tasks_week (zadania na 7 dni), activity (akcje dziennie, 14 dni), cost (koszt Hermesa dziennie, 14 dni), jev_confidence (pewność decyzji Jeva, ostatnie 30).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "kind": {
+     "type": "string",
+     "enum": [
+      "tasks_week",
+      "activity",
+      "cost",
+      "jev_confidence"
+     ]
+    }
+   },
+   "required": [
+    "kind"
+   ]
+  },
+  "required": [
+   "kind"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "dane do wykresu aktywnosci",
+   "seria zadan na tydzien"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "chart_show",
+  "group": "Interfejs",
+  "label": "Pokaż wykres",
+  "description": "Skrót do widget_build: wykres z danych polecenia A3 — crypto (symbol), weather_hours, tasks_week, activity, cost, jev_confidence; kind: line, bar, area, spark.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "source": {
+     "type": "string",
+     "enum": [
+      "crypto",
+      "tasks_week",
+      "activity",
+      "cost",
+      "jev_confidence",
+      "weather_hours"
+     ]
+    },
+    "symbol": {
+     "type": "string"
+    },
+    "range": {
+     "type": "string",
+     "enum": [
+      "1h",
+      "24h",
+      "7d",
+      "30d"
+     ]
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "line",
+      "bar",
+      "area",
+      "spark"
+     ]
+    }
+   },
+   "required": [
+    "source"
+   ]
+  },
+  "required": [
+   "source"
+  ],
+  "risk": "safe",
+  "level": "A2",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "widgets"
+  ],
+  "hermes": true,
+  "examples": [
+   "pokaz wykres bitcoina",
+   "wykres zadan w tym tygodniu",
+   "pokaz na wykresie temperature na dzis",
+   "wykres kosztu hermesa",
+   "wykres aktywnosci"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "plan_control",
+  "group": "Agent",
+  "label": "Sterowanie planem",
+  "description": "Pauza (pause), wznowienie (resume), pominięcie kroku (skip) albo zatrzymanie (stop) trwającego zadania wieloetapowego lub rutyny.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "op": {
+     "type": "string",
+     "enum": [
+      "pause",
+      "resume",
+      "skip",
+      "stop"
+     ]
+    }
+   },
+   "required": [
+    "op"
+   ]
+  },
+  "required": [
+   "op"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "wstrzymaj",
+   "pomin ten krok",
+   "dokoncz",
+   "stop",
+   "wznow zadanie"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "routine_create",
+  "group": "Agent",
+  "label": "Utwórz rutynę",
+  "description": "Rutyna = nazwa + wyzwalacz ({kind:\"time\",at:\"07:30\",days:[\"pn\",…]} | {kind:\"event\",event:\"task-overdue|market-alert|timer-ended|startup|online\"} | {kind:\"phrase\",phrase:\"start pracy\"} | {kind:\"manual\"}) + kroki (maks. 12): {command, args} albo {say: zdanie do Hermesa}. Kroki A0 pytają przy wykonaniu. Rutyna nie może uruchamiać rutyn.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "trigger": {
+     "type": "object"
+    },
+    "steps": {
+     "type": "array",
+     "maxItems": 12,
+     "items": {
+      "type": "object"
+     }
+    }
+   },
+   "required": [
+    "name",
+    "steps"
+   ]
+  },
+  "required": [
+   "name",
+   "steps"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "routines"
+  ],
+  "hermes": true,
+  "examples": [
+   "zrob rutyne poranek: pogoda, zadania na dzis i uklad praca",
+   "codziennie o 18 pokaz podsumowanie dnia",
+   "kiedy mowie start pracy, otworz notatnik i wlacz skupienie"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "routine_run",
+  "group": "Agent",
+  "label": "Uruchom rutynę",
+  "description": "Uruchamia rutynę teraz (kroki po kolei; „wstrzymaj”, „pomiń ten krok”, „stop” działają w trakcie). Zdanie uruchamiające rutyny też ją uruchamia.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  "required": [
+   "name"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "uruchom rutyne {name}",
+   "odpal rutyne {name}",
+   "zrob moj {name}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "routine_list",
+  "group": "Agent",
+  "label": "Lista rutyn",
+  "description": "Rutyny użytkownika z wyzwalaczami, krokami i ostatnim uruchomieniem (plus wbudowane: briefing, podsumowanie dnia).",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "jakie mam rutyny",
+   "lista rutyn",
+   "pokaz automatyzacje",
+   "pokaz rutyny"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "routine_remove",
+  "group": "Agent",
+  "label": "Usuń rutynę",
+  "description": "Usuwa rutynę (wymaga zgody; „Cofnij” przez 10 minut).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  },
+  "required": [
+   "name"
+  ],
+  "risk": "confirm",
+  "level": "A0",
+  "levelDependsOnArgs": false,
+  "undoable": true,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "routines"
+  ],
+  "hermes": true,
+  "examples": [
+   "usun rutyne {name}",
+   "skasuj automatyzacje {name}",
+   "nie potrzebuje juz rutyny {name}"
+  ],
+  "needsConfirmText": true
  }
 ]

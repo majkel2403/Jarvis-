@@ -154,7 +154,6 @@ Ukryte: czat, Process Log, centrum powiadomień (liczba zostaje, treści nie), t
 | polecenie | co robi | poziom | cofanie | fala |
 |---|---|---|---|---|
 | `fx_level` | Poziom efektów | A2 | poprzedni poziom | W5 |
-| `chart_show` | Pokaż wykres | A2 | usuń widget | W4 |
 
 Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
 

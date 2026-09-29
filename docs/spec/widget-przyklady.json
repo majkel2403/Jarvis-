@@ -11,7 +11,7 @@
    "spec": { "v": 1, "title": "Na dziś", "icon": "calendar", "size": "M",
      "sources": { "zad": { "command": "tasks_list", "args": { "range": "today" }, "event": "tasks" } },
      "blocks": [
-       { "kind": "progress", "label": "Zrobione", "value": "$zad.done", "max": 1 },
+       { "kind": "progress", "label": "Zrobione", "value": "$zad.ratio", "max": 1 },
        { "kind": "checklist", "items": "$zad.tasks", "field": "text", "done": "done", "on_check": "tasks_complete" },
        { "kind": "buttons", "buttons": [ { "label": "Otwórz harmonogram", "command": "open_app", "args": { "app": "schedule" }, "style": "ghost" } ] }
      ] } },
