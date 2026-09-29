@@ -71,6 +71,7 @@
       <button class="top-btn" id="btnFocus" title="Tryb skupienia"></button>
       <button class="top-btn hidden" id="btnChat" title="Czat z Jarvisem"></button>
       <button class="top-btn hidden" id="btnLog" title="Process Log"><span class="badge hidden" id="logBadge">0</span></button>
+      <button class="top-btn" id="btnNotif" title="Powiadomienia (Alt+N)"><span class="badge hidden" id="notifBadge">0</span></button>
       <button class="avatar" id="btnAvatar" title="Ustawienia">JD</button>
     </div>
   </header>
@@ -96,6 +97,7 @@
     <div class="hud" id="hud" aria-label="Przepływ zadania"></div>
 
     <div class="result-chip" id="resultChip"></div>
+    <div class="ask-chip" id="askChip" role="dialog" aria-live="assertive"></div>
 
     <!-- telemetria (dolny lewy róg): pogoda, zegar, realne metryki systemu i agenta -->
     <section class="deck" id="deck" aria-label="Telemetria">
@@ -141,11 +143,29 @@
     <div class="lp-tabs"><button data-t="task" class="on">Zadanie</button><button data-t="hist">Historia <em id="lpHistN">0</em></button></div>
     <div class="lp-task" id="lpTask">
       <div class="lp-title" id="lpTitle"></div><div class="lp-meta" id="lpMeta"></div>
+      <div class="lp-plan hidden" id="lpPlan"></div>
       <div class="lp-steps" id="lpSteps"></div>
       <div class="lp-foot" id="lpFoot"></div>
     </div>
     <div class="lp-hist hidden" id="lpHist"></div>
   </div></aside>
+  </div>
+
+  <aside class="notif-panel" id="notifPanel" aria-label="Powiadomienia">
+    <div class="lp-head"><span class="lp-glyph">◉</span><b>Powiadomienia</b><button class="lp-btn" id="notifClear" title="Wyczyść">✕</button><button class="lp-btn" id="notifClose" title="Zamknij">⌄</button></div>
+    <div class="notif-list" id="notifList"></div>
+    <div class="notif-foot">Przypomnienia, minutnik, alerty kursów, sygnały agenta i rutyny trafiają tutaj. <kbd>Alt N</kbd></div>
+  </aside>
+
+  <div class="onboard" id="onboard" role="dialog" aria-label="Pierwsze uruchomienie">
+    <div class="ob-card">
+      <div class="ob-head"><span class="brand-orb"></span><div><b>Witaj w Jarvis OS</b><small>Trzy kroki i środowisko jest Twoje.</small></div></div>
+      <div class="ob-step"><span class="ob-n">1</span><div><b>Głos</b><small>Kliknij, aby przetestować mikrofon i zezwolić przeglądarce na nasłuch.</small></div><button class="btn" id="obMic">Testuj mikrofon</button></div>
+      <div class="ob-step"><span class="ob-n">2</span><div><b>Mózg: Hermes</b><small>Podłącz Hermes Agent (Nous Research), aby Jarvis rozumiał wszystko. Bez niego działa silnik lokalny.</small></div><button class="btn ghost" id="obHermes">Ustawienia</button></div>
+      <div class="ob-step"><span class="ob-n">3</span><div><b>Miasto</b><small>Do pogody i briefingów.</small></div><input class="input" id="obCity" placeholder="Miasto" style="width:150px"></div>
+      <label class="toggle ob-wake"><div>Czuwanie „Jarvis, …”<small>Nasłuch ciągły ze słowem wybudzającym (Chrome / Edge)</small></div><span class="switch"><input type="checkbox" id="obWake"><i></i></span></label>
+      <div class="ob-foot"><button class="btn ghost" id="obSkip">Pomiń</button><button class="btn primary" id="obGo">Zaczynamy</button></div>
+    </div>
   </div>
 
   <div class="palette-bg" id="paletteBg">
@@ -164,10 +184,14 @@
 
 <script src="js/core.js"></script>
 <script src="js/events.js"></script>
+<script src="js/store.js"></script>
+<script src="js/registry.js"></script>
 <script src="js/process.js"></script>
-<script src="js/ai.js"></script>
 <script src="js/apps.js"></script>
 <script src="js/widgets.js"></script>
+<script src="js/commands.js"></script>
+<script src="js/context.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/dash.js"></script>
 <script src="js/main.js"></script>

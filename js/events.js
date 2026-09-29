@@ -9,8 +9,8 @@
    Wystawiane dziś:  task.created · task.completed · task.failed · task.cancelled
                      model.started · model.completed · model.failed
                      tool.started · tool.completed · tool.failed
-   Stany (mode):     IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR
-   Zarezerwowane:    PAUSED · APPROVAL_REQUIRED · VERIFYING · RECOVERING
+   Stany (mode):     IDLE · LISTENING · THINKING · EXECUTING · APPROVAL_REQUIRED · PAUSED · RECOVERING · COMPLETED · ERROR
+   Dodatkowo:        plan.created / plan.step (plan z <plan>), signal (sygnał środowiska)
    ========================================================= */
 'use strict';
 (() => {
@@ -72,6 +72,9 @@ const engine = J.engine = {
   listening: false,
   title: '', turns: 0, toolsStarted: 0, toolsFinished: 0, toolsFailed: 0, toolNames: [], ext: { started: 0, active: 0, finished: 0, last: '' }, thinkChars: 0, hudUntil: 0,
   wave: new Array(56).fill(0), _pend: 0,
+  plan: null, hold: null,   // plan z <plan>; hold = tryb wstrzymany (APPROVAL_REQUIRED/PAUSED) do czasu wznowienia
+  log: [],                  // ostatnie zdarzenia (wszystkie zadania) do Context Packet
+  recent(n = 5) { return this.log.slice(-n).map(e => ({ t: Math.round((Date.now() - e.timestamp) / 1000) + 's', type: e.type, tool: e.payload.tool || e.payload.title || undefined })); },
   /* realny przepływ znaków ze strumienia modelu → fala w karcie Model AI */
   feed(n) { this._pend += n; },
   last: null,           // podsumowanie ostatniego zadania {task_id,title,tools,nodes,dur,status,result}
@@ -82,13 +85,14 @@ const engine = J.engine = {
     if (this.mode === 'COMPLETED' && now - this.since < 2600) return '57,229,154';
     if (this.mode === 'ERROR' && now - this.since < 3500) return '255,184,77';
     if (this.mode === 'THINKING') return J.rgb(J.state.settings.accent2);
+    if (this.mode === 'APPROVAL_REQUIRED' || this.mode === 'PAUSED' || this.mode === 'RECOVERING') return '255,184,77';
     return null;
   }
 };
 const setMode = m => { if (engine.mode !== m) { engine.mode = m; engine.since = Date.now(); } };
 const activeCount = () => Object.values(engine.nodes).filter(n => n.status === 'active' && n.id !== 'model').length;
 const recompute = () => {
-  if (!engine.taskId) return;
+  if (!engine.taskId || engine.hold) return;
   const tools = activeCount(), model = engine.nodes.model?.status === 'active';
   if (tools) { setMode('EXECUTING'); engine.activity = Math.min(.95, .55 + .12 * tools); }
   else if (model) { setMode('THINKING'); engine.activity = .4; }
@@ -99,10 +103,19 @@ const packet = (id, dir, src) => { engine.packets.push({ node: id, dir, src, t0:
 
 const reduce = e => {
   const p = e.payload;
+  if (!p.replay && e.type !== 'signal') { engine.log.push(e); if (engine.log.length > 60) engine.log.shift(); }
   switch (e.type) {
+    case 'plan.created': engine.plan = { steps: p.steps || [], done: 0 }; break;
+    case 'plan.step': if (engine.plan) engine.plan.done = Math.min(engine.plan.steps.length, (p.index ?? engine.plan.done) + 1); break;
+    case 'approval.requested': engine.hold = 'APPROVAL_REQUIRED'; setMode('APPROVAL_REQUIRED'); engine.activity = .25; break;
+    case 'approval.resolved': engine.hold = null; if (engine.taskId) recompute(); else setMode(engine.listening ? 'LISTENING' : 'IDLE'); break;
+    case 'task.paused': engine.hold = 'PAUSED'; setMode('PAUSED'); engine.activity = .15; break;
+    case 'task.resumed': engine.hold = null; recompute(); break;
+    case 'task.recovering': engine.hold = null; setMode('RECOVERING'); engine.activity = .3; break;
+    case 'signal': if (!engine.taskId) engine.activity = Math.max(engine.activity, .35); break;
     case 'task.created':
       if (!p.replay) J.ev.stopReplay();
-      engine.taskId = e.task_id; engine.nodes = {}; engine.packets = []; engine.startedAt = e.timestamp; engine.toolCalls = 0;
+      engine.taskId = e.task_id; engine.nodes = {}; engine.packets = []; engine.startedAt = e.timestamp; engine.toolCalls = 0; engine.plan = null; engine.hold = null;
       Object.assign(engine, { title: p.title || '', turns: 0, toolsStarted: 0, toolsFinished: 0, toolsFailed: 0, toolNames: [], ext: { started: 0, active: 0, finished: 0, last: '' }, thinkChars: 0, hudUntil: 0 });
       setMode('THINKING'); engine.activity = .35; break;
     case 'model.started': { const n = node('model'); n.status = 'active'; n.active++; n.calls++; engine.turns++; packet('model', 'out', e.source); recompute(); break; }
@@ -113,6 +126,7 @@ const reduce = e => {
       packet(n.id, 'out', e.source); recompute(); break; }
     case 'tool.completed': case 'tool.failed': {
       const n = node(p.node || J.ev.nodeFor(p.tool)); n.active = Math.max(0, n.active - 1);
+      if (engine.plan && e.source !== 'hermes' && engine.plan.done < engine.plan.steps.length) { engine.plan.done++; J.emit('plan', engine.plan); }
       engine.toolsFinished++; if (e.type === 'tool.failed') { n.failed = true; engine.toolsFailed++; }
       if (e.source === 'hermes') { engine.ext.active = Math.max(0, engine.ext.active - 1); engine.ext.finished++; }
       if (!n.active) { n.status = n.failed ? 'failed' : 'done'; n.doneAt = e.timestamp; }
@@ -123,7 +137,7 @@ const reduce = e => {
       Object.values(engine.nodes).forEach(n => { if (n.status === 'active') { n.status = 'done'; n.doneAt = e.timestamp; n.active = 0; } });
       engine.flash = { t: e.timestamp, kind: ok ? 'ok' : e.type === 'task.failed' ? 'err' : 'cancel' };
       if (!p.replay) engine.last = { task_id: e.task_id, title: p.title || '', status: e.type.slice(5), tools: engine.toolCalls || 0, nodes: Object.keys(engine.nodes).filter(k => k !== 'model').length, dur: e.timestamp - (engine.startedAt || e.timestamp), result: p.result || '' };
-      setMode(ok ? 'COMPLETED' : e.type === 'task.failed' ? 'ERROR' : 'IDLE'); engine.activity = ok ? .2 : .3;
+      engine.hold = null; setMode(ok ? 'COMPLETED' : e.type === 'task.failed' ? 'ERROR' : 'IDLE'); engine.activity = ok ? .2 : .3;
       engine.taskId = null; engine.hudUntil = e.timestamp + 9000;
       setTimeout(() => { if (engine.taskId === null && (engine.mode === 'COMPLETED' || engine.mode === 'ERROR')) setMode(engine.listening ? 'LISTENING' : 'IDLE'); }, 3600);
       break;

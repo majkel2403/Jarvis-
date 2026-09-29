@@ -125,9 +125,17 @@ J.market = (() => {
       ws.onerror = () => { try { ws.close(); } catch (e) { } };
     } catch (e) { ws = null; }
   };
+  let bg = false, hiddenT = null;
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(hiddenT);
+    if (document.hidden) { hiddenT = setTimeout(() => { if (ws) { try { ws.close(); } catch (e) { } ws = null; } }, 60e3); }
+    else if (users && !ws) openWS();
+  });
   return {
     COINS, data, get source() { return source; },
     async ensure() { if (!loaded) await fetchCG(); return data; },
+    /* alerty kursów działają także bez otwartego okna rynku */
+    subscribeBackground() { if (bg) return; bg = true; this.subscribe(); },
     subscribe() {
       users++;
       if (users === 1) {
@@ -190,6 +198,7 @@ J.timer = {
     J.log('Minutnik uruchomiony', label + ' · ' + J.timer.fmt(sec * 1000), 'info'); J.emit('timer');
   },
   stop() { this.running = false; clearInterval(this._t); J.emit('timer'); },
+  extend(sec) { if (!this.running) return; this.end += sec * 1000; this.total += sec * 1000; J.emit('timer'); },
   left() { return Math.max(0, this.end - Date.now()); },
   fmt(ms) { const s = Math.ceil(ms / 1000), hh = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return (hh ? hh + ':' + J.pad(mm) : J.pad(mm)) + ':' + J.pad(ss); },
   tick() {
@@ -197,7 +206,8 @@ J.timer = {
     if (this.running && this.left() <= 0) {
       this.stop(); J.sfx.alarm(); J.orb.set('alert', '⏰ ' + this.label + ' — czas minął!');
       J.toast('⏰ ' + this.label + ' — czas minął!', 6000); J.log('Minutnik zakończony', this.label, 'warn');
-      J.voice.speak(this.label + '. Czas minął.'); J.notify?.('Jarvis — minutnik', this.label + ': czas minął');
+      J.voice.speak(this.label + '. Czas minął.', { priority: 2 }); J.notify?.('Jarvis — minutnik', this.label + ': czas minął');
+      J.emit('timer-ended', this);
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 4000);
     }
   }
@@ -277,24 +287,32 @@ J.apps.chat = {
 
 /* historia czatu (niezależna od okna) */
 J.chat = (() => {
-  let items = [], box = null;
+  let items = [], box = null, restored = false;
+  const persist = J.debounce(() => J.store.set('chat.items', items.filter(i => !i.typing).slice(-80).map(({ role, text }) => ({ role, text }))), 500);
+  const restore = async () => { if (restored) return; restored = true; try { const saved = await J.store.get('chat.items', []); if (saved.length && !items.some(i => i.role === 'user')) { items = saved.map(x => ({ ...x })); if (box) { box.innerHTML = ''; items.forEach(it => box.appendChild(draw(it))); scroll(); } } } catch (e) { } };
   const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
   const draw = it => {
     const e = h('div', { class: 'msg ' + it.role });
+    if (it.role === 'link') { const a = h('a', { href: it.text, target: '_blank', rel: 'noopener' }); a.textContent = it.text; e.appendChild(a); it.el = e; return e; }
     if (it.typing) e.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; else e.innerHTML = fmt(it.text);
+    if (it.role === 'jarvis' && it.text) { const pin = h('button', { class: 'msg-pin', title: 'Przypnij jako widget' }, icon('pin', 'width="11" height="11"')); pin.onclick = () => J.widgets.create('result', { title: it.text.slice(0, 40), content: it.text, meta: 'Z czatu · ' + J.hhmm() }); e.appendChild(pin); }
     it.el = e; return e;
   };
   const scroll = () => { if (box) box.scrollTop = box.scrollHeight; };
   const api = {
-    bind(b) { box = b; b.innerHTML = ''; if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nHermes (' + J.state.settings.hermesModel + ') jest skonfigurowany — status połączenia widać w nagłówku.' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
+    bind(b) { box = b; b.innerHTML = ''; restore(); if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nHermes (' + J.state.settings.hermesModel + ') jest skonfigurowany — status połączenia widać w nagłówku.' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
     unbind(b) { if (box === b) box = null; },
-    reset() { items = []; },
+    reset() { items = []; J.store.del('chat.items'); },
+    link(url) { const it = { role: 'link', text: url }; items.push(it); if (box) { const e = h('div', { class: 'msg link' }); const a = h('a', { href: url, target: '_blank', rel: 'noopener' }); a.textContent = url; e.appendChild(a); it.el = e; box.appendChild(e); scroll(); } },
+    /* szybkie odpowiedzi (ui_ask / potwierdzenia): zwraca element do usunięcia */
+    quick(question, options, onPick) { if (!box) return null; const e = h('div', { class: 'msg quick' }, '<div class="q"></div><div class="opts"></div>'); e.querySelector('.q').textContent = question; const o = e.querySelector('.opts'); options.forEach(op => { const b = h('button', { class: 'btn sm' + (op.primary ? ' primary' : op.danger ? ' ghost danger' : ' ghost') }, ''); b.textContent = op.label; b.onclick = () => onPick(op.value); o.appendChild(b); }); box.appendChild(e); scroll(); return e; },
     add(role, text, silent) {
       const it = { role, text: text || '', typing: role === 'jarvis' && text === '' };
       items.push(it); if (items.length > 200) items.shift();
       if (box) { box.appendChild(draw(it)); scroll(); }
+      if (!silent) persist();
       return {
-        set(t) { it.text = t; it.typing = false; if (it.el) it.el.innerHTML = fmt(t); scroll(); },
+        set(t) { persist(); it.text = t; it.typing = false; if (it.el) { it.el.innerHTML = fmt(t); if (it.role === 'jarvis' && t) { const pin = h('button', { class: 'msg-pin', title: 'Przypnij jako widget' }, icon('pin', 'width="11" height="11"')); pin.onclick = () => J.widgets.create('result', { title: t.slice(0, 40), content: t, meta: 'Z czatu · ' + J.hhmm() }); it.el.appendChild(pin); } } scroll(); },
         get text() { return it.text; },
         remove() { items = items.filter(x => x !== it); it.el?.remove(); }
       };
@@ -343,9 +361,11 @@ J.apps.notes = {
     $('#nExp', body).onclick = () => { const n = cur(); if (!n) return; const a = h('a', { href: URL.createObjectURL(new Blob([n.title + '\n\n' + n.body], { type: 'text/plain' })), download: (n.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '') + '.txt' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
     $('#nRead', body).onclick = () => { const n = cur(); if (n) { const was = J.state.settings.speech; J.state.settings.speech = true; J.voice.speak(n.title + '. ' + n.body); J.state.settings.speech = was; } };
     sub(ctx, 'notes', id => { if (id) sel = id; renderList(); renderEd(); });
+    ctx.state = () => { const n = cur(); return n ? { noteId: n.id, title: n.title, words: n.body.trim().split(/\s+/).filter(Boolean).length } : null; };
     renderList(); renderEd();
   },
-  onArg(arg, ctx) { J.emit('notes', arg); }
+  onArg(arg, ctx) { J.emit('notes', arg); },
+  state: ctx => ctx?.state?.() || null
 };
 
 /* ---------- RYNEK ---------- */
@@ -411,8 +431,27 @@ J.apps.schedule = {
     $('#tf', body).onsubmit = e => { e.preventDefault(); const tx = $('#tx', body); J.tasks.add($('#tt', body).value, tx.value.trim(), day); tx.value = ''; J.sfx.click(); };
     sub(ctx, 'tasks', () => { renderDays(); render(); });
     const iv = setInterval(render, 30e3); ctx.onClose(() => clearInterval(iv));
+    ctx.state = () => ({ day });
+    // import kalendarza .ics (VEVENT → zadania)
+    const imp = h('label', { class: 'btn sm ghost', style: 'cursor:pointer;margin-left:auto', title: 'Importuj wydarzenia z pliku .ics' }, icon('download', 'width="12" height="12"') + ' .ics<input type="file" accept=".ics,text/calendar" hidden>');
+    $('#tf', body).appendChild(imp);
+    $('input[type=file]', imp).onchange = async e => { const f = e.target.files[0]; if (!f) return; const n = J.ics.import(await f.text()); J.toast(n ? 'Zaimportowano ' + n + ' ' + J.pl(n, 'wydarzenie', 'wydarzenia', 'wydarzeń') : 'Brak wydarzeń w pliku'); };
     renderDays(); render();
-  }
+  },
+  state: ctx => ctx?.state?.() || null
+};
+
+/* ---------- import kalendarza (.ics, VEVENT z DTSTART i SUMMARY) ---------- */
+J.ics = {
+  parse(text) {
+    const out = [], lines = String(text).replace(/\r\n[ \t]/g, '').split(/\r?\n/); let ev = null;
+    for (const l of lines) {
+      if (l === 'BEGIN:VEVENT') ev = {}; else if (l === 'END:VEVENT') { if (ev?.start && ev.summary) out.push(ev); ev = null; }
+      else if (ev) { const i = l.indexOf(':'); if (i < 0) continue; const key = l.slice(0, i).split(';')[0], val = l.slice(i + 1); if (key === 'SUMMARY') ev.summary = val.replace(/\\,/g, ',').replace(/\\n/g, ' '); else if (key === 'DTSTART') { const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/.exec(val); if (m) ev.start = { date: m[1] + '-' + m[2] + '-' + m[3], time: m[4] ? m[4] + ':' + m[5] : '' }; } }
+    }
+    return out;
+  },
+  import(text) { const l = J.ics.parse(text); let n = 0; l.forEach(ev => { if (J.state.tasks.some(t => t.date === ev.start.date && t.text === ev.summary)) return; J.tasks.add(ev.start.time, ev.summary, ev.start.date); n++; }); return n; }
 };
 
 /* ---------- MONITOR SYSTEMU ---------- */
@@ -498,6 +537,23 @@ J.apps.terminal = {
     body.innerHTML = `<div class="term"><div class="term-out" id="to"></div><div class="term-in"><span>jarvis@os:~$</span><input id="ti" autocomplete="off" spellcheck="false"></div></div>`;
     const out = $('#to', body), inp = $('#ti', body), hist = []; let hi = 0;
     const print = (html, cls = '') => { const d = h('div', { class: cls }, html); out.appendChild(d); out.scrollTop = out.scrollHeight; };
+    const run = async line => { print('<span class="g">jarvis@os:~$</span> ' + esc(line)); if (line.trim().toLowerCase() === 'clear') { out.innerHTML = ''; return; } const r = await TERM.run(line, print); if (r) print(r); };
+    const cmdNames = Object.keys(TERM.cmds);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const v = inp.value; if (v.trim()) { hist.push(v); hi = hist.length; } inp.value = ''; run(v); }
+      else if (e.key === 'ArrowUp') { if (hi > 0) inp.value = hist[--hi]; e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { inp.value = hi < hist.length - 1 ? hist[++hi] : (hi = hist.length, ''); }
+      else if (e.key === 'Tab') { e.preventDefault(); const m = cmdNames.filter(k => k.startsWith(inp.value)); if (m.length === 1) inp.value = m[0] + ' '; else if (m.length) print('<span class="d">' + m.join('  ') + '</span>'); }
+      else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); out.innerHTML = ''; }
+    });
+    body.addEventListener('click', () => inp.focus());
+    print('<span class="c">Jarvis OS 2.1</span> — terminal. Wpisz <span class="c">help</span>, aby zobaczyć polecenia.');
+    setTimeout(() => inp.focus(), 60);
+  }
+};
+/* polecenia terminala: wspólne dla okna Terminala i narzędzia terminal_run (zwracają HTML) */
+const TERM = (() => {
+    let print = () => { };
     const cmds = {
       help: () => print(`<span class="c">Dostępne polecenia:</span>
   help            ta lista            open &lt;app&gt;     otwórz aplikację
@@ -521,40 +577,35 @@ J.apps.terminal = {
       crypto: async () => { await J.market.ensure(); print(J.market.COINS.map(c => { const d = J.market.data[c.sym]; return `<span class="c">${c.sym.padEnd(4)}</span> ${J.fmtMoney(d.price).padStart(12)}  <span class="${d.chg >= 0 ? 'g' : 'e'}">${(d.chg >= 0 ? '+' : '') + d.chg.toFixed(2)}%</span>`; }).join('\n')); },
       theme: c => { const t = J.THEMES[(c || '').toLowerCase()]; if (!t) return print('dostępne: ' + Object.keys(J.THEMES).join(', ')); J.state.settings.accent = t[0]; J.state.settings.accent2 = t[1]; J.applyTheme(); J.save(); J.emit('settings'); print('<span class="g">✓</span> motyw: ' + esc(c)); },
       say: t => { const was = J.state.settings.speech; J.state.settings.speech = true; J.voice.speak(t); J.state.settings.speech = was; },
-      ask: q => { J.wm.open('chat', q); },
+      ask: q => { J.wm.open('chat', q); print('<span class="d">→ czat</span>'); },
       date: () => print(new Date().toLocaleString('pl-PL', { dateStyle: 'full', timeStyle: 'medium' })),
       whoami: () => print(esc(J.state.settings.user) + ' · administrator środowiska Jarvis'),
       echo: t => print(esc(t)),
-      clear: () => { out.innerHTML = ''; },
+      clear: () => { },
       matrix: () => J.matrix?.(),
       reboot: () => { print('<span class="c">restart…</span>'); setTimeout(() => location.reload(), 600); },
       neofetch: () => print(`<span class="c">     ◢◤◥◣      </span> <b>jarvis</b>@<b>os</b>
 <span class="c">   ◢◤ ◉◉ ◥◣    </span> ─────────────
-<span class="c">  ◢◤ ◉  ◉ ◥◣   </span> <span class="c">OS</span>: Jarvis OS 2.0 (web)
+<span class="c">  ◢◤ ◉  ◉ ◥◣   </span> <span class="c">OS</span>: Jarvis OS 2.1 (web)
 <span class="c">  ◥◣ ◉  ◉ ◢◤   </span> <span class="c">Silnik</span>: ${esc(J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel : 'lokalny')}
 <span class="c">   ◥◣ ◉◉ ◢◤    </span> <span class="c">Okna</span>: ${J.wm.count()} · <span class="c">Notatki</span>: ${J.state.notes.length}
 <span class="c">     ◥◣◢◤      </span> <span class="c">Rozdzielczość</span>: ${innerWidth}×${innerHeight}
                   <span class="c">Akcje</span>: ${J.state.stats.actions || 0} · <span class="c">CPU</span>: ${navigator.hardwareConcurrency || '?'} rdzeni`)
     };
-    const run = line => {
-      print('<span class="g">jarvis@os:~$</span> ' + esc(line));
-      const [c, ...rest] = line.trim().split(/\s+/); const arg = rest.join(' ');
-      if (!c) return;
-      const fn = cmds[c.toLowerCase()];
-      if (fn) fn(arg); else print('<span class="e">nieznane polecenie: ' + esc(c) + '</span> — wpisz <span class="c">help</span>');
+    const api = {
+      cmds,
+      async run(line, out) {
+        print = out || (() => { });
+        const [c, ...rest] = line.trim().split(/\s+/); const arg = rest.join(' ');
+        if (!c) return '';
+        const fn = cmds[c.toLowerCase()];
+        if (!fn) return '<span class="e">nieznane polecenie: ' + esc(c) + '</span> — wpisz <span class="c">help</span>';
+        await fn(arg); return '';
+      }
     };
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { const v = inp.value; if (v.trim()) { hist.push(v); hi = hist.length; } inp.value = ''; run(v); }
-      else if (e.key === 'ArrowUp') { if (hi > 0) inp.value = hist[--hi]; e.preventDefault(); }
-      else if (e.key === 'ArrowDown') { inp.value = hi < hist.length - 1 ? hist[++hi] : (hi = hist.length, ''); }
-      else if (e.key === 'Tab') { e.preventDefault(); const m = Object.keys(cmds).filter(k => k.startsWith(inp.value)); if (m.length === 1) inp.value = m[0] + ' '; else if (m.length) print('<span class="d">' + m.join('  ') + '</span>'); }
-      else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); out.innerHTML = ''; }
-    });
-    body.addEventListener('click', () => inp.focus());
-    print('<span class="c">Jarvis OS 2.0</span> — terminal. Wpisz <span class="c">help</span>, aby zobaczyć polecenia.');
-    setTimeout(() => inp.focus(), 60);
-  }
-};
+    return api;
+})();
+J.terminalRun = async line => { const buf = []; const r = await TERM.run(line, html => buf.push(html)); if (r) buf.push(r); return buf.join('\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); };
 
 /* ---------- KALKULATOR ---------- */
 J.apps.calc = {
@@ -662,6 +713,21 @@ J.apps.settings = {
         <div class="dim" id="hInfo" style="font-size:10.5px;line-height:1.5"></div>
         <div class="muted" id="hHelp" style="font-size:10.5px;line-height:1.55"></div>
       </div>
+      <div class="label">Agent i proaktywność</div>
+      <div class="card col">
+        <label class="toggle" style="padding-top:0"><div>Czuwanie ze słowem „Jarvis”<small>Nasłuch ciągły: powiedz „Jarvis, …” (Chrome / Edge)</small></div><span class="switch"><input type="checkbox" id="aWake"><i></i></span></label>
+        <label class="toggle"><div>Cichy tryb głosowy<small>Polecenia głosowe nie otwierają panelu czatu</small></div><span class="switch"><input type="checkbox" data-k="silentVoice"><i></i></span></label>
+        <div class="row"><div style="flex:1;font-size:12px">Proaktywność<small class="dim" style="display:block;font-size:10px">cicha = sygnały w następnej rozmowie · aktywna = Jarvis sam zaczyna rozmowę</small></div><select class="input" id="aPro" style="width:130px"><option value="quiet">cicha</option><option value="active">aktywna</option></select></div>
+        <div class="row"><div style="flex:1;font-size:12px">Cisza nocna<small class="dim" style="display:block;font-size:10px">bez aktywnych sygnałów i rutyn</small></div><input class="input" type="time" id="aQf" style="width:100px"><span class="dim">–</span><input class="input" type="time" id="aQt" style="width:100px"></div>
+        <div class="row"><div style="flex:1;font-size:12px">Poranny briefing<small class="dim" style="display:block;font-size:10px">pogoda, zadania, alerty (wymaga Hermesa)</small></div><input class="input" type="time" id="aBr" style="width:100px"><button class="btn sm ghost" id="aBrNow" title="Uruchom teraz">▶</button></div>
+        <div class="row"><div style="flex:1;font-size:12px">Podsumowanie dnia</div><input class="input" type="time" id="aSu" style="width:100px"><button class="btn sm ghost" id="aSuNow" title="Uruchom teraz">▶</button></div>
+        <div class="row"><div style="flex:1;font-size:12px">Format narzędzi Hermesa<small class="dim" style="display:block;font-size:10px">auto wykrywa przy „Połącz i testuj”</small></div><select class="input" id="aFmt" style="width:130px"><option value="auto">auto</option><option value="hermes">&lt;tool_call&gt;</option><option value="openai">tool_calls</option></select></div>
+        <div class="row"><div style="flex:1;font-size:12px">Zawsze dozwolone bez pytania<small class="dim" id="aAllow" style="display:block;font-size:10px"></small></div><button class="btn sm ghost" id="aAllowClr">Wyczyść</button></div>
+      </div>
+      <div class="label">Pamięć Jarvisa</div>
+      <div class="card col" id="memBox"><div class="dim" style="font-size:10.5px">Fakty zapamiętane poleceniem „zapamiętaj, że…” trafiają do kontekstu każdej rozmowy.</div><div id="memList" class="col"></div></div>
+      <div class="label">Folder roboczy (pliki)</div>
+      <div class="card col"><div class="row"><span id="fsInfo" class="dim" style="flex:1;font-size:11px"></span><button class="btn sm" id="fsPick">Wybierz folder</button><button class="btn sm ghost" id="fsPerm" title="Odśwież uprawnienia">Odśwież dostęp</button></div></div>
       <div class="label">Dane</div>
       <div class="row"><button class="btn ghost" id="exp">${icon('download', 'width="12" height="12"')} Eksportuj</button><label class="btn ghost" style="cursor:pointer">Importuj<input type="file" id="imp" accept=".json" hidden></label><button class="btn ghost danger" id="rst" style="margin-left:auto">Resetuj wszystko</button></div>
       <div class="dim" style="font-size:10px;margin-top:14px;text-align:center">Jarvis OS 2.0 · skróty: <kbd>Ctrl K</kbd> paleta · <kbd>Ctrl Spacja</kbd> głos · <kbd>Esc</kbd> zamknij okno</div>`;
@@ -697,7 +763,26 @@ J.apps.settings = {
     $('#hTest', body).onclick = async () => { hOn.checked = true; saveH(); hInfo.textContent = 'Łączę z Hermesem…'; try { hInfo.textContent = '✓ ' + await J.brain.test(); J.sfx.notify(); J.log('Hermes połączony', s.hermesModel + ' @ ' + s.hermesUrl); } catch (e) { hInfo.textContent = '✗ ' + e.message; J.sfx.error(); } };
     $('#exp', body).onclick = () => { const data = { ...J.state, settings: { ...J.state.settings, hermesKey: '' } }; const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: 'jarvis-os-backup.json' }); a.click(); };
     $('#imp', body).onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); const key = s.hermesKey; Object.assign(J.state, d); J.state.settings.hermesKey = key; J.save(); J.toast('Zaimportowano — restart…'); setTimeout(() => location.reload(), 800); } catch (er) { J.toast('Nieprawidłowy plik'); } };
-    $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) J.resetAll(); };
+    $('#rst', body).onclick = () => { if (confirm('Usunąć wszystkie dane Jarvis OS (notatki, zadania, ustawienia)?')) { J.store.clear().finally(() => J.resetAll()); } };
+    /* agent */
+    const aWake = $('#aWake', body); aWake.checked = !!s.wakeWord && J.ear.supported; aWake.disabled = !J.ear.supported; aWake.onchange = () => J.ear.setStandby(aWake.checked);
+    sub(ctx, 'settings', () => { aWake.checked = !!J.ear.standby; });
+    const aPro = $('#aPro', body); aPro.value = s.proactive || 'quiet'; aPro.onchange = () => { s.proactive = aPro.value; J.save(); J.emit('settings'); J.toast(aPro.value === 'active' ? 'Jarvis będzie sam zaczynał rozmowę przy ważnych sygnałach (max ' + (s.proactiveMax || 4) + '/h)' : 'Sygnały trafią do następnej rozmowy'); };
+    const bindT = (id, key, after) => { const el = $('#' + id, body); el.value = s[key] || ''; el.onchange = () => { s[key] = el.value; J.save(); J.emit('settings'); after?.(); }; };
+    bindT('aQf', 'quietFrom'); bindT('aQt', 'quietTo'); bindT('aBr', 'briefingTime'); bindT('aSu', 'summaryTime');
+    $('#aBrNow', body).onclick = () => J.brain.handle('Rutyna: poranny briefing. Na podstawie kontekstu środowiska (pogoda przez get_weather, zadania na dziś, zaległe, alerty) przygotuj zwięzły briefing dnia w 3–5 zdaniach do odczytania na głos.', { source: 'routine', routine: 'briefing', silentWindow: true });
+    $('#aSuNow', body).onclick = () => J.brain.handle('Rutyna: podsumowanie dnia. Sprawdź zadania (tasks_list today) i notatki (notes_list) i podsumuj w 3 zdaniach, co zrobiono, a co przechodzi na jutro.', { source: 'routine', routine: 'summary', silentWindow: true });
+    const aFmt = $('#aFmt', body); aFmt.value = s.toolFormat || 'auto'; aFmt.onchange = () => { s.toolFormat = aFmt.value; J.hermes.format = null; J.save(); J.brain.reset(); };
+    const drawAllow = () => { const l = J.state.ui.allowAlways || []; $('#aAllow', body).textContent = l.length ? l.map(id => J.registry.get(id)?.label || id).join(', ') : 'brak — ryzykowne narzędzia zawsze pytają'; };
+    drawAllow(); $('#aAllowClr', body).onclick = () => { J.state.ui.allowAlways = []; J.save(); drawAllow(); J.sfx.click(); };
+    /* pamięć */
+    const drawMem = async () => { const l = await J.memory.all(); const box = $('#memList', body); box.innerHTML = l.length ? '' : '<div class="dim" style="font-size:11px">Brak zapamiętanych faktów.</div>'; l.slice().reverse().forEach(f => { const r = h('div', { class: 'row', style: 'font-size:11.5px' }, '<span style="flex:1"></span><span class="dim" style="font-size:9.5px"></span><button class="btn sm ghost danger" title="Zapomnij">×</button>'); r.children[0].textContent = f.fact; r.children[1].textContent = f.scope; r.children[2].onclick = async () => { await J.memory.forget(f.id); drawMem(); }; box.appendChild(r); }); };
+    drawMem(); sub(ctx, 'memory', drawMem);
+    /* pliki */
+    const fsInfo = async () => { const el = $('#fsInfo', body); if (!J.files.supported) { el.textContent = 'Dostęp do folderów wymaga Chrome lub Edge.'; return; } const hnd = J.files.handle || await J.files.load(); el.textContent = hnd ? 'Folder: ' + hnd.name : 'Nie wybrano folderu.'; };
+    fsInfo(); $('#fsPick', body).onclick = async () => { try { await J.files.pick(); J.toast('Folder roboczy: ' + J.files.handle.name); fsInfo(); } catch (e) { if (e.name !== 'AbortError') J.toast(e.message); } };
+    $('#fsPerm', body).onclick = async () => { try { await J.files.ensure(true); J.toast('Dostęp do folderu odświeżony'); } catch (e) { J.toast(e.message); } };
+    sub(ctx, 'files', fsInfo);
   }
 };
 

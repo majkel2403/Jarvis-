@@ -2,6 +2,23 @@
 
 Dokument opisuje stan projektu po przebudowie wyglądu (gałąź `claude/neon-dashboard`), diagnozę braków na podstawie kodu oraz plan zmian w kolejności, która buduje fundament pod resztę. Odniesienia do plików wskazują, gdzie dana rzecz dziś jest (lub jej nie ma).
 
+## Stan realizacji (gałąź `claude/neon-dashboard`)
+
+Zrealizowane w kodzie i pokryte testami (`tests/unit`, `tests/e2e`):
+
+- **Faza 0** — poprawki 7.1–7.15 (zaległe przypomnienia zbierane po powrocie, link w czacie gdy przeglądarka blokuje kartę, koercja typów, historia zachowana po błędzie, jawne `show` w narzędziach, kolejka mowy, streszczenie kroczące, cichy tryb głosowy, IndexedDB, Wake Lock, powiadomienie o nowej wersji SW, `aria-label` w doku, widgety odporne na Esc/„zamknij wszystko”), testy jednostkowe (102) i dymny w Chromium, CI.
+- **Faza 1** — Command Registry (`js/registry.js`, `js/commands.js`), narzędzia/paleta/menu/„co potrafisz” z jednego rejestru, koperta wyniku z kodami, Context Packet z diffem (`js/context.js`), reguły groundingu w prompcie.
+- **Faza 2** — 58 narzędzi (CRUD notatek, zadań, okien, widgetów, minutnika, ustawień, terminala, rynku, pogody, schowka, plików, pamięci, UI), uprawnienia z potwierdzeniem Tak/Nie/Zawsze (chip przy Core, czat, głos), `ui_highlight / ui_narrate / ui_ask / ui_toast`.
+- **Faza 3** — historia i czat w IndexedDB, streszczenie kroczące, profil (`memory_*`), budżety tury → `PAUSED` z pytaniem, `AbortSignal` do narzędzi.
+- **Faza 4** — kolejka sygnałów, tryb cichy/aktywny z limitem i ciszą nocną, rutyny (briefing, podsumowanie dnia) z planistą uwzględniającym widoczność karty, `<plan>` w Process Log i karcie „Logika”, nowe stany maszyny.
+- **Faza 5** — czuwanie ze słowem „Jarvis”, kolejka mowy z priorytetami, barge-in, odpowiedzi głosem na pytania, cichy tryb głosowy.
+- **Faza 6** — File System Access (lista/odczyt/zapis/eksport notatek), import `.ics`, natywne `tool_calls` (Ollama/vLLM) z autodetekcją, lista narzędzi gatewaya w pakiecie, alerty kursów.
+- **Faza 7 (część)** — pauza rysowania w tle, adaptacyjna jakość, backoff pingu, pauza WebSocketu, centrum powiadomień, onboarding, paleta z dopasowaniem rozmytym i „Ostatnie”, przyciąganie i kafelkowanie okien, układy, klikalne karty HUD.
+
+Nie zrealizowane (świadomie odłożone): i18n PL/EN, motyw jasny i wysokiego kontrastu, wirtualne pulpity, RSS i kursy walut, pełny tryb mobilny z dolnym paskiem, audyt a11y (pułapka fokusu w palecie). Wymagają decyzji z sekcji 11 albo osobnej iteracji.
+
+---
+
 Spis treści
 
 1. [Stan obecny — diagnoza](#1-stan-obecny--diagnoza)

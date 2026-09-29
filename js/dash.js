@@ -10,17 +10,21 @@ const eg = J.engine;
 J.bootTime = J.bootTime || Date.now();
 
 /* ---------- tryb agenta (segmentowy wskaźnik w pasku górnym) ---------- */
-const MODE_LABEL = { IDLE: 'GOTOWY', LISTENING: 'SŁUCHAM', THINKING: 'ANALIZA', EXECUTING: 'DZIAŁANIE', COMPLETED: 'GOTOWE', ERROR: 'BŁĄD', SPEAKING: 'MÓWIĘ' };
+const MODE_LABEL = { IDLE: 'GOTOWY', STANDBY: 'CZUWAM', LISTENING: 'SŁUCHAM', THINKING: 'ANALIZA', EXECUTING: 'DZIAŁANIE', APPROVAL_REQUIRED: 'ZGODA?', PAUSED: 'PAUZA', RECOVERING: 'AWARYJNIE', COMPLETED: 'GOTOWE', ERROR: 'BŁĄD', SPEAKING: 'MÓWIĘ' };
+const SEG_OF = { APPROVAL_REQUIRED: 'EXECUTING', PAUSED: 'EXECUTING', RECOVERING: 'EXECUTING', ERROR: 'COMPLETED', STANDBY: 'IDLE' };
 const modeHud = $('#modeHud'), segs = $$('.mh-seg', modeHud), dkMode = $('#dkMode');
 let lastMode = '', lastFine = '';
 const syncMode = () => {
-  const m = eg.mode;
+  const m = eg.mode === 'IDLE' && J.ear.standby ? 'STANDBY' : eg.mode;
   if (m !== lastMode) {
     lastMode = m; modeHud.dataset.mode = m;
-    segs.forEach(s => s.classList.toggle('on', s.dataset.m === m || (m === 'ERROR' && s.dataset.m === 'COMPLETED')));
+    const seg = SEG_OF[m] || m;
+    segs.forEach(s => s.classList.toggle('on', s.dataset.m === seg));
     segs[segs.length - 1].textContent = m === 'ERROR' ? 'Błąd' : 'Gotowe';
+    segs[3].textContent = m === 'APPROVAL_REQUIRED' ? 'Zgoda?' : m === 'PAUSED' ? 'Pauza' : m === 'RECOVERING' ? 'Awaryjnie' : 'Działanie';
+    segs[0].textContent = m === 'STANDBY' ? 'Czuwam' : 'Gotowy';
   }
-  const fine = (m === 'IDLE' && J.orb.state === 'speaking') ? 'SPEAKING' : m;
+  const fine = (m === 'IDLE' || m === 'STANDBY') && J.orb.state === 'speaking' ? 'SPEAKING' : m;
   if (fine !== lastFine) { lastFine = fine; dkMode.textContent = MODE_LABEL[fine] || fine; dkMode.dataset.m = fine; }
 };
 

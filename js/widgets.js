@@ -78,6 +78,9 @@ J.widgets = {
     J.state.widgets = J.state.widgets.filter(w => TYPES[w.type] && w.data);
     J.state.widgets.forEach(w => { if (!J.apps['w:' + w.id]) J.wm.open(J.widgets.register(w)); });
   },
+  remove(id) { const key = 'w:' + id; if (J.wm.isOpen(key)) J.wm.close(key); else { J.widgets.list = J.widgets.list.filter(x => x.id !== id); J.state.widgets = J.state.widgets.filter(x => x.id !== id); delete J.apps[key]; J.save(); } },
+  /* odśwież zawartość po zmianie danych (np. przez narzędzie) */
+  refresh(id) { const key = 'w:' + id, w = J.widgets.list.find(x => x.id === id), ctx = J.wm.ctx(key); if (w && ctx) { ctx.body.innerHTML = ''; mounts[w.type](ctx.body, w); ctx.setTitle(w.title); } },
   menu(x, y) { return J.widgets._menu?.(x, y); }
 };
 })();

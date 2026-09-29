@@ -61,11 +61,19 @@ const fx = (() => {
     mouse.x = e.clientX; mouse.y = e.clientY;
     const wp = $('#wallpaper'); if (wp) wp.style.transform = `translate(${(e.clientX / W - .5) * -18}px,${(e.clientY / H - .5) * -12}px) scale(1.02)`;
   });
+  let lowSince = 0, okSince = 0; J.quality = 'high';
+  const adapt = () => {
+    const f = J.fps, t = Date.now();
+    if (J.quality === 'high') { if (f && f < 38) { lowSince = lowSince || t; if (t - lowSince > 3000) { J.quality = 'low'; okSince = 0; $('#app').classList.add('lowfx'); J.toast('Obniżyłem jakość efektów, żeby zachować płynność'); } } else lowSince = 0; }
+    else { if (f >= 55) { okSince = okSince || t; if (t - okSince > 6000) { J.quality = 'high'; lowSince = 0; $('#app').classList.remove('lowfx'); } } else okSince = 0; }
+  };
   const loop = now => {
+    if (document.hidden) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle nic nie rysujemy
     frames++;
-    if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; }
+    if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
     c.clearRect(0, 0, W, H);
-    if (S.particles && !document.hidden && !$('#app').classList.contains('focus')) {
+    const LOW = J.quality === 'low';
+    if (S.particles && !LOW && !$('#app').classList.contains('focus')) {
       const rgb = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim() || '33,217,255';
       for (const p of pts) {
         p.x += p.vx; p.y += p.vy;
@@ -89,6 +97,7 @@ const fx = (() => {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); frames = 0; } });
   return { resize };
 })();
 
@@ -105,6 +114,7 @@ const ORBITS = [{ rx: 1.55, ry: .40, rot: -14, sp: .00042, ph: 0, v: true }, { r
 const TWO = Math.PI * 2;
 
 function orbDraw(t) {
+  const LOW = J.quality === 'low';
   const dpr = Math.min(devicePixelRatio || 1, 2);
   if (orbCv.width !== SZ * dpr) orbCv.width = orbCv.height = SZ * dpr;
   oc.setTransform(dpr, 0, 0, dpr, 0, 0); oc.clearRect(0, 0, SZ, SZ);
@@ -144,7 +154,7 @@ function orbDraw(t) {
     const rot = (o.rot + Math.sin(t / 3800 + o.ph) * 3) * Math.PI / 180, oc_ = o.v ? V : A;
     oc.save(); oc.translate(C0, C0); oc.rotate(rot);
     oc.beginPath(); oc.ellipse(0, 0, RB * o.rx, RB * o.ry, 0, front ? 0 : Math.PI, front ? Math.PI : TWO);
-    oc.strokeStyle = `rgba(${oc_},${(front ? .9 : .34) * breath})`; oc.lineWidth = front ? 1.7 : 1.1; oc.shadowColor = `rgba(${oc_},.95)`; oc.shadowBlur = front ? 12 : 4; oc.stroke(); oc.shadowBlur = 0;
+    oc.strokeStyle = `rgba(${oc_},${(front ? .9 : .34) * breath})`; oc.lineWidth = front ? 1.7 : 1.1; oc.shadowColor = `rgba(${oc_},.95)`; oc.shadowBlur = LOW ? 0 : (front ? 12 : 4); oc.stroke(); oc.shadowBlur = 0;
     // cząstka biegnąca po orbicie + ogon
     for (let i = 0; i < 7; i++) {
       const a = t * o.sp * sp * 1.3 + o.ph - i * .07, sn = Math.sin(a);
@@ -166,14 +176,14 @@ function orbDraw(t) {
   g.addColorStop(0, `rgba(70,220,255,${.22 + .1 * energy})`); g.addColorStop(1, 'rgba(70,220,255,0)'); oc.fillStyle = g; oc.fillRect(C0 - RB, C0 - RB, RB * 2, RB * 2);
 
   // plazma: łuki wirujące w środku (mocniej przy pracy)
-  const nArc = idle ? 7 : ARCS.length;
+  const nArc = LOW ? 5 : idle ? 7 : ARCS.length;
   for (let i = 0; i < nArc; i++) {
     const a = ARCS[i], a0 = a.a + t / 1000 * a.sp * sp;
     oc.beginPath(); oc.arc(C0, C0, RB * a.r, a0, a0 + a.len);
     oc.strokeStyle = `rgba(${a.v ? V : '90,200,255'},${(.18 + .5 * energy) * breath})`; oc.lineWidth = a.w; oc.stroke();
   }
   // cząstki wewnątrz
-  const nP = idle ? 46 : PART.length;
+  const nP = LOW ? 30 : idle ? 46 : PART.length;
   for (let i = 0; i < nP; i++) {
     const p = PART[i], a = p.a + t / 1000 * p.sp * sp, r = RB * p.r;
     oc.fillStyle = `rgba(${p.v ? '200,150,255' : '150,220,255'},${(.25 + .6 * ((i * 37) % 10) / 10) * breath * (.6 + energy * .4)})`;
@@ -189,11 +199,11 @@ function orbDraw(t) {
   for (let i = 0; i < 4; i++) {   // grube łuki (cyjan) wokół napisu
     const a0 = t / 1000 * (i % 2 ? -.9 : .7) * sp + i * 1.9;
     oc.beginPath(); oc.arc(C0, C0, RB * (.78 - (i > 1 ? .07 : 0)), a0, a0 + .95 - i * .1);
-    oc.strokeStyle = `rgba(70,225,255,${.95 * breath})`; oc.lineWidth = 3.4 - i * .3; oc.shadowColor = 'rgba(70,225,255,.9)'; oc.shadowBlur = 8; oc.stroke(); oc.shadowBlur = 0;
+    oc.strokeStyle = `rgba(70,225,255,${.95 * breath})`; oc.lineWidth = 3.4 - i * .3; oc.shadowColor = 'rgba(70,225,255,.9)'; oc.shadowBlur = LOW ? 0 : (8); oc.stroke(); oc.shadowBlur = 0;
   }
   // główny pierścień z napisem
   oc.beginPath(); oc.arc(C0, C0, RB * .5, 0, TWO);
-  oc.strokeStyle = `rgba(${ov || '120,190,255'},${.95 * breath})`; oc.lineWidth = 3 + orbAmp * 3; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = 16; oc.stroke(); oc.shadowBlur = 0;
+  oc.strokeStyle = `rgba(${ov || '120,190,255'},${.95 * breath})`; oc.lineWidth = 3 + orbAmp * 3; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = LOW ? 0 : (16); oc.stroke(); oc.shadowBlur = 0;
   oc.beginPath(); oc.arc(C0, C0, RB * .5 - 6, 0, TWO); oc.strokeStyle = `rgba(${col},.22)`; oc.lineWidth = 1; oc.stroke();
   // odblask
   g = oc.createLinearGradient(C0 - RB * .7, C0 - RB * .9, C0 + RB * .1, C0 - RB * .1);
@@ -204,7 +214,7 @@ function orbDraw(t) {
   // — krawędź kuli (fresnel)
   g = oc.createLinearGradient(C0 - RB, C0 - RB, C0 + RB, C0 + RB);
   g.addColorStop(0, 'rgba(130,230,255,.98)'); g.addColorStop(.5, `rgba(${col},.9)`); g.addColorStop(1, `rgba(${V},.98)`);
-  oc.beginPath(); oc.arc(C0, C0, RB, 0, TWO); oc.strokeStyle = g; oc.lineWidth = 2.8; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = 22; oc.stroke(); oc.shadowBlur = 0;
+  oc.beginPath(); oc.arc(C0, C0, RB, 0, TWO); oc.strokeStyle = g; oc.lineWidth = 2.8; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = LOW ? 0 : (22); oc.stroke(); oc.shadowBlur = 0;
   oc.beginPath(); oc.arc(C0, C0, RB - 6, 0, TWO); oc.strokeStyle = 'rgba(200,230,255,.22)'; oc.lineWidth = 1; oc.stroke();
   // pierścień reagujący na głos / mikrofon (fala)
   for (let ring = 0; ring < 2; ring++) {
@@ -234,7 +244,7 @@ function orbDraw(t) {
   // — romby płynące po wiązce (tylko gdy trwa zadanie)
   if (busy) for (let i = 0; i < 3; i++) {
     const u = ((t / 1500) + i / 3) % 1, y = C0 + RB * 1.02 + u * RB * .32, sz = 3.4 * (1 - u * .4);
-    oc.save(); oc.translate(C0, y); oc.rotate(Math.PI / 4); oc.fillStyle = `rgba(${i % 2 ? '190,140,255' : '120,215,255'},${.95 * (1 - u * .5)})`; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = 10; oc.fillRect(-sz, -sz, sz * 2, sz * 2); oc.restore();
+    oc.save(); oc.translate(C0, y); oc.rotate(Math.PI / 4); oc.fillStyle = `rgba(${i % 2 ? '190,140,255' : '120,215,255'},${.95 * (1 - u * .5)})`; oc.shadowColor = `rgba(${col},1)`; oc.shadowBlur = LOW ? 0 : (10); oc.fillRect(-sz, -sz, sz * 2, sz * 2); oc.restore();
   }
 }
 
@@ -264,8 +274,10 @@ function reflect(dpr, sc, now) {
   rc.fillStyle = g; rc.fillRect(0, 0, w, hh);
   fc.save(); fc.globalCompositeOperation = 'screen'; fc.drawImage(refCv, sc.cx - C0 * sc.k, sc.foot, SZ * sc.k, hR * sc.k); fc.restore();
 }
+let flowFrame = 0;
 function flowDraw(now) {
   const sc = J.hud.scene; if (!sc.W) return;
+  const LOW = J.quality === 'low'; flowFrame++;
   const dpr = Math.min(devicePixelRatio || 1, 2), W = sc.W, H = sc.H, { cx, cy, R, k, foot } = sc;
   if (flowCv.width !== Math.round(W * dpr) || flowCv.height !== Math.round(H * dpr)) { flowCv.width = Math.round(W * dpr); flowCv.height = Math.round(H * dpr); }
   fc.setTransform(dpr, 0, 0, dpr, 0, 0); fc.clearRect(0, 0, W, H);
@@ -273,18 +285,18 @@ function flowDraw(now) {
   const wall = Date.now(), A = J.rgb(S.accent), V = J.rgb(S.accent2), col = eg.rgb() || A, act = eg.activity, busy = !!eg.taskId;
 
   // — jezioro: odbicie kuli, poświata u podstawy wiązki, fale
-  reflect(dpr, sc, now);
+  if (!LOW || flowFrame % 2 === 0) reflect(dpr, sc, now); else { fc.save(); fc.globalCompositeOperation = 'screen'; fc.drawImage(refCv, sc.cx - C0 * sc.k, sc.foot, SZ * sc.k, refCv.height / dpr * sc.k); fc.restore(); }
   fc.save(); fc.translate(cx, foot); fc.scale(1, .17);
   let g = fc.createRadialGradient(0, 0, 0, 0, 0, 190 * k); g.addColorStop(0, `rgba(170,215,255,${.55 + act * .2})`); g.addColorStop(.35, `rgba(${A},.28)`); g.addColorStop(1, `rgba(${A},0)`);
   fc.fillStyle = g; fc.fillRect(-200 * k, -200 * k, 400 * k, 400 * k); fc.restore();
   for (let i = 0; i < 8; i++) {
     const ph = ((now / (busy ? 2300 : 3900)) + i / 8) % 1, rx = (22 + ph * 310) * k, ry = rx * .078, a = Math.pow(1 - ph, 1.5) * (.55 + act * .4);
     const c = i % 3 === 2 ? V : '120,195,255';
-    fc.beginPath(); fc.ellipse(cx, foot, rx, ry, 0, 0, TWO); fc.strokeStyle = `rgba(${c},${a})`; fc.lineWidth = 1.3; fc.shadowColor = `rgba(${c},.9)`; fc.shadowBlur = 9; fc.stroke();
+    fc.beginPath(); fc.ellipse(cx, foot, rx, ry, 0, 0, TWO); fc.strokeStyle = `rgba(${c},${a})`; fc.lineWidth = 1.3; fc.shadowColor = `rgba(${c},.9)`; fc.shadowBlur = LOW ? 0 : (9); fc.stroke();
   }
   fc.shadowBlur = 0;
   [46, 92, 150, 214].forEach((r0, i) => { fc.beginPath(); fc.ellipse(cx, foot, r0 * k, r0 * k * .078, 0, 0, TWO); fc.strokeStyle = `rgba(${i % 2 ? V : '130,205,255'},${.34 - i * .06})`; fc.lineWidth = 1; fc.stroke(); });
-  fc.beginPath(); fc.ellipse(cx, foot, 30 * k, 4.4 * k, 0, 0, TWO); fc.fillStyle = 'rgba(210,235,255,.9)'; fc.shadowColor = `rgba(${A},1)`; fc.shadowBlur = 16; fc.fill(); fc.shadowBlur = 0;
+  fc.beginPath(); fc.ellipse(cx, foot, 30 * k, 4.4 * k, 0, 0, TWO); fc.fillStyle = 'rgba(210,235,255,.9)'; fc.shadowColor = `rgba(${A},1)`; fc.shadowBlur = LOW ? 0 : (16); fc.fill(); fc.shadowBlur = 0;
 
   // — puls zakończenia Core (tylko po realnym task.*)
   const ft = wall - eg.flash.t;
@@ -303,11 +315,11 @@ function flowDraw(now) {
     const a = (s === 'active' ? .9 : s === 'failed' ? .6 : s === 'done' ? .36 : .13) * lineA;
     fc.beginPath(); c.pts.forEach((p, j) => j ? fc.lineTo(p.x, p.y) : fc.moveTo(p.x, p.y));
     fc.lineJoin = 'round'; fc.lineWidth = s === 'active' ? 1.9 : 1.3; fc.strokeStyle = `rgba(${tone},${a})`;
-    fc.shadowColor = `rgba(${tone},.9)`; fc.shadowBlur = s === 'active' ? 11 : s === 'done' ? 4 : 0; fc.stroke(); fc.shadowBlur = 0;
-    [c.A, c.B].forEach(p => { fc.beginPath(); fc.arc(p.x, p.y, 2.6, 0, TWO); fc.fillStyle = `rgba(${tone},${Math.min(1, a + .15)})`; fc.shadowColor = `rgba(${tone},1)`; fc.shadowBlur = s === 'idle' ? 0 : 8; fc.fill(); fc.shadowBlur = 0; });
+    fc.shadowColor = `rgba(${tone},.9)`; fc.shadowBlur = LOW ? 0 : (s === 'active' ? 11 : s === 'done' ? 4 : 0); fc.stroke(); fc.shadowBlur = 0;
+    [c.A, c.B].forEach(p => { fc.beginPath(); fc.arc(p.x, p.y, 2.6, 0, TWO); fc.fillStyle = `rgba(${tone},${Math.min(1, a + .15)})`; fc.shadowColor = `rgba(${tone},1)`; fc.shadowBlur = LOW ? 0 : (s === 'idle' ? 0 : 8); fc.fill(); fc.shadowBlur = 0; });
     if (s === 'active') for (let j = 0; j < 2; j++) {     // impulsy płyną tylko, gdy karta faktycznie pracuje
       const p = pointAt(c.pts, ((now / 1400) + j * .5 + i * .17) % 1);
-      fc.beginPath(); fc.arc(p.x, p.y, 2.5, 0, TWO); fc.fillStyle = `rgba(255,255,255,${.9 * lineA})`; fc.shadowColor = `rgba(${tone},1)`; fc.shadowBlur = 12; fc.fill(); fc.shadowBlur = 0;
+      fc.beginPath(); fc.arc(p.x, p.y, 2.5, 0, TWO); fc.fillStyle = `rgba(255,255,255,${.9 * lineA})`; fc.shadowColor = `rgba(${tone},1)`; fc.shadowBlur = LOW ? 0 : (12); fc.fill(); fc.shadowBlur = 0;
     }
   });
   // pakiety zdarzeń: start (Core → karta) i wynik (karta → Core)
@@ -317,7 +329,7 @@ function flowDraw(now) {
     J.hud.cardsFor(p).forEach(id => {
       const c = cards.find(x => x.id === id); if (!c?.pts) return;
       const pt = pointAt(c.pts, p.dir === 'out' ? 1 - q : q);
-      fc.beginPath(); fc.arc(pt.x, pt.y, p.dir === 'in' ? 3.4 : 2.6, 0, TWO); fc.fillStyle = `rgba(255,255,255,${(1 - q * .6) * lineA})`; fc.shadowColor = `rgba(${col},1)`; fc.shadowBlur = 13; fc.fill(); fc.shadowBlur = 0;
+      fc.beginPath(); fc.arc(pt.x, pt.y, p.dir === 'in' ? 3.4 : 2.6, 0, TWO); fc.fillStyle = `rgba(255,255,255,${(1 - q * .6) * lineA})`; fc.shadowColor = `rgba(${col},1)`; fc.shadowBlur = LOW ? 0 : (13); fc.fill(); fc.shadowBlur = 0;
     });
   }
 }
@@ -364,7 +376,7 @@ const renderDock = () => {
   const d = $('#dock'); d.innerHTML = '';
   const btn = id => {
     const isChat = id === 'chat';
-    const b = h('button', { 'data-app': id, title: J.apps[id].title }, `${tile(J.apps[id].icon, TONES[id] || 'blue')}<span>${LABEL[id] || J.apps[id].title}</span>`);
+    const b = h('button', { 'data-app': id, title: J.apps[id].title, 'aria-label': J.apps[id].title }, `${tile(J.apps[id].icon, TONES[id] || 'blue')}<span>${LABEL[id] || J.apps[id].title}</span>`);
     b.onclick = () => isChat ? J.chatPanel.toggle() : J.wm.toggle(id);
     const on = isChat ? !!J.chatPanel?.isOpen : J.wm.isOpen(id);
     b.classList.toggle('running', on); b.classList.toggle('focused', !isChat && J.wm.isFocused(id) && !J.wm.isMin(id));
@@ -388,6 +400,9 @@ const palette = (() => {
   const bg = $('#paletteBg'), inp = $('#paletteInput'), list = $('#paletteList');
   let items = [], sel = 0;
   const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+  /* dopasowanie rozmyte: podciąg z premią za początek słowa i ciągłość */
+  const fz = (q, text) => { if (!q) return 1; const t = norm(text); if (t.includes(q)) return 100 - t.indexOf(q) * .5 + (t.startsWith(q) ? 20 : 0); let i = 0, score = 0, streak = 0; for (const ch of t) { if (ch === q[i]) { i++; streak++; score += 2 + streak + (i === 1 || t[t.indexOf(ch) - 1] === ' ' ? 3 : 0); if (i === q.length) return score; } else streak = 0; } return 0; };
+  const remember = it => { const l = (J.state.ui.recent || []).filter(x => x !== it.t); l.unshift(it.t); J.state.ui.recent = l.slice(0, 6); J.save(); };
   const base = () => [
     ...Object.entries(J.apps).filter(([, a]) => !a.widget).map(([id, a]) => ({ g: 'Aplikacje', ic: a.icon, t: a.title, k: id + ' ' + (LABEL[id] || ''), run: () => J.wm.open(id) })),
     { g: 'Akcje', ic: 'mic', t: 'Mów do Jarvisa', s: 'Ctrl Spacja', run: () => J.ear.start() },
@@ -403,16 +418,22 @@ const palette = (() => {
     { g: 'Akcje', ic: 'min', t: 'Pokaż pulpit (zminimalizuj okna)', run: () => J.wm.minimizeAll() },
     { g: 'Akcje', ic: 'close', t: 'Zamknij wszystkie okna', run: () => J.wm.closeAll() },
     { g: 'Akcje', ic: 'code', t: 'Matrix', run: () => J.matrix() },
+    ...J.registry.list(c => c.palette !== false && !['open_app'].includes(c.id) && !(c.args.required || []).length).map(c => ({ g: c.group, ic: c.id.startsWith('notes') ? 'notes' : c.id.startsWith('tasks') || c.id === 'add_task' ? 'calendar' : c.id.startsWith('wm') || c.id.startsWith('layout') ? 'max' : c.id.startsWith('memory') ? 'star' : c.id.startsWith('files') ? 'folder' : c.id.includes('weather') ? 'weather' : c.id.includes('crypto') || c.id.includes('market') ? 'market' : 'bolt', t: c.label, k: c.examples.join(' '), run: () => J.registry.run(c.id, {}, { source: 'ui' }).then(r => J.toast(r.text)) })),
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
     ...J.state.notes.slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
   ];
   const render = () => {
-    const q = norm(inp.value.trim());
-    items = base().filter(it => !q || norm(it.t + ' ' + (it.k || '')).includes(q));
-    if (q) {
-      items.push({ g: 'Jarvis', ic: 'chat', t: 'Zapytaj Jarvisa: „' + inp.value.trim() + '”', s: 'Enter', run: () => J.brain.handle(inp.value.trim()), jar: true });
-      items.push({ g: 'Jarvis', ic: 'globe', t: 'Szukaj w Google: ' + inp.value.trim(), run: () => window.open('https://www.google.com/search?q=' + encodeURIComponent(inp.value.trim()), '_blank', 'noopener') });
-      if (!items.some(i => !i.jar && i.g !== 'Jarvis')) sel = 0;
+    const raw = inp.value.trim(), q = norm(raw);
+    const all = base();
+    if (!q) {
+      const rec = (J.state.ui.recent || []).map(t => all.find(it => it.t === t)).filter(Boolean).map(it => ({ ...it, g: 'Ostatnie' }));
+      items = [...rec, ...all];
+    } else {
+      items = all.map(it => ({ it, sc: Math.max(fz(q, it.t), fz(q, it.k || '') * .6) })).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).map(x => x.it);
+      const m = J.registry.match(raw)[0];
+      if (m) items.unshift({ g: 'Wykonaj', ic: 'bolt', t: m.cmd.label + (Object.keys(m.args).length ? ': ' + Object.values(m.args).map(v => Array.isArray(v) ? v.join(', ') : String(v)).join(' · ').slice(0, 60) : ''), s: 'Enter', run: () => J.registry.run(m.id, m.args, { source: 'ui' }).then(r => { J.toast(r.text); if (r.ui?.highlight) J.ui.highlight(r.ui.highlight); }) });
+      items.push({ g: 'Jarvis', ic: 'chat', t: 'Zapytaj Jarvisa: „' + raw + '”', s: 'Enter', run: () => J.brain.handle(raw), jar: true });
+      items.push({ g: 'Jarvis', ic: 'globe', t: 'Szukaj w Google: ' + raw, run: () => window.open('https://www.google.com/search?q=' + encodeURIComponent(raw), '_blank', 'noopener') });
     }
     sel = J.clamp(sel, 0, items.length - 1);
     list.innerHTML = ''; let g = '';
@@ -425,8 +446,8 @@ const palette = (() => {
     });
   };
   const mark = () => $$('.pitem', list).forEach((b, i) => b.classList.toggle('sel', i === sel));
-  const exec = i => { const it = items[i]; if (!it) return; close(); J.sfx.click(); it.run(); };
-  const open = () => { bg.classList.add('open'); inp.value = ''; sel = 0; render(); setTimeout(() => inp.focus(), 30); };
+  const exec = i => { const it = items[i]; if (!it) return; close(); J.sfx.click(); if (!it.jar && it.g !== 'Jarvis' && it.g !== 'Wykonaj') remember(it); it.run(); };
+  const open = (query) => { bg.classList.add('open'); inp.value = query || ''; sel = 0; render(); setTimeout(() => inp.focus(), 30); };
   const close = () => { bg.classList.remove('open'); inp.blur(); };
   inp.addEventListener('input', () => { sel = 0; render(); });
   inp.addEventListener('keydown', e => {
@@ -438,6 +459,7 @@ const palette = (() => {
   bg.addEventListener('pointerdown', e => { if (e.target === bg) close(); });
   return { open, close, get isOpen() { return bg.classList.contains('open'); } };
 })();
+J.palette = palette;
 
 function nextTheme() {
   const keys = Object.keys(J.THEMES), cur = keys.findIndex(k => J.THEMES[k][0] === S.accent);
@@ -495,11 +517,13 @@ const wrap = $('#coreWrap');
 $('#core').addEventListener('click', () => { if (J.ear.supported) J.ear.toggle(); else J.chatPanel.show(); });
 J.on('ear', on => $('#btnVoice').classList.toggle('rec', on));
 if (!J.ear.supported) $('#coreHint').textContent = 'kliknij, aby porozmawiać';
-J.on('voice-command', t => J.brain.handle(t, { voice: true }));
+J.on('voice-command', t => J.brain.handle(t, { voice: true, source: 'voice' }));
+J.on('ear-standby', on => { $('#app').classList.toggle('standby', on); $('#btnVoice').classList.toggle('standby', on); });
 
 /* =================== PASEK GÓRNY =================== */
 $('#btnVoice').innerHTML = icon('mic'); $('#btnFocus').innerHTML = icon('focus');
 $('#btnLog').insertAdjacentHTML('afterbegin', icon('history'));
+$('#btnNotif').insertAdjacentHTML('afterbegin', icon('bell'));
 const soundIcon = () => { $('#btnSound').innerHTML = icon(S.sound ? 'sound' : 'mute'); $('#btnSound').classList.toggle('on', S.sound); };
 soundIcon(); J.on('settings', () => { J.hermesPing(); soundIcon(); $('#btnAvatar').textContent = S.user; });
 $('#btnNet').innerHTML = icon('wifi'); $('#btnFull').innerHTML = icon('screen');
@@ -533,10 +557,18 @@ addEventListener('keydown', e => {
   else if (mod && e.code === 'Space') { e.preventDefault(); J.ear.toggle(); }
   else if (e.altKey && e.key === '1') { e.preventDefault(); J.chatPanel.toggle(); }
   else if (e.altKey && e.key === '2') { e.preventDefault(); J.proc.toggle(); }
+  else if (e.altKey && e.key === '3') { e.preventDefault(); $('#deckHead')?.click(); }
+  else if (e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); J.notifs.toggle(); }
+  else if (e.altKey && e.key.toLowerCase() === 'w') { e.preventDefault(); J.wm.cycle(); }
+  else if (e.altKey && e.key.toLowerCase() === 'j') { e.preventDefault(); J.ear.setStandby(!J.ear.standby); }
+  else if (e.altKey && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) { const f = J.wm.focused(); if (f) { e.preventDefault(); J.wm.snap(f, { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' }[e.key]); } }
+  else if (e.altKey && e.key === 'Enter') { const f = J.wm.focused(); if (f) { e.preventDefault(); J.wm.toggleMax(f); } }
   else if (e.key === 'Escape') {
     if (ctxEl) return closeCtx();
     if (palette.isOpen) return palette.close();
     if (J.proc.isOpen && !J.proc.active) return J.proc.close();
+    if (J.notifs.isOpen) return J.notifs.close();
+    if (J.ask.pending) return J.ask.cancel();
     if (J.brain.abort()) return;
     if (J.voice.speaking) return J.voice.stop();
     if (J.ear.active) return J.ear.stop();
@@ -632,33 +664,155 @@ J.on('hermes', syncStatus); J.on('settings', syncStatus);
   }));
 }
 
+/* =================== PYTANIA I POTWIERDZENIA (chip przy Core + szybkie odpowiedzi w czacie + głos) =================== */
+const askChip = (() => {
+  const el = $('#askChip'); let timer = null, prog = null;
+  return {
+    show(question, options, onPick, ms) {
+      el.innerHTML = '<div class="ac-q"></div><div class="ac-opts"></div><i class="ac-bar"></i>';
+      $('.ac-q', el).textContent = question;
+      options.forEach(op => { const b = h('button', { class: 'btn sm' + (op.primary ? ' primary' : op.danger ? ' ghost danger' : ' ghost') }); b.textContent = op.label; b.onclick = () => onPick(op.value); $('.ac-opts', el).appendChild(b); });
+      el.classList.add('show'); const bar = $('.ac-bar', el); if (bar && ms) { bar.style.transition = 'none'; bar.style.width = '100%'; requestAnimationFrame(() => { bar.style.transition = 'width ' + ms + 'ms linear'; bar.style.width = '0%'; }); }
+      $('.ac-opts button', el)?.focus();
+    },
+    hide() { el.classList.remove('show'); clearTimeout(timer); }
+  };
+})();
+/* J.ask(question, options[], {timeout, speak}) → Promise<odpowiedź|null>; odpowiedź: klik, Enter w czacie, głos */
+J.ask = (() => {
+  let pend = null;
+  const api = (question, options = [], o = {}) => new Promise(resolve => {
+    api.cancel();
+    const ms = o.timeout || 60000, opts = options.map((x, i) => typeof x === 'string' ? { label: x, value: x, primary: i === 0 } : x);
+    const finish = v => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: v }); p.resolve(v); };
+    pend = { question, opts, resolve, t: setTimeout(() => finish(null), ms), quick: null };
+    J.ev.emit('approval.requested', { question }); J.sfx.ask();
+    askChip.show(question, opts, finish, ms);
+    pend.quick = J.chat.quick(question, opts, finish);
+    if (o.speak !== false) J.voice.speak(question + (opts.length && opts.length <= 4 ? ' ' + opts.map(x => x.label).join(', ') + '?' : ''), { priority: 2 }).then(() => { if (!pend) return; const byVoice = J.ear.standby || J.brain.lastSource === 'voice'; if (!byVoice || !J.ear.supported) return; J.ear.expectAnswer(t => { if (!pend) return; const n = J.norm(t); const hit = opts.find(x => n.includes(J.norm(x.label))) || (/^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) && opts[0]) || (/^(nie|anuluj|odmawiam|stop)/.test(n) && opts.find(x => x.danger || /nie|anuluj|zako/i.test(x.label))); finish(hit ? hit.value : t); }); if (!J.ear.standby) J.ear.start({ answer: true }); });
+  });
+  api.answer = t => { if (!pend) return false; const n = J.norm(t); const hit = pend.opts.find(x => J.norm(x.label) === n || n.includes(J.norm(x.label))); const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: t }); p.resolve(hit ? hit.value : t); return true; };
+  api.cancel = () => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: null }); p.resolve(null); };
+  Object.defineProperty(api, 'pending', { get: () => !!pend });
+  return api;
+})();
+/* potwierdzenie ryzykownego narzędzia: 'yes' | 'no' | 'always' | 'timeout' */
+J.confirm = async req => {
+  J.sfx.confirm();
+  const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, { label: 'Zawsze', value: 'always' }], { timeout: 60000 });
+  if (v === null) return 'timeout';
+  if (v === 'yes' || v === 'no' || v === 'always') return v;
+  const n = J.norm(String(v)); return /^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) ? 'yes' : /zawsze/.test(n) ? 'always' : 'no';
+};
+
+/* =================== WSKAZYWANIE ELEMENTÓW (Jarvis „pokazuje palcem”) =================== */
+J.ui = {
+  resolve(target) {
+    const t = String(target || '');
+    const map = { dock: '#dock', rail: '#iconRail', deck: '#deck', core: '#core', chat: J.chatPanel?.isOpen ? '#chatPanel' : '#chatChip', log: $('#workspace').classList.contains('log-open') ? '#logPanel' : '#logChip', palette: '#searchPill', notifications: '#btnNotif', voice: '#btnVoice', settings: '#btnAvatar' };
+    if (map[t]) return $(map[t]);
+    if (t.startsWith('sc:')) return $('[data-sc="' + t.slice(3) + '"]');
+    if (J.apps[t] || t.startsWith('w:')) return $('.window[data-app="' + t + '"]:not(.hidden)') || $('.dock [data-app="' + t + '"]') || $('.icon-rail [data-app="' + t + '"]');
+    try { return $(t); } catch (e) { return null; }
+  },
+  highlight(target, text) {
+    const el = J.ui.resolve(target); if (!el) return false;
+    $$('.hl').forEach(x => x.classList.remove('hl')); $$('.hl-tag').forEach(x => x.remove());
+    el.classList.add('hl'); void el.offsetWidth;
+    if (text) { const tag = h('div', { class: 'hl-tag' }); tag.textContent = text; document.body.appendChild(tag); const r = el.getBoundingClientRect(); tag.style.left = Math.min(innerWidth - 220, Math.max(8, r.left)) + 'px'; tag.style.top = Math.max(8, r.top - 34) + 'px'; setTimeout(() => tag.remove(), 3200); }
+    J.sfx.tick(); setTimeout(() => el.classList.remove('hl'), 2600); return true;
+  }
+};
+
+/* =================== CENTRUM POWIADOMIEŃ =================== */
+J.notifs = (() => {
+  const panel = $('#notifPanel'), list = $('#notifList'), btn = $('#btnNotif'), badge = $('#notifBadge');
+  const KIND_APP = { task: 'schedule', timer: 'timer', market: 'market', routine: 'chat', agent: 'chat', hermes: 'settings', network: 'monitor', files: 'settings' };
+  const rel = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'teraz' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); };
+  const render = () => {
+    const l = J.state.notifs; list.innerHTML = l.length ? '' : '<div class="lp-empty">Brak powiadomień.</div>';
+    l.slice(0, 60).forEach(n => {
+      const el = h('button', { class: 'nt' + (n.read ? '' : ' unread'), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
+      $('b', el).textContent = n.title; $('span', el).textContent = n.body || ''; $('small', el).textContent = rel(n.ts);
+      el.onclick = () => { n.read = true; J.save(); render(); const app = KIND_APP[n.kind]; if (app === 'chat') J.chatPanel.show(); else if (app) J.wm.open(app); };
+      list.appendChild(el);
+    });
+    const u = api.unread(); badge.textContent = u; badge.classList.toggle('hidden', !u); btn.classList.toggle('on', api.isOpen);
+  };
+  const api = {
+    get isOpen() { return panel.classList.contains('open'); },
+    unread: () => J.state.notifs.filter(n => !n.read).length,
+    open() { panel.classList.add('open'); render(); J.state.notifs.forEach(n => n.read = true); J.save(); setTimeout(render, 600); },
+    close() { panel.classList.remove('open'); render(); },
+    toggle() { api.isOpen ? api.close() : api.open(); },
+    clear() { J.state.notifs = []; J.save(); render(); },
+    render
+  };
+  btn.onclick = () => api.toggle(); $('#notifClear').onclick = () => api.clear(); $('#notifClose').onclick = () => api.close();
+  addEventListener('pointerdown', e => { if (api.isOpen && !panel.contains(e.target) && !btn.contains(e.target)) api.close(); });
+  return api;
+})();
+/* J.notice: jedno wejście dla powiadomień (toast + centrum + opcjonalnie systemowe) */
+J.notice = ({ title, body, kind = 'info', toast = true, system = false }) => {
+  const n = { id: J.uid(), title: String(title), body: body ? String(body) : '', kind, ts: Date.now(), read: false };
+  J.state.notifs.unshift(n); J.state.notifs.length = Math.min(J.state.notifs.length, 100); J.save();
+  if (toast) J.toast(n.title + (n.body ? ' — ' + n.body : ''), 5000);
+  if (system) J.notify?.(n.title, n.body);
+  J.notifs.render(); return n;
+};
+
+/* =================== ONBOARDING (pierwsze uruchomienie) =================== */
+const onboarding = () => {
+  if (J.state.ui.onboarded) return;
+  const el = $('#onboard'); el.classList.add('show');
+  $('#obMic').onclick = () => { J.ear.start(); $('#obMic').textContent = 'Słucham…'; };
+  $('#obHermes').onclick = () => { J.wm.open('settings'); };
+  $('#obCity').value = S.city;
+  $('#obGo').onclick = async () => {
+    const c = $('#obCity').value.trim();
+    if (c && c !== S.city) { try { const g = await J.weather.geocode(c); Object.assign(S, { city: g.city, lat: g.lat, lon: g.lon }); J.weather.ts = 0; loadWeather(); } catch (e) { J.toast(e.message); } }
+    if ($('#obWake').checked && J.ear.supported) J.ear.setStandby(true);
+    J.state.ui.onboarded = true; J.save(); el.classList.remove('show'); J.sfx.success();
+    J.toast('Gotowe. Ctrl+K otwiera paletę, Ctrl+Spacja uruchamia mikrofon.', 6000);
+  };
+  $('#obSkip').onclick = () => { J.state.ui.onboarded = true; J.save(); el.classList.remove('show'); };
+  if (!J.ear.supported) { $('#obWake').disabled = true; $('#obWake').closest('label').classList.add('dim'); }
+};
+
 /* =================== START =================== */
 // kontenery z overflow:hidden potrafią się „przewinąć” przy fokusie — trzymamy je w miejscu
 ['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
 J.proc.init(); J.hud.init(); renderIcons(); renderDock(); syncStatus();
 clock(); setInterval(clock, 1000);
 setInterval(nodes, 1500);
-setInterval(() => J.tasks.check(), 15e3);
 loadWeather(); setInterval(loadWeather, 15 * 60e3);
 J.on('action', nodes); J.on('tasks', nodes);
 addEventListener('online', () => { nodes(); J.toast('Połączenie przywrócone'); });
 addEventListener('offline', () => { nodes(); J.toast('Utracono połączenie z internetem'); J.log('Sieć', 'Tryb offline — działają funkcje lokalne.', 'warn'); });
 
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').then(reg => {
+  reg.addEventListener('updatefound', () => { const w = reg.installing; w?.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) J.notice({ title: 'Nowa wersja Jarvis OS', body: 'odśwież stronę, aby ją załadować', kind: 'agent' }); }); });
+}).catch(() => { });
+/* Wake Lock: ekran nie gaśnie, gdy trwa minutnik albo czuwanie głosowe */
+let wakeLock = null;
+const syncWake = async () => { const want = (J.timer.running || J.ear.standby) && !document.hidden; try { if (want && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } else if (!want && wakeLock) { await wakeLock.release(); wakeLock = null; } } catch (e) { wakeLock = null; } };
+J.on('timer', syncWake); J.on('ear-standby', syncWake); document.addEventListener('visibilitychange', syncWake);
 
+J.notifs.render();
+if (J.state.alerts?.length) J.market.subscribeBackground();
+J.files?.load?.();
 boot().then(() => {
   J.widgets.restore();
   J.hermesPing();
   J.tasks.check();
+  if (S.wakeWord && J.ear.supported) setTimeout(() => J.ear.setStandby(true), 1200);
+  setTimeout(onboarding, 1500);
   const hr = new Date().getHours();
   const greet = (hr < 5 ? 'Dobranoc' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj' : 'Dobry wieczór');
   const pending = J.tasks.today().filter(t => !t.done && t.time >= J.hhmm());
   const msg = `${greet}. Wszystkie systemy online.` + (pending.length ? ` Następne zadanie: ${pending[0].text} o ${pending[0].time}.` : '');
   J.orb.set('idle', msg);
   setTimeout(() => J.voice.speak(msg), 700);
-  let seen = '1'; try { seen = localStorage.getItem('jarvis-os:seen'); localStorage.setItem('jarvis-os:seen', '1'); } catch (e) { }
-  if (!seen) {
-    setTimeout(() => J.toast('Wskazówka: kliknij orb, aby mówić · Ctrl+K otwiera paletę poleceń', 6000), 1800);
-  }
+  const un = J.notifs.unread(); if (un) setTimeout(() => J.toast('Masz ' + un + ' ' + J.pl(un, 'nieprzeczytane powiadomienie', 'nieprzeczytane powiadomienia', 'nieprzeczytanych powiadomień') + ' (Alt+N)', 5000), 2500);
 });
 })();

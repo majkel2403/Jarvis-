@@ -80,8 +80,9 @@ const DEFAULTS = () => ({
   settings: {
     accent: '#33d6ff', accent2: '#a25cff', look: 4, wall: 'photo', particles: true, sound: true,
     speech: true, voiceName: '',
-    hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
-    user: 'JD', skipBoot: false
+    hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
+    user: 'JD', skipBoot: false,
+    proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -96,7 +97,10 @@ const DEFAULTS = () => ({
   log: [],
   history: [],
   widgets: [],
-  ui: { chatClosed: true, logPinned: false, deckMin: false },
+  alerts: [],
+  notifs: [],
+  layouts: {},
+  ui: { chatClosed: true, logPinned: false, deckMin: false, allowAlways: [], routinesRun: {}, recent: [], onboarded: false },
   winPos: {},
   stats: { actions: 0 }
 });
@@ -108,8 +112,8 @@ J.state = (() => {
   s.settings = Object.assign(d.settings, s.settings || {});
   if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd (neon HUD): domyślny akcent cyjan-fiolet
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
-  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets']) if (!Array.isArray(s[k])) s[k] = d[k];
-  s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
+  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets', 'alerts', 'notifs']) if (!Array.isArray(s[k])) s[k] = d[k];
+  s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 }; s.layouts = s.layouts && typeof s.layouts === 'object' ? s.layouts : {};
   return s;
 })();
 J.save = J.debounce(() => { try { localStorage.setItem(KEY, JSON.stringify(J.state)); } catch (e) { /* tryb prywatny */ } }, 250);
@@ -144,81 +148,126 @@ J.sfx = (() => {
       tone(55, 1.6, 'sine', .12, 0, 110); tone(110, 1.4, 'triangle', .04, .1, 220);
       [523, 659, 784, 1046].forEach((f, i) => tone(f, .5, 'sine', .035, .5 + i * .12));
     },
-    type: () => tone(2400 + Math.random() * 600, .015, 'square', .008)
+    type: () => tone(2400 + Math.random() * 600, .015, 'square', .008),
+    success: () => { tone(660, .09, 'sine', .04); tone(880, .1, 'sine', .04, .07); tone(1320, .22, 'sine', .035, .14); },
+    signal: () => { tone(740, .1, 'triangle', .035); tone(988, .16, 'triangle', .03, .11); },
+    ask: () => { tone(880, .1, 'sine', .04); tone(1108, .18, 'sine', .04, .1); tone(1320, .2, 'sine', .03, .2); },
+    confirm: () => { tone(523, .1, 'sine', .04); tone(392, .16, 'sine', .04, .1); },
+    wake: () => { tone(1046, .08, 'sine', .04); tone(1568, .16, 'sine', .035, .07); },
+    pause: () => { tone(440, .14, 'triangle', .035); tone(330, .2, 'triangle', .03, .12); },
+    tick: () => tone(1500, .03, 'sine', .02),
+    snap: () => tone(300, .06, 'sine', .03, 0, 600)
   };
 })();
 
-/* ---------- głos: synteza mowy ---------- */
+/* ---------- głos: synteza mowy (kolejka z priorytetami, barge-in) ---------- */
 J.voice = (() => {
   const synth = window.speechSynthesis;
-  let voices = [];
+  let voices = [], queue = [], current = null;
   const load = () => { voices = synth ? synth.getVoices() : []; };
   if (synth) { load(); synth.onvoiceschanged = load; }
-  const pick = () => {
-    const want = J.state.settings.voiceName;
-    return voices.find(v => v.name === want) || voices.find(v => /pl/i.test(v.lang) && /google|natural|online/i.test(v.name)) || voices.find(v => /^pl/i.test(v.lang)) || null;
+  const pick = () => { const want = J.state.settings.voiceName; return voices.find(v => v.name === want) || voices.find(v => /pl/i.test(v.lang) && /google|natural|online/i.test(v.name)) || voices.find(v => /^pl/i.test(v.lang)) || null; };
+  const clean = t => String(t).replace(/[*_`#>]/g, '').replace(/https?:\/\/\S+/g, 'link').replace(/[⚙⚠⛔⏹🔊📈⏰✓✦◈]/g, '').slice(0, 900);
+  const next = () => {
+    if (current || !queue.length || !synth) return;
+    const it = queue.shift(); current = it;
+    const u = new SpeechSynthesisUtterance(it.text);
+    const v = pick(); if (v) u.voice = v; u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04; u.pitch = .92;
+    u.onstart = () => { api.speaking = true; J.orb.set('speaking'); J.emit('voice', true); };
+    u.onend = u.onerror = () => { current = null; api.speaking = false; if (!queue.length) { J.orb.set('idle'); J.emit('voice', false); } it.resolve(); setTimeout(next, 120); };
+    synth.speak(u);
   };
-  return {
-    supported: !!synth,
+  const api = {
+    supported: !!synth, speaking: false,
     list: () => voices.filter(v => /^pl/i.test(v.lang)).concat(voices.filter(v => !/^pl/i.test(v.lang))),
-    speaking: false,
-    speak(text) {
-      if (!synth || !J.state.settings.speech || !text) return;
-      const clean = String(text).replace(/[*_`#>]/g, '').replace(/https?:\/\/\S+/g, 'link').slice(0, 600);
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(clean);
-      const v = pick(); if (v) u.voice = v;
-      u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04; u.pitch = .92;
-      u.onstart = () => { this.speaking = true; J.orb.set('speaking'); };
-      u.onend = u.onerror = () => { this.speaking = false; J.orb.set('idle'); };
-      synth.speak(u);
+    /* priority: 0 = niski (czeka), 1 = normalny, 2 = wysoki (przerywa bieżącą wypowiedź) */
+    speak(text, o = {}) {
+      const t = clean(text || '').trim();
+      if (!synth || !t || (!J.state.settings.speech && !o.force)) return Promise.resolve();
+      return new Promise(resolve => {
+        const it = { text: t, priority: o.priority ?? 1, resolve };
+        if (it.priority >= 2 && current) { queue.unshift(it); synth.cancel(); return; }   // onend bieżącej uruchomi next()
+        if (o.replace) { queue = queue.filter(q => q.priority >= 2); }
+        queue.push(it); queue.sort((a, b) => b.priority - a.priority); next();
+      });
     },
-    stop() { if (synth) synth.cancel(); this.speaking = false; }
+    stop() { queue.forEach(q => q.resolve()); queue = []; if (synth) synth.cancel(); current = null; api.speaking = false; J.emit('voice', false); },
+    get pending() { return queue.length; }
   };
+  return api;
 })();
 
-/* ---------- głos: rozpoznawanie mowy ---------- */
+/* ---------- głos: rozpoznawanie mowy (pojedyncze + czuwanie ze słowem wybudzającym) ---------- */
 J.ear = (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, active = false, stream = null;
-  const api = { supported: !!SR, active: false, analyser: null };
+  let rec = null, active = false, stream = null, srec = null, standby = false, restartT = null, answerCb = null;
+  const api = { supported: !!SR, active: false, standby: false, analyser: null };
+  const WAKE = /^(?:hej |ok |okej |okay |halo )?(?:jarvis|dzarvis|dżarwis|jarwis|jarvisie|dżarwisie|jarwisie)[,!.]?\s*(.*)$/i;
   const startAnalyser = async () => {
     try {
-      if (!navigator.mediaDevices?.getUserMedia) return;
+      if (stream || !navigator.mediaDevices?.getUserMedia) return;
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const c = J.sfx.unlock(); if (!c) return;
       const src = c.createMediaStreamSource(stream);
       const an = c.createAnalyser(); an.fftSize = 256; src.connect(an); api.analyser = an;
     } catch (e) { /* brak zgody — orb pokaże animację zastępczą */ }
   };
-  const stopAnalyser = () => { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; api.analyser = null; };
+  const stopAnalyser = () => { if (standby) return; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; api.analyser = null; };
+  /* odpowiedź na pytanie Jarvisa (J.ask) — następna wypowiedź trafia tu zamiast do poleceń */
+  api.expectAnswer = cb => { answerCb = cb; };
+  const deliver = t => { if (answerCb) { const cb = answerCb; answerCb = null; cb(t); return true; } return false; };
   api.stop = () => { if (rec) try { rec.stop(); } catch (e) { } };
   api.toggle = () => active ? api.stop() : api.start();
-  api.start = () => {
+  api.start = (o = {}) => {
     if (!SR) { J.toast('Twoja przeglądarka nie obsługuje rozpoznawania mowy — użyj Chrome lub Edge'); J.sfx.error(); return; }
     if (active) return;
     J.voice.stop();
+    if (srec) { try { srec.abort(); } catch (e) { } }
     rec = new SR(); rec.lang = 'pl-PL'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     let finalText = '';
-    rec.onstart = () => { active = api.active = true; J.sfx.listen(); J.orb.set('listening', 'słucham…'); J.emit('ear', true); startAnalyser(); };
-    rec.onresult = e => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript; else interim += e.results[i][0].transcript;
-      }
-      J.orb.banner('„' + (finalText + interim).trim() + '”');
-    };
-    rec.onerror = e => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') J.toast('Brak dostępu do mikrofonu — zezwól w ustawieniach przeglądarki');
-      else if (e.error !== 'no-speech' && e.error !== 'aborted') J.toast('Błąd rozpoznawania mowy: ' + e.error);
-    };
+    rec.onstart = () => { active = api.active = true; J.sfx.listen(); J.orb.set('listening', o.answer ? 'słucham odpowiedzi…' : 'słucham…'); J.emit('ear', true); startAnalyser(); };
+    rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) finalText += e.results[i][0].transcript; else interim += e.results[i][0].transcript; } J.orb.banner('„' + (finalText + interim).trim() + '”'); };
+    rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { J.toast('Brak dostępu do mikrofonu — zezwól w ustawieniach przeglądarki'); api.setStandby(false); } else if (e.error !== 'no-speech' && e.error !== 'aborted') J.toast('Błąd rozpoznawania mowy: ' + e.error); };
     rec.onend = () => {
       active = api.active = false; stopAnalyser(); J.emit('ear', false);
       const t = finalText.trim();
-      if (t) J.emit('voice-command', t); else { J.orb.set('idle'); J.orb.banner(null); }
+      if (t && deliver(t)) { J.orb.set('idle'); J.orb.banner(null); }
+      else if (t) { const m = WAKE.exec(t); J.emit('voice-command', m && m[1] ? m[1] : t); }
+      else { J.orb.set('idle'); J.orb.banner(null); if (o.answer) deliver(''); }
+      if (standby) restart(400);
     };
     try { rec.start(); } catch (e) { J.toast('Nie udało się uruchomić mikrofonu'); }
   };
+  /* czuwanie: nasłuch ciągły; polecenie = wypowiedź zaczynająca się od „Jarvis” */
+  const restart = ms => { clearTimeout(restartT); if (!standby) return; restartT = setTimeout(() => { if (standby && !active) startStandby(); }, ms); };
+  const startStandby = () => {
+    if (!SR || active) return;
+    try { srec = new SR(); } catch (e) { return; }
+    srec.lang = 'pl-PL'; srec.interimResults = true; srec.continuous = true; srec.maxAlternatives = 1;
+    let heard = '';
+    srec.onstart = () => { startAnalyser(); J.emit('ear-standby', true); };
+    srec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript.trim();
+        if (!e.results[i].isFinal) { if (WAKE.test(t) && !heard) { heard = 'x'; J.sfx.wake(); J.orb.set('listening', 'słucham…'); } continue; }
+        heard = '';
+        if (deliver(t)) continue;
+        const m = WAKE.exec(t); if (!m) { if (J.orb.state === 'listening') J.orb.set('idle'); continue; }
+        const cmd = m[1].trim();
+        if (!cmd) { J.sfx.wake(); J.orb.set('listening', 'tak?'); api.expectAnswer(a => { if (a) J.emit('voice-command', a); else J.orb.set('idle'); }); continue; }
+        J.emit('voice-command', cmd);
+      }
+    };
+    srec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { api.setStandby(false); J.toast('Czuwanie wyłączone — brak dostępu do mikrofonu'); } };
+    srec.onend = () => { srec = null; J.emit('ear-standby', false); restart(600); };
+    try { srec.start(); } catch (e) { restart(3000); }
+  };
+  api.setStandby = on => {
+    standby = api.standby = !!on && !!SR; J.state.settings.wakeWord = standby; J.save();
+    if (standby) { startStandby(); J.toast('Czuwanie: powiedz „Jarvis, …”'); } else { clearTimeout(restartT); if (srec) { try { srec.abort(); } catch (e) { } srec = null; } stream?.getTracks().forEach(t => t.stop()); stream = null; api.analyser = null; J.emit('ear-standby', false); }
+    J.emit('settings');
+  };
+  document.addEventListener('visibilitychange', () => { if (standby && !document.hidden && !srec && !active) restart(300); });
   return api;
 })();
 
@@ -313,16 +362,29 @@ J.wm = (() => {
         if (mode === 'move') {
           el.style.left = J.clamp(ox + dx, -ow + 120, d.width - 120) + 'px';
           el.style.top = J.clamp(oy + dy, 0, d.height - 60) + 'px';
+          const px = ev.clientX - d.left, py = ev.clientY - d.top, m = 14;
+          snapPos = px < m ? (py < m ? 'tl' : py > d.height - 90 ? 'bl' : 'left') : px > d.width - m ? (py < m ? 'tr' : py > d.height - 90 ? 'br' : 'right') : py < m ? 'top' : null;
+          showSnap(snapPos, d);
         } else {
           el.style.width = J.clamp(ow + dx, 280, d.width - ox) + 'px';
           el.style.height = J.clamp(oh + dy, 180, d.height - oy) + 'px';
         }
       };
-      const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); savePos(id, el); J.emit('wm-resize', id); };
+      let snapPos = null;
+      const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); showSnap(null); if (snapPos) { api.snap(id, snapPos); snapPos = null; return; } savePos(id, el); J.emit('wm-resize', id); };
       handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
     });
   };
 
+  /* podgląd przyciągania przy przeciąganiu okna do krawędzi */
+  let snapEl = null;
+  const showSnap = (pos, d) => {
+    if (!pos) { snapEl?.classList.remove('on'); return; }
+    if (!snapEl) { snapEl = J.h('div', { class: 'snap-preview' }); desk().appendChild(snapEl); }
+    const W = d.width, H = d.height - 84, g = 8, half = (W - g * 3) / 2, hh = (H - g * 3) / 2;
+    const R = { left: [g, g, half, H - g * 2], right: [g * 2 + half, g, half, H - g * 2], top: [g, g, W - g * 2, hh], tl: [g, g, half, hh], tr: [g * 2 + half, g, half, hh], bl: [g, g * 2 + hh, half, hh], br: [g * 2 + half, g * 2 + hh, half, hh] }[pos];
+    Object.assign(snapEl.style, { left: R[0] + 'px', top: R[1] + 'px', width: R[2] + 'px', height: R[3] + 'px' }); snapEl.classList.add('on');
+  };
   /* pulpit zmienia rozmiar (panel logu, czat, okno przeglądarki) → okna mieszczą się w nowych granicach */
   const reflow = () => {
     const d = desk().getBoundingClientRect(); if (!d.width || isMobile()) return;
@@ -337,7 +399,7 @@ J.wm = (() => {
   const api = {
     open(id, arg) {
       if (id === 'chat') { J.chatPanel?.show(arg); return true; }   // czat = stały lewy panel
-      const app = J.apps[id]; if (!app) return false;
+      const app = J.apps[id]; if (!app || !desk()) return false;
       if (open[id]) {
         const w = open[id];
         if (w.minimized) { w.minimized = false; w.el.classList.remove('hidden', 'minimizing'); }
@@ -382,7 +444,7 @@ J.wm = (() => {
       setTimeout(() => w.el.remove(), 220);
       J.emit('wm');
     },
-    closeAll() { Object.keys(open).forEach(api.close); },
+    closeAll() { Object.keys(open).filter(id => !id.startsWith('w:')).forEach(api.close); },   // widgety zostają (zamknięcie widgetu = usunięcie)
     minimize(id) {
       const w = open[id]; if (!w) return;
       w.minimized = true; w.el.classList.add('minimizing'); w.el.classList.remove('focused');
@@ -400,6 +462,26 @@ J.wm = (() => {
       focus(id);
     },
     remember: id => { if (open[id]) savePos(id, open[id].el); },
+    focused() { const id = Object.keys(open).find(i => open[i].el.classList.contains('focused') && !open[i].minimized); return id || null; },
+    info() { return Object.entries(open).map(([id, w]) => ({ id, title: J.apps[id]?.title || id, x: w.el.offsetLeft, y: w.el.offsetTop, w: w.el.offsetWidth, h: w.el.offsetHeight, min: !!w.minimized, max: w.el.classList.contains('max'), focused: w.el.classList.contains('focused') })); },
+    cycle() { const ids = Object.keys(open); if (!ids.length) return null; const cur = api.focused(); const i = ids.indexOf(cur); const nxt = ids[(i + 1) % ids.length]; api.open(nxt); return nxt; },
+    move(id, x, y) { const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(); w.el.classList.remove('max'); if (x != null) w.el.style.left = J.clamp(x, 0, Math.max(0, d.width - w.el.offsetWidth)) + 'px'; if (y != null) w.el.style.top = J.clamp(y, 0, Math.max(0, d.height - w.el.offsetHeight - 80)) + 'px'; savePos(id, w.el); J.emit('wm-resize', id); },
+    resize(id, wd, ht) { const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(); w.el.classList.remove('max'); if (wd != null) w.el.style.width = J.clamp(wd, 280, d.width - w.el.offsetLeft) + 'px'; if (ht != null) w.el.style.height = J.clamp(ht, 180, d.height - w.el.offsetTop - 80) + 'px'; savePos(id, w.el); J.emit('wm-resize', id); },
+    /* przyciąganie do krawędzi / ćwiartek: left right top bottom tl tr bl br center */
+    snap(id, pos) {
+      const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(), W = d.width, H = d.height - 84, g = 8, half = (W - g * 3) / 2, hh = (H - g * 3) / 2;
+      const R = { left: [g, g, half, H - g * 2], right: [g * 2 + half, g, half, H - g * 2], top: [g, g, W - g * 2, hh], bottom: [g, g * 2 + hh, W - g * 2, hh], tl: [g, g, half, hh], tr: [g * 2 + half, g, half, hh], bl: [g, g * 2 + hh, half, hh], br: [g * 2 + half, g * 2 + hh, half, hh], center: [(W - Math.min(W * .6, 720)) / 2, (H - Math.min(H * .7, 520)) / 2, Math.min(W * .6, 720), Math.min(H * .7, 520)] }[pos];
+      if (!R) return; w.minimized = false; w.el.classList.remove('hidden', 'minimizing', 'max'); w.el.classList.add('snapping');
+      Object.assign(w.el.style, { left: R[0] + 'px', top: R[1] + 'px', width: Math.max(280, R[2]) + 'px', height: Math.max(180, R[3]) + 'px' });
+      setTimeout(() => w.el.classList.remove('snapping'), 320); focus(id); savePos(id, w.el); J.sfx.snap(); J.emit('wm-resize', id);
+    },
+    tile(ids) {
+      const l = (ids || Object.keys(open)).filter(i => open[i] && !open[i].minimized); if (!l.length) return 0;
+      const n = l.length, cols = n === 1 ? 1 : n <= 4 ? 2 : 3, rows = Math.ceil(n / cols), d = desk().getBoundingClientRect(), g = 8, W = (d.width - g * (cols + 1)) / cols, H = (d.height - 84 - g * (rows + 1)) / rows;
+      l.forEach((id, i) => { const w = open[id], c = i % cols, r = Math.floor(i / cols); w.el.classList.remove('max'); w.el.classList.add('snapping'); Object.assign(w.el.style, { left: g + c * (W + g) + 'px', top: g + r * (H + g) + 'px', width: Math.max(280, W) + 'px', height: Math.max(180, H) + 'px' }); setTimeout(() => w.el.classList.remove('snapping'), 320); savePos(id, w.el); });
+      J.sfx.snap(); J.emit('wm-resize'); return n;
+    },
+    setMax(id, on) { const w = open[id]; if (!w) return; w.el.classList.toggle('max', on !== false); J.emit('wm-resize', id); },
     isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,
     isFocused: id => !!open[id]?.el.classList.contains('focused'),
@@ -407,13 +489,34 @@ J.wm = (() => {
     count: () => Object.keys(open).length,
     list: () => Object.keys(open),
     closeTop() {
-      const ids = Object.keys(open).filter(i => !open[i].minimized);
+      const ids = Object.keys(open).filter(i => !open[i].minimized && !i.startsWith('w:'));   // widgety nie znikają po Esc (zamknięcie = usunięcie)
       if (!ids.length) return false;
       ids.sort((a, b) => (+open[b].el.style.zIndex) - (+open[a].el.style.zIndex));
       api.close(ids[0]); return true;
     }
   };
   return api;
+})();
+
+/* ---------- układy okien (zapisane + presety) ---------- */
+J.layouts = (() => {
+  const PRESETS = {
+    praca: { apps: ['notes', 'schedule'], mode: 'tile' },
+    rynek: { apps: ['market', 'terminal'], mode: 'tile' },
+    'skupienie': { apps: ['notes'], mode: 'center' },
+    czysto: { apps: [], mode: 'min' }
+  };
+  return {
+    list: () => [...Object.keys(PRESETS), ...Object.keys(J.state.layouts || {})],
+    save(name) { const apps = J.wm.info().filter(w => !w.min).map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max })); J.state.layouts[name] = { apps, ts: Date.now() }; J.save(); return { name, apps: apps.map(a => a.id) }; },
+    remove(name) { delete J.state.layouts[name]; J.save(); },
+    apply(name) {
+      const key = J.norm(name || ''); const custom = Object.keys(J.state.layouts).find(k => J.norm(k) === key); const preset = Object.keys(PRESETS).find(k => J.norm(k) === key);
+      if (custom) { const l = J.state.layouts[custom]; J.wm.minimizeAll(); l.apps.forEach(a => { J.wm.open(a.id); J.wm.move(a.id, a.x, a.y); J.wm.resize(a.id, a.w, a.h); if (a.max) J.wm.setMax(a.id, true); }); return { ok: true, name: custom, apps: l.apps.map(a => a.id) }; }
+      if (preset) { const p = PRESETS[preset]; J.wm.minimizeAll(); if (p.mode === 'min') return { ok: true, name: preset, apps: [] }; p.apps.forEach(id => J.wm.open(id)); if (p.mode === 'tile') J.wm.tile(p.apps); else p.apps.forEach(id => J.wm.snap(id, 'center')); return { ok: true, name: preset, apps: p.apps }; }
+      return { ok: false };
+    }
+  };
 })();
 
 /* ---------- licznik akcji (tool calls) ---------- */

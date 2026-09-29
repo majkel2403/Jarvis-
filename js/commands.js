@@ -1,0 +1,358 @@
+/* =========================================================
+   JARVIS OS — polecenia (Command Registry): wszystko, co da się kliknąć,
+   da się powiedzieć i zlecić Hermesowi. Jeden wpis = narzędzie modelu,
+   wzorce silnika lokalnego, pozycja palety, opis możliwości.
+   ========================================================= */
+'use strict';
+(() => {
+const R = J.registry, { ok, fail } = R, norm = J.norm;
+const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library'];
+const APP_NAMES = { chat: 'Czat', notes: 'Notatnik', market: 'Monitor rynku', schedule: 'Harmonogram', monitor: 'Monitor systemu', terminal: 'Terminal', weather: 'Pogoda', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Biblioteka aplikacji' };
+[['chat', /\b(czat|chat|rozmow)/], ['notes', /\b(notatnik|notatk|notes)/], ['market', /\b(rynek|rynku|token|krypto|kurs|gield|market|monitor rynku)/],
+  ['schedule', /\b(harmonogram|kalendarz|zadani|plan dnia|agend|przypomnien)/], ['monitor', /\b(monitor system|monitor|system|statystyk|wydajnos|telemetri)/],
+  ['terminal', /\b(terminal|konsol|shell)/], ['weather', /\b(pogod)/], ['calc', /\b(kalkulator|liczydl)/], ['timer', /\b(minutnik|stoper|timer|odliczani)/],
+  ['settings', /\b(ustawieni|opcje|konfiguracj|preferencj)/], ['library', /\b(bibliotek|aplikacj|menu|programy)/]].forEach(([id, re]) => R.alias('app', id, re));
+const SITES = { youtube: 'https://youtube.com', google: 'https://google.com', github: 'https://github.com', gmail: 'https://mail.google.com', spotify: 'https://open.spotify.com', netflix: 'https://netflix.com', facebook: 'https://facebook.com', twitter: 'https://x.com', wikipedia: 'https://pl.wikipedia.org', mapy: 'https://maps.google.com', linkedin: 'https://linkedin.com', reddit: 'https://reddit.com', allegro: 'https://allegro.pl', nous: 'https://nousresearch.com', hermes: 'https://hermes-agent.nousresearch.com', chatgpt: 'https://chatgpt.com', wp: 'https://wp.pl', onet: 'https://onet.pl' };
+const TRUSTED = new Set(Object.values(SITES).map(u => new URL(u).hostname).concat(['www.google.com', 'duckduckgo.com', 'pl.wikipedia.org', 'en.wikipedia.org', 'github.com', 'open-meteo.com']));
+[['cyjan', /cyjan|turkus/], ['niebieski', /niebiesk/], ['fiolet', /fiolet|purpur/], ['zielony', /zielon/], ['złoty', /zlot|pomarancz/], ['czerwony', /czerwon/], ['różowy', /rozow/], ['jarvis', /jarvis|domysl/]].forEach(([id, re]) => R.alias('color', id, re));
+[['aurora', /aurora|zorz/], ['void', /pust|czarn|void|ciemn/], ['photo', /miast|zdjec|photo|jezior|gor/]].forEach(([id, re]) => R.alias('wallpaper', id, re));
+const findApp = t => { const n = norm(t); for (const [id, re] of R.aliases.app) if (re.test(n)) return id; return null; };
+const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+/* ---------- wyszukiwanie obiektów po id / tytule (z wykrywaniem dwuznaczności) ---------- */
+const findNote = q => {
+  if (!q) return { err: fail('INVALID_ARGS', 'Podaj tytuł lub id notatki.') };
+  const notes = J.state.notes, n = norm(q);
+  let hit = notes.find(x => x.id === q); if (hit) return { note: hit };
+  const byTitle = notes.filter(x => norm(x.title) === n); if (byTitle.length === 1) return { note: byTitle[0] };
+  const inc = notes.filter(x => norm(x.title).includes(n) || n.includes(norm(x.title)) && x.title);
+  if (inc.length === 1) return { note: inc[0] };
+  if (inc.length > 1) return { err: fail('AMBIGUOUS', 'Kilka notatek pasuje: ' + inc.slice(0, 5).map(x => '„' + x.title + '” (' + x.id + ')').join(', ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, title: x.title })) }) };
+  const body = notes.filter(x => norm(x.body).includes(n));
+  if (body.length === 1) return { note: body[0] };
+  return { err: fail('NOT_FOUND', 'Nie znalazłem notatki „' + q + '”. Dostępne: ' + (notes.slice(0, 8).map(x => '„' + x.title + '”').join(', ') || 'brak') + '.') };
+};
+const findTask = q => {
+  if (!q) return { err: fail('INVALID_ARGS', 'Podaj treść lub id zadania.') };
+  const tasks = J.state.tasks, n = norm(q);
+  let hit = tasks.find(x => x.id === q); if (hit) return { task: hit };
+  const today = tasks.filter(t => t.date === J.today());
+  const pool = [...today, ...tasks.filter(t => t.date !== J.today())];
+  const inc = pool.filter(x => norm(x.text).includes(n) || n.includes(norm(x.text)));
+  if (inc.length === 1) return { task: inc[0] };
+  if (inc.length > 1) { const open = inc.filter(t => !t.done); if (open.length === 1) return { task: open[0] }; return { err: fail('AMBIGUOUS', 'Kilka zadań pasuje: ' + inc.slice(0, 5).map(x => (x.time || '--:--') + ' ' + x.text + ' (' + x.id + ')').join('; ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, text: x.text, time: x.time, date: x.date })) }) }; }
+  return { err: fail('NOT_FOUND', 'Nie znalazłem zadania „' + q + '”.') };
+};
+const taskRow = t => ({ id: t.id, date: t.date, time: t.time, text: t.text, done: t.done });
+const noteRow = n => ({ id: n.id, title: n.title, updated: new Date(n.ts).toISOString(), words: n.body.trim().split(/\s+/).filter(Boolean).length });
+const showIf = (show, app, arg) => { if (show !== false) J.wm.open(app, arg); };
+
+/* =================== APLIKACJE I OKNA =================== */
+R.add({ id: 'open_app', group: 'Aplikacje i okna', label: 'Otwórz aplikację', description: 'Otwiera aplikację Jarvis OS: ' + APP_IDS.map(i => i + '=' + APP_NAMES[i]).join(', ') + '.',
+  args: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS } }, required: ['app'] }, idempotent: true, reads: [], writes: ['windows'],
+  examples: ['otworz {app}', 'uruchom {app}', 'pokaz {app}', 'wlacz {app}', 'odpal {app}', 'przejdz do {app}'],
+  parse(raw, n) { if (/^(otworz|uruchom|pokaz|wlacz|odpal|start|przejdz do|idz do)\s+/.test(n)) return null; const app = n.split(' ').length <= 2 ? findApp(n) : null; return app ? { args: { app }, score: -20 } : null; },
+  run({ app }) { J.wm.open(app); return ok({ app, open: J.wm.list() }, 'Otwarto: ' + APP_NAMES[app] + '.', { highlight: app }); } });
+R.add({ id: 'close_app', group: 'Aplikacje i okna', label: 'Zamknij okno', description: 'Zamyka okno aplikacji. app="all" zamyka wszystkie okna (wymaga potwierdzenia).',
+  args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'all', 'current'] } }, required: ['app'] }, risk: 'confirm', confirmText: a => a.app === 'all' ? 'Zamknąć wszystkie okna?' : 'Zamknąć ' + (APP_NAMES[a.app] || 'bieżące okno') + '?', writes: ['windows'],
+  examples: ['zamknij {app}', 'wylacz {app}', 'zamknij (wszystko|wszystkie okna|okna)', 'zamknij to'],
+  parse(raw, n) { if (/^zamknij\s+(wszystko|wszystkie|okna)/.test(n)) return { args: { app: 'all' } }; if (/^zamknij\s+(to|biezace|aktualne)/.test(n)) return { args: { app: 'current' } }; return null; },
+  run({ app }) {
+    if (app === 'all') { const n = J.wm.count(); J.wm.closeAll(); return ok({ closed: n }, n ? 'Zamknięto ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + '.' : 'Nie było otwartych okien.'); }
+    if (app === 'current') { const f = J.wm.focused(); if (!f) return fail('NOT_FOUND', 'Żadne okno nie jest aktywne.'); J.wm.close(f); return ok({ app: f }, 'Zamknięto: ' + (J.apps[f]?.title || f) + '.'); }
+    if (!J.wm.isOpen(app)) return fail('NOT_FOUND', 'Okno ' + APP_NAMES[app] + ' nie jest otwarte. Otwarte: ' + (J.wm.list().join(', ') || 'brak') + '.');
+    J.wm.close(app); return ok({ app }, 'Zamknięto: ' + APP_NAMES[app] + '.');
+  } });
+R.add({ id: 'wm_list', group: 'Aplikacje i okna', label: 'Lista okien', description: 'Zwraca otwarte okna z pozycją, rozmiarem, stanem i tym, które jest aktywne.', idempotent: true, reads: ['windows'], palette: false,
+  examples: ['jakie okna sa otwarte', 'lista okien', 'co jest otwarte'],
+  run() { const l = J.wm.info(); return ok({ windows: l, focused: J.wm.focused() }, l.length ? 'Otwarte: ' + l.map(w => w.title + (w.min ? ' (zminimalizowane)' : '') + (w.focused ? ' (aktywne)' : '')).join(', ') + '.' : 'Brak otwartych okien.'); } });
+R.add({ id: 'wm_focus', group: 'Aplikacje i okna', label: 'Aktywuj okno', description: 'Przenosi okno na wierzch (przywraca, jeśli zminimalizowane). app="next" = następne okno.',
+  args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'next'] } }, required: ['app'] }, idempotent: true, writes: ['windows'],
+  examples: ['przelacz na {app}', 'aktywuj {app}', 'nastepne okno', 'przelacz okno'],
+  parse(raw, n) { return /^(nastepne okno|przelacz okno|kolejne okno)$/.test(n) ? { args: { app: 'next' } } : null; },
+  run({ app }) { if (app === 'next') { const id = J.wm.cycle(); return id ? ok({ app: id }, 'Aktywne: ' + (J.apps[id]?.title || id) + '.') : fail('NOT_FOUND', 'Brak okien.'); } if (!J.wm.isOpen(app)) return fail('NOT_FOUND', APP_NAMES[app] + ' nie jest otwarte.'); J.wm.open(app); return ok({ app }, 'Aktywne: ' + APP_NAMES[app] + '.'); } });
+R.add({ id: 'wm_minimize', group: 'Aplikacje i okna', label: 'Minimalizuj', description: 'Minimalizuje okno do doku. app="all" pokazuje pulpit.',
+  args: { type: 'object', properties: { app: { type: 'string', enum: [...APP_IDS, 'all', 'current'] } }, required: ['app'] }, idempotent: true, writes: ['windows'],
+  examples: ['zminimalizuj {app}', 'schowaj {app}', 'pokaz pulpit', 'zminimalizuj wszystko', 'schowaj okna'],
+  parse(raw, n) { return /^(pokaz pulpit|zminimalizuj (wszystko|wszystkie okna)|schowaj (wszystko|okna))$/.test(n) ? { args: { app: 'all' } } : null; },
+  run({ app }) { if (app === 'all') { J.wm.minimizeAll(); return ok(null, 'Pulpit jest czysty.'); } const id = app === 'current' ? J.wm.focused() : app; if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', 'Okno nie jest otwarte.'); J.wm.minimize(id); return ok({ app: id }, 'Zminimalizowano ' + (J.apps[id]?.title || id) + '.'); } });
+R.add({ id: 'wm_arrange', group: 'Aplikacje i okna', label: 'Ułóż okna', description: 'Układa okna: tile (kafelki z otwartych okien), left/right/top/bottom (przyciąga aktywne okno do krawędzi), max (maksymalizuje), center; layout=nazwa zapisanego układu lub presetu (praca, rynek, czysto).',
+  args: { type: 'object', properties: { mode: { type: 'string', enum: ['tile', 'left', 'right', 'top', 'bottom', 'max', 'center', 'layout'] }, layout: { type: 'string', description: 'nazwa układu przy mode=layout' }, app: { type: 'string', enum: APP_IDS, description: 'okno do przyciągnięcia; domyślnie aktywne' } }, required: ['mode'] }, writes: ['windows'],
+  examples: ['uloz okna', 'kafelkuj okna', 'okno na lewo', 'okno na prawo', 'maksymalizuj [okno]', 'wysrodkuj okno', 'uklad {layout}', 'zastosuj uklad {layout}'],
+  parse(raw, n) { let m; if (/^(uloz|kafelkuj|poukladaj)\s+okna$/.test(n)) return { args: { mode: 'tile' } }; if ((m = /^(?:okno|przesun okno|przesun)\s+(?:na|w)\s+(lewo|prawo|gore|dol)$/.exec(n))) return { args: { mode: { lewo: 'left', prawo: 'right', gore: 'top', dol: 'bottom' }[m[1]] } }; if (/^maksymalizuj/.test(n)) return { args: { mode: 'max' } }; if (/^wysrodkuj/.test(n)) return { args: { mode: 'center' } }; if ((m = /^(?:zastosuj\s+)?uklad\s+(.+)$/.exec(n))) return { args: { mode: 'layout', layout: m[1] } }; return null; },
+  run({ mode, layout, app }) {
+    if (mode === 'tile') { const n = J.wm.tile(); return n ? ok({ tiled: n }, 'Ułożyłem ' + n + ' ' + J.pl(n, 'okno', 'okna', 'okien') + ' w kafelki.') : fail('NOT_FOUND', 'Brak okien do ułożenia.'); }
+    if (mode === 'layout') { const r = J.layouts.apply(layout); return r.ok ? ok(r, 'Układ „' + r.name + '”: ' + r.apps.join(', ') + '.') : fail('NOT_FOUND', 'Nie znam układu „' + layout + '”. Dostępne: ' + J.layouts.list().join(', ') + '.'); }
+    const id = app || J.wm.focused(); if (!id || !J.wm.isOpen(id)) return fail('NOT_FOUND', 'Brak aktywnego okna.');
+    if (mode === 'max') { J.wm.setMax(id, true); return ok({ app: id }, 'Zmaksymalizowano ' + (J.apps[id]?.title || id) + '.'); }
+    J.wm.snap(id, mode); return ok({ app: id, mode }, 'Okno ' + (J.apps[id]?.title || id) + ': ' + ({ left: 'lewa połowa', right: 'prawa połowa', top: 'górna połowa', bottom: 'dolna połowa', center: 'wyśrodkowane' })[mode] + '.');
+  } });
+R.add({ id: 'wm_move', group: 'Aplikacje i okna', label: 'Przesuń / zmień rozmiar okna', description: 'Ustawia pozycję (x,y) i/lub rozmiar (w,h) okna w pikselach względem pulpitu.',
+  args: { type: 'object', properties: { app: { type: 'string', enum: APP_IDS }, x: { type: 'number' }, y: { type: 'number' }, w: { type: 'number', minimum: 280 }, h: { type: 'number', minimum: 180 } }, required: ['app'] }, writes: ['windows'], voice: false, palette: false,
+  run({ app, x, y, w, h }) { if (!J.wm.isOpen(app)) return fail('NOT_FOUND', APP_NAMES[app] + ' nie jest otwarte.'); if (x != null || y != null) J.wm.move(app, x, y); if (w != null || h != null) J.wm.resize(app, w, h); const i = J.wm.info().find(k => k.id === app); return ok(i, 'Okno ' + APP_NAMES[app] + ' ustawione.'); } });
+R.add({ id: 'layout_save', group: 'Aplikacje i okna', label: 'Zapisz układ okien', description: 'Zapisuje bieżący układ otwartych okien pod nazwą (do wm_arrange mode=layout).',
+  args: { type: 'object', properties: { name: { type: 'string', maxLength: 40 } }, required: ['name'] }, writes: ['layouts'],
+  examples: ['zapisz uklad [jako] {name}', 'zapamietaj uklad [jako] {name}'],
+  run({ name }) { const r = J.layouts.save(name); return r.apps.length ? ok(r, 'Zapisałem układ „' + r.name + '” (' + r.apps.join(', ') + ').') : fail('NOT_FOUND', 'Brak otwartych okien do zapisania.'); } });
+
+/* =================== NOTATKI =================== */
+R.add({ id: 'notes_list', group: 'Notatki', label: 'Lista notatek', description: 'Zwraca listę notatek (id, tytuł, data, liczba słów). Użyj przed edycją, jeśli nie znasz id.', idempotent: true, reads: ['notes'],
+  args: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100 } } },
+  examples: ['[pokaz] (liste notatek|moje notatki|jakie mam notatki)', 'ile mam notatek'],
+  run({ limit = 20 }) { const l = J.state.notes.slice(0, limit).map(noteRow); return ok({ count: J.state.notes.length, notes: l }, J.state.notes.length ? 'Masz ' + J.state.notes.length + ' ' + J.pl(J.state.notes.length, 'notatkę', 'notatki', 'notatek') + ': ' + l.slice(0, 6).map(n => '„' + n.title + '”').join(', ') + (l.length > 6 ? '…' : '') + '.' : 'Nie masz jeszcze notatek.'); } });
+R.add({ id: 'notes_read', group: 'Notatki', label: 'Przeczytaj notatkę', description: 'Zwraca pełną treść notatki (po id lub fragmencie tytułu). show=true otwiera ją w Notatniku.', idempotent: true, reads: ['notes'],
+  args: { type: 'object', properties: { note: { type: 'string', description: 'id lub tytuł' }, show: { type: 'boolean' } }, required: ['note'] },
+  examples: ['przeczytaj notatke {note}', 'pokaz notatke {note}', 'co jest w notatce {note}', 'otworz notatke {note}'],
+  run({ note, show }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; showIf(show, 'notes', n.id); return ok({ id: n.id, title: n.title, body: n.body, updated: new Date(n.ts).toISOString() }, '„' + n.title + '”: ' + cut(n.body.replace(/\s+/g, ' '), 400)); } });
+R.add({ id: 'notes_search', group: 'Notatki', label: 'Szukaj w notatkach', description: 'Przeszukuje tytuły i treść notatek; zwraca dopasowania z fragmentem.', idempotent: true, reads: ['notes'],
+  args: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+  examples: ['szukaj w notatkach {query}', 'znajdz w notatkach {query}', 'wyszukaj notatke {query}', 'ktora notatka zawiera {query}'],
+  run({ query }) { const q = norm(query); const hits = J.state.notes.filter(n => norm(n.title + ' ' + n.body).includes(q)).map(n => { const i = norm(n.body).indexOf(q); return { id: n.id, title: n.title, snippet: i >= 0 ? cut(n.body.slice(Math.max(0, i - 40), i + 80).replace(/\s+/g, ' '), 140) : '' }; }); return ok({ hits }, hits.length ? 'Znalazłem w ' + hits.length + ' ' + J.pl(hits.length, 'notatce', 'notatkach', 'notatkach') + ': ' + hits.slice(0, 5).map(h => '„' + h.title + '”').join(', ') + '.' : 'Nic nie pasuje do „' + query + '”.'); } });
+R.add({ id: 'create_note', group: 'Notatki', label: 'Nowa notatka', description: 'Tworzy notatkę. show=false nie otwiera Notatnika.', writes: ['notes'],
+  args: { type: 'object', properties: { title: { type: 'string', maxLength: 80 }, content: { type: 'string' }, show: { type: 'boolean' } }, required: ['content'] },
+  examples: ['zanotuj {content}', 'zapisz notatke {content}', 'nowa notatka {content}', 'dodaj notatke {content}', 'notatka {content}', 'zapisz {content}'],
+  run({ title, content, show }) { const n = J.notes.add(String(title || content).split('\n')[0].slice(0, 60), String(content)); showIf(show, 'notes', n.id); return ok(noteRow(n), 'Utworzyłem notatkę „' + n.title + '”.', { highlight: 'notes' }); } });
+R.add({ id: 'notes_append', group: 'Notatki', label: 'Dopisz do notatki', description: 'Dopisuje tekst na końcu istniejącej notatki (po id lub tytule).', writes: ['notes'],
+  args: { type: 'object', properties: { note: { type: 'string' }, text: { type: 'string' }, show: { type: 'boolean' } }, required: ['note', 'text'] },
+  examples: ['dopisz do notatki {note}: {text}', 'dodaj do notatki {note}: {text}', 'dopisz do {note}: {text}', 'dodaj do listy {note} {text}', 'dopisz do notatki {note} {text}'],
+  run({ note, text, show }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; n.body = (n.body ? n.body.replace(/\s+$/, '') + '\n' : '') + text; n.ts = Date.now(); J.save(); J.emit('notes', n.id); showIf(show, 'notes', n.id); return ok(noteRow(n), 'Dopisałem do „' + n.title + '”.', { highlight: 'notes' }); } });
+R.add({ id: 'notes_update', group: 'Notatki', label: 'Zmień notatkę', description: 'Zmienia tytuł i/lub zastępuje całą treść notatki.', writes: ['notes'],
+  args: { type: 'object', properties: { note: { type: 'string' }, title: { type: 'string', maxLength: 80 }, content: { type: 'string' } }, required: ['note'] },
+  examples: ['zmien tytul notatki {note} na {title}', 'przemianuj notatke {note} na {title}'],
+  run({ note, title, content }) { const f = findNote(note); if (f.err) return f.err; const n = f.note; if (title) n.title = title; if (content != null) n.body = content; n.ts = Date.now(); J.save(); J.emit('notes', n.id); return ok(noteRow(n), 'Zmieniłem notatkę „' + n.title + '”.'); } });
+R.add({ id: 'notes_delete', group: 'Notatki', label: 'Usuń notatkę', description: 'Usuwa notatkę (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć notatkę „' + a.note + '”?', writes: ['notes'],
+  args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] },
+  examples: ['usun notatke {note}', 'skasuj notatke {note}', 'wyrzuc notatke {note}'],
+  run({ note }) { const f = findNote(note); if (f.err) return f.err; J.notes.remove(f.note.id); return ok({ id: f.note.id }, 'Usunąłem notatkę „' + f.note.title + '”.'); } });
+
+/* =================== ZADANIA I CZAS =================== */
+R.add({ id: 'tasks_list', group: 'Zadania i czas', label: 'Lista zadań', description: 'Zwraca zadania: range=today (domyślnie), tomorrow, week, all, overdue.', idempotent: true, reads: ['tasks'],
+  args: { type: 'object', properties: { range: { type: 'string', enum: ['today', 'tomorrow', 'week', 'all', 'overdue'] } } },
+  examples: ['[pokaz] (zadania|plan|harmonogram) na (dzis|dzisiaj)', 'co mam (dzis|dzisiaj) do zrobienia', 'jakie mam zadania', 'co mam jutro', 'plan na tydzien', 'co mam zalegle', 'co mam w planach'],
+  parse(raw, n) { if (/\bjutro\b/.test(n) && /zadani|plan|co mam/.test(n)) return { args: { range: 'tomorrow' } }; if (/tydzien|tygodnia/.test(n) && /zadani|plan/.test(n)) return { args: { range: 'week' } }; if (/zalegl/.test(n)) return { args: { range: 'overdue' } }; return null; },
+  run({ range = 'today' }) {
+    const today = J.today(), now = J.hhmm(), all = J.state.tasks; let l;
+    const plus = k => { const d = new Date(); d.setDate(d.getDate() + k); return d.getFullYear() + '-' + J.pad(d.getMonth() + 1) + '-' + J.pad(d.getDate()); };
+    if (range === 'today') l = all.filter(t => t.date === today); else if (range === 'tomorrow') l = all.filter(t => t.date === plus(1)); else if (range === 'week') l = all.filter(t => t.date >= today && t.date <= plus(7)); else if (range === 'overdue') l = all.filter(t => !t.done && (t.date < today || (t.date === today && t.time && t.time < now))); else l = all;
+    const rows = l.map(taskRow), lab = { today: 'dziś', tomorrow: 'jutro', week: 'w tym tygodniu', all: 'łącznie', overdue: 'zaległych' }[range];
+    return ok({ range, tasks: rows, done: rows.filter(t => t.done).length }, rows.length ? 'Zadania ' + lab + ' (' + rows.filter(t => t.done).length + '/' + rows.length + ' ukończone): ' + rows.map(t => (t.time || '--:--') + ' ' + t.text + (t.done ? ' ✓' : '')).join('; ') + '.' : 'Brak zadań ' + lab + '.');
+  } });
+R.add({ id: 'add_task', group: 'Zadania i czas', label: 'Dodaj zadanie / przypomnienie', description: 'Dodaje zadanie do Harmonogramu; o podanej godzinie Jarvis przypomni głosem. Obsługuje czas względny przez pole "in" (np. "20 minut").', writes: ['tasks'],
+  args: { type: 'object', properties: { text: { type: 'string' }, time: { type: 'string', format: 'time', description: 'HH:MM' }, date: { type: 'string', format: 'date', description: 'YYYY-MM-DD, jutro, piątek' }, in: { type: 'string', description: 'czas względny, np. "20 minut", "2 godziny"' }, show: { type: 'boolean' } }, required: ['text'] },
+  examples: ['przypomnij [mi] {text}', 'dodaj zadanie {text}', 'zaplanuj {text}', 'nowe zadanie {text}', 'dodaj do harmonogramu {text}'],
+  parse(raw, n) {
+    if (!/^(przypomnij|dodaj zadanie|zaplanuj|nowe zadanie|dodaj do harmonogramu|zapisz zadanie)/.test(n)) return null;
+    const rel = J.nlp.relative(raw), time = rel ? rel.time : J.nlp.time(raw), date = rel ? rel.date : (J.nlp.date(raw) || J.today());
+    let text = J.nlp.strip(raw.replace(/^(przypomnij( mi)?( o tym)?( ze| że|zeby| żeby)?|dodaj zadanie|zaplanuj|nowe zadanie|dodaj do harmonogramu|zapisz zadanie)\s*:?\s*/i, ''));
+    text = text.replace(/^(o|na|ze|że|zeby|żeby|:)\s+/i, '').replace(/\s+(o|na)$/i, '').trim();
+    return { args: { text: text || 'Przypomnienie', time: time || undefined, date }, score: 10 };
+  },
+  run({ text, time, date, in: rel, show }) {
+    if (rel) { const r = J.nlp.relative('za ' + rel); if (r) { time = r.time; date = r.date; } }
+    const t = J.tasks.add(time || '', text, date || J.today()); showIf(show === true, 'schedule');
+    const when = (t.date !== J.today() ? new Date(t.date + 'T12:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }) + ' ' : 'dziś ') + (t.time ? 'o ' + t.time : 'bez godziny');
+    return ok(taskRow(t), 'Dodałem: „' + t.text + '” — ' + when + '.', { highlight: 'schedule' });
+  } });
+R.add({ id: 'tasks_complete', group: 'Zadania i czas', label: 'Odhacz zadanie', description: 'Oznacza zadanie jako wykonane (done=false cofa).', writes: ['tasks'],
+  args: { type: 'object', properties: { task: { type: 'string', description: 'id lub treść' }, done: { type: 'boolean' } }, required: ['task'] },
+  examples: ['odhacz {task}', 'zrobione {task}', 'oznacz {task} jako (zrobione|wykonane|ukonczone)', 'ukonczylem {task}', 'zaliczone {task}'],
+  run({ task, done = true }) { const f = findTask(task); if (f.err) return f.err; f.task.done = done; J.save(); J.emit('tasks'); if (done) J.sfx.success(); return ok(taskRow(f.task), (done ? 'Odhaczyłem: ' : 'Przywróciłem: ') + f.task.text + '.'); } });
+R.add({ id: 'tasks_update', group: 'Zadania i czas', label: 'Zmień zadanie', description: 'Zmienia treść, godzinę lub datę zadania. Do przesunięcia o czas użyj snooze_minutes.', writes: ['tasks'],
+  args: { type: 'object', properties: { task: { type: 'string' }, text: { type: 'string' }, time: { type: 'string', format: 'time' }, date: { type: 'string', format: 'date' }, snooze_minutes: { type: 'integer', minimum: 1 } }, required: ['task'] },
+  examples: ['przesun {task} na {time}', 'przeloz {task} na {date}', 'odloz {task} o {snooze_minutes} minut'],
+  parse(raw, n) { let m; if ((m = /^(?:przesun|przeloz|odloz)\s+(.+?)\s+(?:o|na)\s+(.+)$/.exec(n))) { const rest = raw.slice(n.indexOf(m[2])), rn = m[2]; const args = { task: raw.slice(n.indexOf(m[1]), n.indexOf(m[1]) + m[1].length) }; const dur = /^(\d+(?:[.,]\d+)?|pol|poltorej|kwadrans)\s*(minut|min|godzin|godzine|h|kwadrans)?$/.test(rn) && !/^\d{1,2}[:.]\d{2}$/.test(rn) ? J.nlp.duration(rest) : null; if (dur) args.snooze_minutes = Math.max(1, Math.round(dur / 60)); else { const time = J.nlp.time(rest) || J.nlp.time('o ' + rest); const date = J.nlp.date(rest); if (time) args.time = time; if (date) args.date = date; } return (args.snooze_minutes || args.time || args.date) ? { args, score: 5 } : null; } return null; },
+  run({ task, text, time, date, snooze_minutes }) { const f = findTask(task); if (f.err) return f.err; const t = f.task; if (text) t.text = text; if (time) t.time = time; if (date) t.date = date; if (snooze_minutes) { const base = new Date((t.date || J.today()) + 'T' + (t.time || J.hhmm()) + ':00'); base.setMinutes(base.getMinutes() + snooze_minutes); t.time = J.pad(base.getHours()) + ':' + J.pad(base.getMinutes()); t.date = base.getFullYear() + '-' + J.pad(base.getMonth() + 1) + '-' + J.pad(base.getDate()); } t.fired = false; t.done = false; J.state.tasks.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)); J.save(); J.emit('tasks'); return ok(taskRow(t), 'Zadanie „' + t.text + '”: ' + t.date + ' ' + (t.time || 'bez godziny') + '.'); } });
+R.add({ id: 'tasks_remove', group: 'Zadania i czas', label: 'Usuń zadanie', description: 'Usuwa zadanie z Harmonogramu (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć zadanie „' + a.task + '”?', writes: ['tasks'],
+  args: { type: 'object', properties: { task: { type: 'string' } }, required: ['task'] },
+  examples: ['usun zadanie {task}', 'skasuj zadanie {task}', 'usun przypomnienie {task}'],
+  run({ task }) { const f = findTask(task); if (f.err) return f.err; J.state.tasks = J.state.tasks.filter(x => x !== f.task); J.save(); J.emit('tasks'); return ok({ id: f.task.id }, 'Usunąłem zadanie „' + f.task.text + '”.'); } });
+R.add({ id: 'start_timer', group: 'Zadania i czas', label: 'Minutnik', description: 'Uruchamia minutnik na podaną liczbę sekund.', writes: ['timer'],
+  args: { type: 'object', properties: { seconds: { type: 'number', minimum: 1, maximum: 86400 }, label: { type: 'string', maxLength: 40 }, show: { type: 'boolean' } }, required: ['seconds'] },
+  examples: ['minutnik {seconds}', 'ustaw minutnik na {seconds}', 'odliczaj {seconds}', 'pomodoro', 'budzik za {seconds}'],
+  parse(raw, n) { if (/^pomodoro$/.test(n)) return { args: { seconds: 1500, label: 'Pomodoro' }, score: 20 }; if (!/^(minutnik|timer|odlicz|budzik|stoper|pomodoro|ustaw|nastaw|wlacz|uruchom|zacznij|odliczaj|\d)/.test(n)) return null; if (!/(minutnik|timer|odlicz|budzik|stoper|pomodoro)/.test(n) && !/^ustaw .*na \d/.test(n)) return null; const s = J.nlp.duration(raw); if (!s) return n.split(' ').length <= 3 ? { args: { seconds: 0 } } : null; return { args: { seconds: s, label: 'Minutnik ' + J.timer.fmt(s * 1000) }, score: 10 }; },
+  run({ seconds, label, show }) { if (!(seconds > 0)) { J.wm.open('timer'); return fail('INVALID_ARGS', 'Na ile ustawić minutnik? Otworzyłem Minutnik.'); } J.timer.start(Math.round(seconds), label || 'Minutnik'); showIf(show, 'timer'); return ok({ seconds: Math.round(seconds), label: J.timer.label, ends: new Date(J.timer.end).toISOString() }, 'Minutnik ustawiony na ' + J.timer.fmt(seconds * 1000) + '.', { highlight: 'timer' }); } });
+R.add({ id: 'timer_control', group: 'Zadania i czas', label: 'Sterowanie minutnikiem', description: 'stop zatrzymuje minutnik, extend dodaje sekundy, status zwraca pozostały czas.',
+  args: { type: 'object', properties: { action: { type: 'string', enum: ['stop', 'extend', 'status'] }, seconds: { type: 'number', minimum: 1 } }, required: ['action'] }, writes: ['timer'],
+  examples: ['(zatrzymaj|wylacz|stop) minutnik', 'ile zostalo [minutnika|czasu]', 'przedluz minutnik o {seconds}', 'dodaj do minutnika {seconds}'],
+  parse(raw, n) { if (/^(zatrzymaj|wylacz|stop|anuluj|przerwij)\s+(minutnik|odliczanie|timer|odliczanie)$/.test(n)) return { args: { action: 'stop' }, score: 10 }; if (/^ile (zostalo|czasu)/.test(n)) return { args: { action: 'status' }, score: 10 }; if (/^(przedluz|dodaj do) minutnik/.test(n)) { const s = J.nlp.duration(raw); return s ? { args: { action: 'extend', seconds: s }, score: 10 } : null; } return null; },
+  run({ action, seconds }) { const t = J.timer; if (action === 'status') return ok({ running: t.running, label: t.label, left_s: Math.round(t.left() / 1000) }, t.running ? t.label + ': zostało ' + t.fmt(t.left()) + '.' : 'Minutnik nie działa.'); if (!t.running) return fail('NOT_FOUND', 'Minutnik nie jest uruchomiony.'); if (action === 'stop') { const l = t.label; t.stop(); return ok({ label: l }, 'Zatrzymałem minutnik ' + l + '.'); } t.extend(seconds || 60); return ok({ left_s: Math.round(t.left() / 1000) }, 'Przedłużyłem o ' + t.fmt((seconds || 60) * 1000) + ', zostało ' + t.fmt(t.left()) + '.'); } });
+R.add({ id: 'get_datetime', group: 'Zadania i czas', label: 'Data i godzina', description: 'Zwraca aktualną datę, godzinę, dzień tygodnia i strefę czasową.', idempotent: true,
+  examples: ['ktora [jest] godzina', 'jaki [jest] (dzis|dzisiaj) dzien', 'jaka [jest] [dzis] data', 'podaj godzine', 'jaki mamy dzien'],
+  run() { const d = new Date(); return ok({ iso: d.toISOString(), local: d.toLocaleString('pl-PL'), weekday: d.toLocaleDateString('pl-PL', { weekday: 'long' }), tz: Intl.DateTimeFormat().resolvedOptions().timeZone }, 'Jest ' + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) + ', ' + d.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '.'); } });
+
+/* =================== PULPIT, WIDGETY, WYGLĄD =================== */
+R.add({ id: 'create_widget', group: 'Pulpit i widgety', label: 'Nowy widget', description: 'Tworzy widget na pulpicie: note (tekst), list (pozycje do odhaczania), result (wynik zadania).', writes: ['widgets'],
+  args: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result'] }, title: { type: 'string', maxLength: 60 }, content: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['type', 'title'] },
+  examples: ['dodaj widget {title}', 'nowy widget (notatka|lista|wynik) {title}', 'stworz liste {title}', 'nowa lista {title}', 'utworz widget {title}'],
+  parse(raw, n) { let m; if ((m = /^(?:stworz|utworz|nowa|zrob)\s+liste\s+(.+)$/.exec(n))) { const t = raw.slice(n.indexOf(m[1])); const [title, rest] = t.split(/:\s*/); return { args: { type: 'list', title: title.trim(), items: rest ? rest.split(/,|;/).map(s => s.trim()).filter(Boolean) : [] }, score: 15 }; } if ((m = /^(?:dodaj|nowy|utworz|stworz)\s+widget\s+(?:(notatka|lista|wynik)\s+)?(.*)$/.exec(n))) { const type = { notatka: 'note', lista: 'list', wynik: 'result' }[m[1]] || 'note'; return { args: { type, title: m[2] ? raw.slice(n.indexOf(m[2])) : 'Widget' }, score: 12 }; } return null; },
+  run({ type, title, content, items }) { const w = J.widgets.create(type, { title, content, items }); return ok({ id: w.id, type, title: w.title }, 'Utworzyłem widget „' + w.title + '”.', { highlight: 'w:' + w.id }); } });
+R.add({ id: 'widgets_list', group: 'Pulpit i widgety', label: 'Lista widgetów', description: 'Zwraca widgety na pulpicie z id, typem, tytułem i skrótem treści.', idempotent: true, reads: ['widgets'], palette: false,
+  examples: ['jakie mam widgety', 'lista widgetow'],
+  run() { const l = J.widgets.list.map(w => ({ id: w.id, type: w.type, title: w.title, preview: w.type === 'list' ? w.data.items.length + ' pozycji, ' + w.data.items.filter(i => i.done).length + ' odhaczonych' : cut(w.data.text || '', 80) })); return ok({ widgets: l }, l.length ? 'Widgety: ' + l.map(w => '„' + w.title + '” (' + w.type + ')').join(', ') + '.' : 'Brak widgetów na pulpicie.'); } });
+R.add({ id: 'widgets_update', group: 'Pulpit i widgety', label: 'Zmień widget', description: 'Zmienia tytuł, treść (note/result) lub dodaje/odhacza pozycje listy (add_items, check_item).', writes: ['widgets'],
+  args: { type: 'object', properties: { widget: { type: 'string', description: 'id lub tytuł' }, title: { type: 'string' }, content: { type: 'string' }, add_items: { type: 'array', items: { type: 'string' } }, check_item: { type: 'string' }, uncheck_item: { type: 'string' } }, required: ['widget'] },
+  examples: ['dodaj do listy {widget} {add_items}', 'odhacz na liscie {widget} {check_item}'],
+  run({ widget, title, content, add_items, check_item, uncheck_item }) {
+    const q = norm(widget), w = J.widgets.list.find(x => x.id === widget) || J.widgets.list.find(x => norm(x.title).includes(q)); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”. ' + (J.widgets.list.length ? 'Dostępne: ' + J.widgets.list.map(x => '„' + x.title + '”').join(', ') : ''));
+    if (title) w.title = title; if (content != null && w.type !== 'list') w.data.text = content;
+    if (w.type === 'list') { (add_items || []).forEach(t => w.data.items.push({ text: String(t), done: false })); [[check_item, true], [uncheck_item, false]].forEach(([q2, v]) => { if (!q2) return; const it = w.data.items.find(i => norm(i.text).includes(norm(q2))); if (it) it.done = v; }); }
+    J.save(); J.widgets.refresh(w.id); return ok({ id: w.id, title: w.title }, 'Zaktualizowałem widget „' + w.title + '”.', { highlight: 'w:' + w.id });
+  } });
+R.add({ id: 'widgets_remove', group: 'Pulpit i widgety', label: 'Usuń widget', description: 'Usuwa widget z pulpitu (wymaga potwierdzenia).', risk: 'confirm', confirmText: a => 'Usunąć widget „' + a.widget + '”?', writes: ['widgets'],
+  args: { type: 'object', properties: { widget: { type: 'string' } }, required: ['widget'] },
+  examples: ['usun widget {widget}', 'zamknij widget {widget}'],
+  run({ widget }) { const q = norm(widget), w = J.widgets.list.find(x => x.id === widget) || J.widgets.list.find(x => norm(x.title).includes(q)); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”.'); J.widgets.remove(w.id); return ok({ id: w.id }, 'Usunąłem widget „' + w.title + '”.'); } });
+R.add({ id: 'add_shortcut', group: 'Pulpit i widgety', label: 'Skrót na pulpicie', description: 'Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url).', writes: ['shortcuts'],
+  args: { type: 'object', properties: { name: { type: 'string', maxLength: 40 }, app: { type: 'string', enum: APP_IDS }, url: { type: 'string' } }, required: ['name'] },
+  examples: ['dodaj skrot {name}', 'utworz skrot do {name}', 'nowa ikona {name}'],
+  parse(raw, n) { const m = /^(?:dodaj|utworz|stworz|nowy|nowa)\s+(?:skrot|ikone|ikona)\s*(?:do)?\s*(.*)$/.exec(n); if (!m) return null; const rest = raw.slice(n.indexOf(m[1] || '') || raw.length).trim(); const url = /([a-z0-9-]+\.[a-z]{2,}(?:\/\S*)?)/i.exec(rest)?.[1]; const app = findApp(rest); const name = rest.replace(url || '', '').trim() || (app ? APP_NAMES[app] : url) || 'Nowy skrót'; return { args: { name, app: app || undefined, url: url || undefined }, score: 12 }; },
+  run({ name, app, url }) { if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url; const s = J.shortcuts.add(name, app ? { app } : url ? { url } : {}); return ok({ id: s.id, name: s.name, app: s.app, url: s.url }, 'Skrót „' + s.name + '” jest na pulpicie.', { highlight: 'sc:' + s.id }); } });
+R.add({ id: 'shortcut_remove', group: 'Pulpit i widgety', label: 'Usuń skrót', description: 'Usuwa skrót z pulpitu (wymaga potwierdzenia).', risk: 'confirm', writes: ['shortcuts'],
+  args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, examples: ['usun skrot {name}', 'usun ikone {name}'],
+  run({ name }) { const q = norm(name), s = J.state.shortcuts.find(x => x.id === name || norm(x.name).includes(q)); if (!s) return fail('NOT_FOUND', 'Nie ma skrótu „' + name + '”.'); J.shortcuts.remove(s.id); return ok({ id: s.id }, 'Usunąłem skrót „' + s.name + '”.'); } });
+R.add({ id: 'set_theme', group: 'Pulpit i widgety', label: 'Motyw kolorystyczny', description: 'Zmienia kolor akcentu interfejsu.', idempotent: true, writes: ['settings'],
+  args: { type: 'object', properties: { color: { type: 'string', enum: Object.keys(J.THEMES) } }, required: ['color'] },
+  examples: ['motyw {color}', 'zmien motyw na {color}', 'kolor {color}', 'ustaw akcent {color}', 'zmien kolor na {color}', 'nastepny motyw'],
+  parse(raw, n) { if (/^(nastepny|kolejny|inny) (motyw|kolor)$/.test(n)) { const keys = Object.keys(J.THEMES), cur = keys.findIndex(k => J.THEMES[k][0] === J.state.settings.accent); return { args: { color: keys[(cur + 1) % keys.length] } }; } return null; },
+  run({ color }) { const t = J.THEMES[color]; Object.assign(J.state.settings, { accent: t[0], accent2: t[1] }); J.applyTheme(); J.save(); J.emit('settings'); return ok({ color }, 'Motyw: ' + color + '.'); } });
+R.add({ id: 'set_wallpaper', group: 'Pulpit i widgety', label: 'Tapeta', description: 'Zmienia tapetę: photo (jezioro w górach), aurora, void (pustka). Bez argumentu — następna.', idempotent: true, writes: ['settings'],
+  args: { type: 'object', properties: { wallpaper: { type: 'string', enum: ['photo', 'aurora', 'void'] } } },
+  examples: ['tapeta {wallpaper}', 'zmien tapete [na] {wallpaper}', 'zmien tapete', 'nastepna tapeta', 'ustaw tapete {wallpaper}'],
+  run({ wallpaper }) { const order = ['photo', 'aurora', 'void'], s = J.state.settings; s.wall = wallpaper || order[(order.indexOf(s.wall) + 1) % order.length]; J.applyTheme(); J.save(); return ok({ wallpaper: s.wall }, 'Tapeta: ' + ({ photo: 'jezioro w górach', aurora: 'aurora', void: 'pustka' })[s.wall] + '.'); } });
+R.add({ id: 'focus_mode', group: 'Pulpit i widgety', label: 'Tryb skupienia', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', idempotent: true, writes: ['ui'],
+  args: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
+  examples: ['tryb skupienia', 'wlacz (tryb skupienia|skupienie|focus)', 'wylacz (tryb skupienia|skupienie|focus)', 'skup sie'],
+  parse(raw, n) { return /(skupieni|focus|skup sie)/.test(n) ? { args: { on: !/wylacz|wyłącz|koniec/.test(n) } } : null; },
+  run({ on }) { J.setFocus(on); return ok({ on }, on ? 'Tryb skupienia włączony.' : 'Tryb skupienia wyłączony.'); } });
+
+/* =================== DANE =================== */
+R.add({ id: 'get_weather', group: 'Dane', label: 'Pogoda', description: 'Aktualna pogoda i prognoza (Open-Meteo). Bez miasta — lokalizacja użytkownika. show=false nie otwiera okna.', idempotent: true, reads: ['internet'],
+  args: { type: 'object', properties: { city: { type: 'string' }, days: { type: 'integer', minimum: 1, maximum: 6 }, show: { type: 'boolean' } } },
+  examples: ['[jaka jest] pogoda', 'pogoda w {city}', 'jaka [jest] pogoda w {city}', 'czy bedzie padac', 'czy pada', 'jaka [jest] temperatura', 'prognoza [pogody]', 'prognoza na {city}', 'jak jest na dworze'],
+  parse(raw, n) { if (!/(pogod|temperatur|na dworze|padac|pada\b|prognoz|cieplo|zimno)/.test(n)) return null; const c = /\b(?:w|we|dla|na)\s+([a-z\- ]{3,})$/.exec(n); const city = c ? raw.slice(n.lastIndexOf(c[1]), n.lastIndexOf(c[1]) + c[1].length).trim() : undefined; return { args: { city }, score: 5 }; },
+  async run({ city, days = 2, show }, { ctx }) { const d = await J.weather.get(city || undefined); showIf(show, 'weather', city || undefined); const dl = d.daily, fc = dl.time.slice(1, 1 + days).map((t, i) => ({ date: t, code: dl.weather_code[i + 1], desc: J.wxInfo(dl.weather_code[i + 1])[1], min: Math.round(dl.temperature_2m_min[i + 1]), max: Math.round(dl.temperature_2m_max[i + 1]), rain: dl.precipitation_probability_max[i + 1] })); return ok({ city: d.city, now: { temp: Math.round(d.current.temperature_2m), feels: Math.round(d.current.apparent_temperature), desc: J.wxInfo(d.current.weather_code)[1], wind: Math.round(d.current.wind_speed_10m), humidity: d.current.relative_humidity_2m, is_day: d.current.is_day }, forecast: fc }, J.weather.describe(d)); } });
+R.add({ id: 'get_crypto_prices', group: 'Dane', label: 'Kursy krypto', description: 'Aktualne kursy BTC, ETH, SOL, BNB w USD ze zmianą 24h (CoinGecko / Binance).', idempotent: true, reads: ['internet'],
+  args: { type: 'object', properties: { symbol: { type: 'string', enum: ['BTC', 'ETH', 'SOL', 'BNB'] }, show: { type: 'boolean' } } },
+  examples: ['kurs (bitcoina|btc|ethereum|eth|solany|sol|bnb)', 'ile kosztuje (bitcoin|ethereum|solana|bnb)', 'kursy krypto', 'krypto', 'rynek krypto', 'jak stoi bitcoin'],
+  parse(raw, n) { if (!/(bitcoin|btc|ethereum|\beth\b|solan|\bsol\b|\bbnb\b|krypto|kurs)/.test(n)) return null; const symbol = /bitcoin|btc/.test(n) ? 'BTC' : /ethereum|\beth\b/.test(n) ? 'ETH' : /solan|\bsol\b/.test(n) ? 'SOL' : /\bbnb\b/.test(n) ? 'BNB' : undefined; return { args: { symbol }, score: 5 }; },
+  async run({ symbol, show }) { await J.market.ensure(); showIf(show, 'market'); const rows = J.market.COINS.map(c => ({ symbol: c.sym, name: c.name, usd: J.market.data[c.sym].price, change_24h: +J.market.data[c.sym].chg.toFixed(2), live: !!J.market.data[c.sym].live })); const one = symbol && rows.find(r => r.symbol === symbol); return ok({ source: J.market.source, prices: one ? [one] : rows }, one ? one.name + ': ' + J.fmtMoney(one.usd) + ' (' + (one.change_24h >= 0 ? '+' : '') + one.change_24h + '% 24h).' : 'Kursy (USD, 24h): ' + J.market.summary() + '.'); } });
+R.add({ id: 'market_watch', group: 'Dane', label: 'Alert kursu', description: 'Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów.', writes: ['alerts'],
+  args: { type: 'object', properties: { symbol: { type: 'string', enum: ['BTC', 'ETH', 'SOL', 'BNB'] }, direction: { type: 'string', enum: ['above', 'below'] }, price: { type: 'number', minimum: 0 }, remove: { type: 'boolean' } } },
+  examples: ['powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) {price}', 'alert (bitcoin|btc|eth|sol|bnb) {price}', 'jakie mam alerty'],
+  parse(raw, n) { if (/^jakie mam alerty/.test(n)) return { args: {} }; const m = /(bitcoin|btc|ethereum|eth|solana|sol|bnb).*?(przekroczy|powyzej|wzrosnie|spadnie|ponizej).*?(\d[\d\s.,]*)\s*(k|tys)?/.exec(n); if (!m || !/alert|powiadom|daj znac|ostrzez/.test(n)) return null; const symbol = /bitcoin|btc/.test(m[1]) ? 'BTC' : /eth/.test(m[1]) ? 'ETH' : /sol/.test(m[1]) ? 'SOL' : 'BNB'; let price = parseFloat(m[3].replace(/\s/g, '').replace(',', '.')); if (m[4]) price *= 1000; return { args: { symbol, direction: /spadnie|ponizej/.test(m[2]) ? 'below' : 'above', price }, score: 10 }; },
+  run({ symbol, direction, price, remove }) { const al = J.state.alerts = J.state.alerts || []; if (!symbol || price == null) { return ok({ alerts: al }, al.length ? 'Alerty: ' + al.map(a => a.symbol + ' ' + (a.direction === 'above' ? '>' : '<') + ' ' + J.fmtMoney(a.price)).join(', ') + '.' : 'Brak alertów kursów.'); } if (remove) { J.state.alerts = al.filter(a => !(a.symbol === symbol && a.price === price)); J.save(); return ok(null, 'Usunąłem alert.'); } al.push({ id: J.uid(), symbol, direction: direction || 'above', price, ts: Date.now() }); J.save(); J.market.subscribeBackground?.(); return ok({ symbol, direction, price }, 'Dam znać, gdy ' + symbol + ' ' + (direction === 'below' ? 'spadnie poniżej ' : 'przekroczy ') + J.fmtMoney(price) + '.'); } });
+R.add({ id: 'calculate', group: 'Dane', label: 'Oblicz', description: 'Dokładnie liczy wyrażenie (+ - * / ^ % nawiasy sqrt sin cos log ln pi) i procenty.', idempotent: true,
+  args: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] },
+  examples: ['oblicz {expression}', 'policz {expression}', 'ile to {expression}', 'ile jest {expression}', 'ile wynosi {expression}'],
+  parse(raw, n) { let m; if ((m = /(\d+(?:[.,]\d+)?)\s*%\s*(?:z|od)\s*(\d+(?:[.,]\d+)?)/.exec(n))) return { args: { expression: m[1] + '/100*' + m[2] }, score: 10 }; if (/[\d)]\s*[-+*/^x×÷]\s*[\d(]/.test(n) && /^[\d\s+\-*/().,%^x×÷]+$/.test(n)) return { args: { expression: n }, score: 8 }; return null; },
+  run({ expression }) { const expr = expression.replace(/\s*razy\s*/g, '*').replace(/\s*(przez|podzielone przez)\s*/g, '/').replace(/\s*plus\s*/g, '+').replace(/\s*minus\s*/g, '-').replace(/\s*do potegi\s*/g, '^').replace(/(\d+(?:[.,]\d+)?)\s*%\s*(?:z|od)\s*(\d+(?:[.,]\d+)?)/, '$1/100*$2'); try { const r = J.calc(expr); return ok({ expression: expr, result: r }, expr + ' = ' + r); } catch (e) { return fail('INVALID_ARGS', 'Nie umiem policzyć „' + expression + '”: ' + e.message); } } });
+R.add({ id: 'open_url', group: 'Dane', label: 'Otwórz stronę', description: 'Otwiera stronę WWW w nowej karcie. Znane serwisy: ' + Object.keys(SITES).join(', ') + '. Adresy spoza listy zaufanych wymagają potwierdzenia.', writes: ['browser'], risk: 'confirm', confirmText: a => 'Otworzyć ' + a.url + '?',
+  args: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
+  examples: ['otworz strone {url}', 'wejdz na {url}', 'otworz (youtube|google|github|gmail|spotify|netflix|wikipedia|mapy|reddit|allegro|linkedin)'],
+  parse(raw, n) { const v = /^(otworz|uruchom|wejdz na|pokaz|odpal|idz do)\s+(.+)$/.exec(n); if (!v) return null; const t = v[2].trim(); if (findApp(t) && t.split(' ').length <= 2) return null; const site = Object.keys(SITES).find(k => t.includes(k)); if (site) return { args: { url: SITES[site] }, score: 8 }; const dom = /^(?:strone\s+)?([a-z0-9-]+\.[a-z]{2,}\S*)$/.exec(t); return dom ? { args: { url: dom[1] }, score: 8 } : null; },
+  run({ url }, { ctx }) { if (!/^https?:\/\//i.test(url)) url = 'https://' + url; let host; try { host = new URL(url).hostname; } catch (e) { return fail('INVALID_ARGS', 'Nieprawidłowy adres: ' + url); } const w = window.open(url, '_blank', 'noopener'); if (w === null) { J.chat?.add('action', '🔗 Kliknij, aby otworzyć: ' + url); J.chat?.link?.(url); return ok({ url, opened: false }, 'Przeglądarka zablokowała nową kartę — w czacie jest link do kliknięcia.'); } return ok({ url, opened: true }, 'Otworzyłem ' + host + '.'); } });
+// zaufane domeny nie wymagają potwierdzenia (registry.run sprawdza prepare().trusted)
+R.get('open_url').prepare = args => { try { const host = new URL(/^https?:\/\//i.test(args.url) ? args.url : 'https://' + args.url).hostname.replace(/^www\./, ''); return { trusted: TRUSTED.has(host) || TRUSTED.has('www.' + host) }; } catch (e) { return { trusted: false }; } };
+R.add({ id: 'web_search', group: 'Dane', label: 'Szukaj w Google', description: 'Otwiera wyszukiwanie Google z zapytaniem w nowej karcie.', writes: ['browser'],
+  args: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+  examples: ['wyszukaj {query}', 'szukaj {query}', 'wygoogluj {query}', 'google {query}', 'znajdz w internecie {query}'],
+  run({ query }) { const url = 'https://www.google.com/search?q=' + encodeURIComponent(query); const w = window.open(url, '_blank', 'noopener'); if (w === null) { J.chat?.link?.(url); return ok({ url, opened: false }, 'Link do wyszukiwania jest w czacie.'); } return ok({ url }, 'Szukam: ' + query + '.'); } });
+R.add({ id: 'clipboard_write', group: 'Dane', label: 'Skopiuj do schowka', description: 'Kopiuje tekst do schowka systemowego.', idempotent: true,
+  args: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }, examples: ['skopiuj {text}', 'skopiuj do schowka {text}'],
+  async run({ text }) { try { await navigator.clipboard.writeText(text); return ok({ length: text.length }, 'Skopiowałem do schowka.'); } catch (e) { return fail('DENIED', 'Brak dostępu do schowka — przeglądarka wymaga zgody.'); } } });
+R.add({ id: 'clipboard_read', group: 'Dane', label: 'Odczytaj schowek', description: 'Zwraca tekst ze schowka (wymaga zgody przeglądarki).', idempotent: true, reads: ['clipboard'], risk: 'confirm', confirmText: () => 'Pozwolić Jarvisowi odczytać schowek?',
+  examples: ['co mam w schowku', 'odczytaj schowek', 'wklej ze schowka'],
+  async run() { try { const t = await navigator.clipboard.readText(); return ok({ text: t }, t ? 'W schowku: ' + cut(t.replace(/\s+/g, ' '), 200) : 'Schowek jest pusty.'); } catch (e) { return fail('DENIED', 'Brak dostępu do schowka.'); } } });
+
+/* =================== INTERFEJS =================== */
+R.add({ id: 'get_status', group: 'Interfejs', label: 'Raport stanu', description: 'Pełny stan środowiska: okna, widgety, notatki, zadania, minutnik, skróty, połączenie, tryb agenta.', idempotent: true, reads: ['all'],
+  examples: ['status', 'raport', 'stan systemu', 'jak sie masz', 'podsumuj dzien', 'co sie dzieje'],
+  run() { const p = J.context.packet({ full: true, quiet: true }); const today = p.tasks.today; return ok(p, `Otwarte okna: ${J.wm.list().map(i => J.apps[i]?.title).filter(Boolean).join(', ') || 'brak'}. Widgety: ${J.widgets.list.length}. Notatki: ${J.state.notes.length}. Zadania dziś: ${today.filter(t => t.done).length}/${today.length}${p.tasks.overdue ? ', zaległe: ' + p.tasks.overdue : ''}. Minutnik: ${J.timer.running ? J.timer.label + ', zostało ' + J.timer.fmt(J.timer.left()) : 'nieaktywny'}. Hermes: ${p.conn.hermes}. Tryb: ${J.engine.mode}.`); } });
+R.add({ id: 'ui_highlight', group: 'Interfejs', label: 'Wskaż element', description: 'Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).', idempotent: true, hermes: true, voice: false, palette: false,
+  args: { type: 'object', properties: { target: { type: 'string' }, text: { type: 'string', description: 'krótki podpis' } }, required: ['target'] },
+  run({ target, text }) { const r = J.ui.highlight(target, text); return r ? ok({ target }, 'Wskazałem ' + target + '.') : fail('NOT_FOUND', 'Nie ma elementu „' + target + '”.'); } });
+R.add({ id: 'ui_narrate', group: 'Interfejs', label: 'Komunikat na Core', description: 'Krótki komunikat statusu na Core (np. "szukam w sieci…") bez wpisu w czacie; speak=true wypowiada go.', idempotent: true, voice: false, palette: false,
+  args: { type: 'object', properties: { text: { type: 'string', maxLength: 120 }, speak: { type: 'boolean' } }, required: ['text'] },
+  run({ text, speak }) { J.orb.banner(text); if (speak) J.voice.speak(text, { priority: 1 }); return ok(null, 'OK'); } });
+R.add({ id: 'ui_toast', group: 'Interfejs', label: 'Powiadomienie', description: 'Pokazuje powiadomienie w interfejsie i zapisuje je w centrum powiadomień.', idempotent: true, voice: false, palette: false,
+  args: { type: 'object', properties: { title: { type: 'string', maxLength: 60 }, body: { type: 'string', maxLength: 200 } }, required: ['title'] },
+  run({ title, body }) { J.notice({ title, body, kind: 'agent' }); return ok(null, 'Pokazałem powiadomienie.'); } });
+R.add({ id: 'ui_ask', group: 'Interfejs', label: 'Zapytaj użytkownika', description: 'Zadaje użytkownikowi pytanie z opcjami (szybkie odpowiedzi w czacie i głosem) i zwraca wybraną odpowiedź. Używaj przy dwuznaczności zamiast zgadywać.', hermes: true, voice: false, palette: false,
+  args: { type: 'object', properties: { question: { type: 'string' }, options: { type: 'array', items: { type: 'string' } } }, required: ['question'] },
+  async run({ question, options }) { const a = await J.ask(question, options || [], { timeout: 90000, speak: true }); if (a == null) return fail('TIMEOUT', 'Użytkownik nie odpowiedział.'); return ok({ answer: a }, 'Użytkownik odpowiedział: ' + a); } });
+R.add({ id: 'speak', group: 'Interfejs', label: 'Powiedz na głos', description: 'Wypowiada tekst syntezatorem mowy.', idempotent: true,
+  args: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }, examples: ['powiedz {text}', 'przeczytaj {text}', 'wypowiedz {text}'],
+  run({ text }) { J.voice.speak(text, { force: true, priority: 1 }); return ok(null, '🔊 ' + text); } });
+R.add({ id: 'sound_toggle', group: 'Interfejs', label: 'Dźwięki', description: 'Włącza/wyłącza dźwięki interfejsu i/lub mowę Jarvisa.', idempotent: true, writes: ['settings'],
+  args: { type: 'object', properties: { sound: { type: 'boolean' }, speech: { type: 'boolean' } } },
+  examples: ['(wylacz|wycisz) dzwieki', 'wlacz dzwieki', '(nie mow|badz cicho|wylacz mowe|przestan mowic)', '(mow|wlacz mowe|mozesz mowic)'],
+  parse(raw, n) { if (/^(wylacz|wycisz)\s+dzwiek/.test(n)) return { args: { sound: false } }; if (/^wlacz\s+dzwiek/.test(n)) return { args: { sound: true } }; if (/^(nie mow|badz cicho|wylacz mowe|przestan mowic|cisza)/.test(n)) return { args: { speech: false } }; if (/^(mow|wlacz mowe|mozesz mowic|odezwij sie)/.test(n)) return { args: { speech: true } }; return null; },
+  run({ sound, speech }) { const s = J.state.settings; if (sound != null) s.sound = sound; if (speech != null) { s.speech = speech; if (!speech) J.voice.stop(); } J.save(); J.emit('settings'); return ok({ sound: s.sound, speech: s.speech }, 'Dźwięki: ' + (s.sound ? 'włączone' : 'wyciszone') + ', mowa: ' + (s.speech ? 'włączona' : 'wyłączona') + '.'); } });
+R.add({ id: 'settings_get', group: 'Interfejs', label: 'Ustawienia', description: 'Zwraca bieżące ustawienia (bez kluczy API).', idempotent: true, reads: ['settings'], palette: false,
+  examples: ['jakie mam ustawienia', 'pokaz ustawienia'],
+  run() { const { hermesKey, ...s } = J.state.settings; return ok(s, 'Miasto: ' + s.city + ', motyw: ' + (Object.keys(J.THEMES).find(k => J.THEMES[k][0] === s.accent) || s.accent) + ', tapeta: ' + s.wall + ', dźwięki: ' + (s.sound ? 'tak' : 'nie') + ', mowa: ' + (s.speech ? 'tak' : 'nie') + ', proaktywność: ' + (s.proactive || 'quiet') + ', słowo wybudzające: ' + (s.wakeWord ? 'tak' : 'nie') + '.'); } });
+R.add({ id: 'settings_set', group: 'Interfejs', label: 'Zmień ustawienie', description: 'Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub ""), summaryTime, silentVoice.', writes: ['settings'],
+  args: { type: 'object', properties: { key: { type: 'string', enum: ['city', 'user', 'particles', 'sound', 'speech', 'skipBoot', 'proactive', 'wakeWord', 'quietFrom', 'quietTo', 'briefingTime', 'summaryTime', 'silentVoice'] }, value: { type: 'string' } }, required: ['key', 'value'] },
+  examples: ['ustaw miasto [na] {value}', 'zmien miasto na {value}', 'wlacz slowo wybudzajace', 'wylacz slowo wybudzajace', 'briefing o {value}', 'tryb proaktywny (aktywny|cichy)'],
+  parse(raw, n) { let m; if ((m = /^(?:ustaw|zmien)\s+miasto\s+(?:na\s+)?(.+)$/.exec(n))) return { args: { key: 'city', value: raw.slice(n.indexOf(m[1])) } }; if ((m = /^(wlacz|wylacz)\s+slowo wybudzajace/.exec(n))) return { args: { key: 'wakeWord', value: m[1] === 'wlacz' ? 'true' : 'false' } }; if ((m = /^briefing o (.+)$/.exec(n))) return { args: { key: 'briefingTime', value: m[1] } }; if ((m = /^tryb proaktywny (aktywny|cichy)$/.exec(n))) return { args: { key: 'proactive', value: m[1] === 'aktywny' ? 'active' : 'quiet' } }; return null; },
+  async run({ key, value }) {
+    const s = J.state.settings, BOOL = ['particles', 'sound', 'speech', 'skipBoot', 'wakeWord', 'silentVoice'];
+    if (key === 'city') { const g = await J.weather.geocode(value); Object.assign(s, { city: g.city, lat: g.lat, lon: g.lon }); J.weather.ts = 0; J.weather.fetch().catch(() => { }); J.save(); J.emit('settings'); return ok({ city: g.city }, 'Miasto: ' + g.city + '.'); }
+    if (BOOL.includes(key)) { const b = /^(true|tak|1|on|wlacz)$/i.test(value); s[key] = b; J.save(); J.emit('settings'); return ok({ [key]: b }, key + ': ' + (b ? 'włączone' : 'wyłączone') + '.'); }
+    if (key === 'proactive') { if (!/^(quiet|active|cichy|aktywny)$/.test(value)) return fail('INVALID_ARGS', 'proactive: quiet albo active'); s.proactive = /active|aktywny/.test(value) ? 'active' : 'quiet'; J.save(); J.emit('settings'); return ok({ proactive: s.proactive }, 'Proaktywność: ' + (s.proactive === 'active' ? 'aktywna' : 'cicha') + '.'); }
+    if (/Time$|^quiet/.test(key)) { const t = value === '' ? '' : (J.nlp.time(value) || J.nlp.time('o ' + value)); if (t == null) return fail('INVALID_ARGS', key + ': podaj godzinę HH:MM albo pusty tekst.'); s[key] = t; J.save(); J.emit('settings'); J.routines?.reschedule(); return ok({ [key]: t }, key + ': ' + (t || 'wyłączone') + '.'); }
+    if (key === 'user') { s.user = value.toUpperCase().slice(0, 3) || 'JD'; J.save(); J.emit('settings'); return ok({ user: s.user }, 'Inicjały: ' + s.user + '.'); }
+    return fail('INVALID_ARGS', 'Nieznany klucz.');
+  } });
+R.add({ id: 'terminal_run', group: 'Interfejs', label: 'Polecenie terminala', description: 'Wykonuje wbudowane polecenie Terminala Jarvis OS (help, ls, neofetch, date, echo, calc…) i zwraca tekstowy wynik.', idempotent: true,
+  args: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }, examples: ['wykonaj w terminalu {command}', 'terminal {command}'],
+  async run({ command }) { const out = await J.terminalRun(command); return ok({ command, output: out }, cut(out.replace(/\s+/g, ' '), 300) || 'OK'); } });
+R.add({ id: 'palette_open', group: 'Interfejs', label: 'Paleta poleceń', description: 'Otwiera paletę poleceń, opcjonalnie z wpisanym zapytaniem.', idempotent: true, hermes: false,
+  args: { type: 'object', properties: { query: { type: 'string' } } }, examples: ['[otworz] palete [polecen]', 'szukaj polecen'],
+  run({ query }) { J.palette.open(query); return ok(null, 'Paleta otwarta.'); } });
+R.add({ id: 'notifications_open', group: 'Interfejs', label: 'Centrum powiadomień', description: 'Pokazuje centrum powiadomień (przypomnienia, sygnały, komunikaty).', idempotent: true,
+  examples: ['[pokaz] powiadomienia', 'co mnie ominelo', 'centrum powiadomien'],
+  run() { J.notifs.open(); const u = J.notifs.unread(); return ok({ unread: u, items: J.state.notifs.slice(0, 10) }, u ? 'Masz ' + u + ' ' + J.pl(u, 'nowe powiadomienie', 'nowe powiadomienia', 'nowych powiadomień') + '.' : 'Brak nowych powiadomień.'); } });
+R.add({ id: 'help', group: 'Interfejs', label: 'Co potrafisz', description: 'Lista możliwości Jarvisa pogrupowana według dziedzin.', idempotent: true, hermes: false,
+  examples: ['pomoc', 'help', 'co potrafisz', 'co umiesz', 'jakie masz (komendy|polecenia|mozliwosci)', 'komendy', 'jak ci pomoc'],
+  run() { return ok({ groups: Object.fromEntries(Object.entries(R.groups()).map(([g, l]) => [g, l.map(c => c.label)])) }, 'Potrafię: ' + R.describe() + '.\n\nPodłącz Hermesa w Ustawieniach, a zrozumiem dowolne polecenie i połączę kilka kroków.'); } });
+
+/* =================== PAMIĘĆ =================== */
+R.add({ id: 'memory_remember', group: 'Pamięć', label: 'Zapamiętaj', description: 'Zapisuje trwały fakt o użytkowniku lub preferencję (np. "pracuję zdalnie", "lubię kawę o 9"). Fakty trafiają do kontekstu każdej rozmowy.', writes: ['memory'],
+  args: { type: 'object', properties: { fact: { type: 'string', maxLength: 200 }, scope: { type: 'string', enum: ['profile', 'preference', 'project', 'other'] } }, required: ['fact'] },
+  examples: ['zapamietaj [ze] {fact}', 'zapamietaj sobie {fact}', 'pamietaj [ze] {fact}'],
+  async run({ fact, scope = 'other' }) { const f = await J.memory.remember(fact, scope); return ok(f, 'Zapamiętałem: ' + fact + '.'); } });
+R.add({ id: 'memory_recall', group: 'Pamięć', label: 'Przypomnij fakty', description: 'Zwraca zapamiętane fakty pasujące do zapytania (bez zapytania — wszystkie).', idempotent: true, reads: ['memory'],
+  args: { type: 'object', properties: { query: { type: 'string' } } }, examples: ['co o mnie wiesz', 'co pamietasz', 'co pamietasz o {query}'],
+  async run({ query }) { const l = await J.memory.recall(query); return ok({ facts: l }, l.length ? 'Pamiętam: ' + l.map(f => f.fact).join('; ') + '.' : 'Nie mam jeszcze zapamiętanych faktów' + (query ? ' o „' + query + '”' : '') + '.'); } });
+R.add({ id: 'memory_forget', group: 'Pamięć', label: 'Zapomnij', description: 'Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia.', risk: 'confirm', writes: ['memory'],
+  args: { type: 'object', properties: { fact: { type: 'string' } }, required: ['fact'] }, examples: ['zapomnij [ze] {fact}', 'zapomnij o {fact}'],
+  async run({ fact }) { const n = await J.memory.forget(fact); return n ? ok({ removed: n }, 'Zapomniałem.') : fail('NOT_FOUND', 'Nie znalazłem takiego faktu.'); } });
+
+/* =================== PLIKI (File System Access — Chromium) =================== */
+const FS = J.files = {
+  handle: null, supported: 'showDirectoryPicker' in window,
+  async load() { if (!FS.supported) return null; try { FS.handle = await J.store.get('files.dir'); } catch (e) { } return FS.handle; },
+  async ensure(prompt) { if (!FS.supported) throw Object.assign(new Error('Ta przeglądarka nie obsługuje dostępu do folderów (użyj Chrome/Edge).'), { code: 'UNSUPPORTED' }); if (!FS.handle) await FS.load(); if (!FS.handle) throw Object.assign(new Error('Nie wybrano folderu roboczego — kliknij „Wybierz folder” w Ustawieniach lub w czacie.'), { code: 'DENIED' }); const p = await FS.handle.queryPermission({ mode: 'readwrite' }); if (p !== 'granted') { if (!prompt) throw Object.assign(new Error('Brak uprawnień do folderu — kliknij „Odśwież dostęp” w Ustawieniach.'), { code: 'DENIED' }); const r = await FS.handle.requestPermission({ mode: 'readwrite' }); if (r !== 'granted') throw Object.assign(new Error('Odmówiono dostępu do folderu.'), { code: 'DENIED' }); } return FS.handle; },
+  async pick() { const h = await window.showDirectoryPicker({ mode: 'readwrite' }); FS.handle = h; await J.store.set('files.dir', h); J.emit('files'); return h; },
+  async list() { const h = await FS.ensure(); const out = []; for await (const [name, e] of h.entries()) out.push({ name, kind: e.kind }); return out.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)); },
+  async read(name) { const h = await FS.ensure(); const f = await (await h.getFileHandle(name)).getFile(); if (f.size > 512 * 1024) throw new Error('Plik jest za duży (limit 512 KB).'); return await f.text(); },
+  async write(name, text, append) { const h = await FS.ensure(); const fh = await h.getFileHandle(name, { create: true }); let prev = ''; if (append) { try { prev = await (await fh.getFile()).text(); } catch (e) { } } const w = await fh.createWritable(); await w.write((prev ? prev.replace(/\s+$/, '') + '\n' : '') + text); await w.close(); return name; }
+};
+R.add({ id: 'files_list', group: 'Pliki', label: 'Pliki w folderze', description: 'Lista plików w folderze roboczym Jarvisa (File System Access, Chrome/Edge).', idempotent: true, reads: ['files'],
+  examples: ['[pokaz] [moje] pliki', 'co jest w folderze', 'lista plikow'],
+  async run() { const l = await FS.list(); return ok({ folder: FS.handle?.name, files: l }, l.length ? 'Folder „' + FS.handle.name + '”: ' + l.slice(0, 12).map(f => f.name + (f.kind === 'directory' ? '/' : '')).join(', ') + (l.length > 12 ? '…' : '') + '.' : 'Folder jest pusty.'); } });
+R.add({ id: 'files_read', group: 'Pliki', label: 'Przeczytaj plik', description: 'Zwraca treść pliku tekstowego z folderu roboczego.', idempotent: true, reads: ['files'],
+  args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, examples: ['przeczytaj plik {name}', 'otworz plik {name}', 'co jest w pliku {name}'],
+  async run({ name }) { const t = await FS.read(name); return ok({ name, text: t }, name + ': ' + cut(t.replace(/\s+/g, ' '), 300)); } });
+R.add({ id: 'files_write', group: 'Pliki', label: 'Zapisz plik', description: 'Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia.', writes: ['files'], risk: 'confirm', confirmText: a => (a.append ? 'Dopisać do pliku ' : 'Zapisać plik ') + a.name + '?',
+  args: { type: 'object', properties: { name: { type: 'string' }, text: { type: 'string' }, append: { type: 'boolean' } }, required: ['name', 'text'] }, examples: ['zapisz plik {name}: {text}', 'zapisz do pliku {name} {text}'],
+  async run({ name, text, append }) { await FS.write(name, text, append); return ok({ name, bytes: text.length }, (append ? 'Dopisałem do ' : 'Zapisałem ') + name + '.'); } });
+R.add({ id: 'files_export_note', group: 'Pliki', label: 'Eksportuj notatkę do pliku', description: 'Zapisuje notatkę jako plik .md w folderze roboczym.', writes: ['files'],
+  args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] }, examples: ['eksportuj notatke {note} [do pliku]', 'zapisz notatke {note} jako plik'],
+  async run({ note }) { const f = findNote(note); if (f.err) return f.err; const name = (f.note.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '').trim() + '.md'; await FS.write(name, '# ' + f.note.title + '\n\n' + f.note.body); return ok({ name }, 'Zapisałem „' + f.note.title + '” jako ' + name + '.'); } });
+
+/* =================== ZGODNOŚĆ: J.actions (stare wywołania) =================== */
+J.actions = new Proxy({}, { get: (_, name) => typeof name === 'string' && R.has(name) ? (args) => R.run(name, args, { source: 'ui' }) : undefined });
+J.APP_NAMES = APP_NAMES; J.APP_IDS = APP_IDS; J.SITES = SITES; J.findApp = findApp;
+})();

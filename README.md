@@ -1,32 +1,34 @@
 # Jarvis OS
 
-Wirtualne środowisko AI w przeglądarce — holograficzny pulpit sterowany przez asystenta **Jarvis**, głosem lub tekstem.
+Wirtualne środowisko AI w przeglądarce — neonowy pulpit HUD sterowany przez agenta **Jarvis**, głosem lub tekstem.
 Czysty HTML/CSS/JS, bez builda i bez zależności: wystarczy otworzyć `index.html` albo wdrożyć na GitHub Pages.
+
+Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, sygnał i liczba w telemetrii pochodzi z realnego zdarzenia lub pomiaru.
 
 ## Co potrafi
 
 | | |
 |---|---|
-| **Animacja startowa** | sekwencja „reaktora łukowego”, log rozruchu, syntezowany dźwięk i powitanie głosowe |
-| **Orb Jarvisa** | żywa fala dźwiękowa reagująca na mikrofon i mowę, stany: słucham / analizuję / mówię / uwaga; najechanie pokazuje panel telemetrii na żywo |
-| **Sterowanie głosem** | kliknij orb lub `Ctrl + Spacja` i mów po polsku (Chrome / Edge); Jarvis odpowiada syntezatorem mowy |
-| **Hermes (Nous Research)** | mózgiem Jarvisa jest **Hermes Agent** (lub model Hermes z Nous Portal / Ollama). Rozumie dowolne polecenia i **sam steruje systemem** wywołaniami funkcji w natywnym formacie Hermes `<tool_call>` (otwiera okna, tworzy notatki, zadania, minutniki, skróty, zmienia motyw…); narzędzia serwerowe Hermes Agent (wyszukiwanie, terminal, pamięć) działają równolegle i są widoczne w czacie |
-| **Tryb lokalny** | gdy Hermes jest wyłączony lub nieosiągalny, działa wbudowany silnik poleceń: „otwórz notatnik”, „zanotuj: …”, „przypomnij mi o 18:00 trening”, „minutnik 5 minut”, „pogoda w Krakowie”, „kurs bitcoina”, „oblicz 15% z 2400”, „motyw fiolet”, „otwórz YouTube”… |
-| **Dashboard agenta** | pasek górny z segmentowym wskaźnikiem trybu (Gotowy · Słucham · Analiza · Działanie · Gotowe/Błąd) wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS i zegar; w lewym dolnym rogu **Telemetria** (zwijana): pogoda, zegar, wykres aktywności agenta oraz FPS, pamięć, sieć, bateria, zadania, narzędzia, czas pracy, okna — wszystko z realnych źródeł |
-| **Wygląd** | neonowy HUD: szklane panele z narożnikami, pierścienie wokół Core reagujące na stan, czcionki Orbitron / Rajdhani, siatka i skanlinie w tle, 8 motywów kolorystycznych |
-| **Układ 3 paneli** | po lewej **czat z Jarvisem**, w środku **główny pulpit**, po prawej **Process Log** (wysuwa się, gdy Jarvis pracuje) |
-| **Process Log** | log tylko bieżącego zadania: polecenie, myśli modelu, zapytania do Hermesa, wywołania narzędzi z argumentami, wynikami, błędami i czasem; zakończone zadania trafiają do **historii** (eksport .json, przypięcie wyniku na pulpit) |
-| **Visual Engine** | Core jest żywym monitorem stanu: **Event Bus** (`js/events.js`, zdarzenia z `task_id`: `task.*`, `model.*`, `tool.*`) → maszyna stanów (IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR) → renderer. W spoczynku: szklana kula z orbitami, wiązką i odbiciem w jeziorze. Gdy trwa zadanie, wokół Core pojawia się **10 kart HUD** (`js/hud.js`: Model AI, Analiza polecenia, Tool Calls, Internet, Dane zewnętrzne, Pliki, Status systemu, Wykonywanie, Logika, Zakończenie) połączonych liniami obwodów. Każda karta i każdy impuls pochodzi z realnego zdarzenia (fala Model AI = faktycznie odebrane znaki ze strumienia); brak zdarzenia = karta przygaszona, linia pusta. Nic nie jest animowane „na niby” |
-| **Replay** | w Process Log przy zakończonym zadaniu: „▶ Replay” odtwarza jego przebieg (węzły, przepływ) na Core |
-| **Skróty** | `Alt+1` czat · `Alt+2` Process Log · `Ctrl+K` paleta · `Esc` przerwij |
-| **Widgety** | Notatka, Lista, Wynik zadania — wiele naraz, przesuwalne; tworzone z docka, menu prawym przyciskiem, palety `Ctrl+K` lub przez Jarvisa (`create_widget`). **Zapisują się** wraz z pozycją i stanem paneli (czat schowany, log przypięty) |
-| **Okna** | przeciąganie, zmiana rozmiaru, minimalizacja do doku, maksymalizacja (dwuklik), pamięć pozycji |
-| **Aplikacje** | Czat, Notatnik (autozapis, eksport, czytanie na głos), Monitor rynku (Binance WebSocket na żywo + CoinGecko), Harmonogram z przypomnieniami, Pogoda (Open-Meteo, geolokalizacja), Monitor systemu (FPS, pamięć, bateria, sieć), Terminal, Kalkulator, Minutnik/Stoper, Ustawienia, Biblioteka |
-| **Paleta poleceń** | `Ctrl + K` lub `/` — aplikacje, akcje, notatki, skróty, pytanie do Jarvisa |
-| **Pulpit** | własne skróty (aplikacje lub strony WWW), menu kontekstowe pod prawym przyciskiem, tapety, 7 motywów kolorystycznych, tryb skupienia |
-| **PWA** | instalowalna aplikacja, działa offline (service worker) |
+| **Animacja startowa** | reaktor łukowy, siatka HUD, log rozruchu z procentem, syntezowany dźwięk, powitanie głosowe |
+| **Core** | żywa kula z orbitami, wiązką i odbiciem w jeziorze; pierścienie HUD reagujące na stan (czuwam / słucham / analizuję / działam / czekam na zgodę / pauza / błąd); wokół Core **10 kart** zasilanych wyłącznie zdarzeniami Event Busa |
+| **Dashboard agenta** | pasek górny: segmentowy wskaźnik trybu wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS, zegar; **Telemetria** (zwijana, `Alt+3`): pogoda, zegar, wykres aktywności agenta, FPS, pamięć, sieć, bateria, zadania, akcje, czas pracy, okna |
+| **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **58 narzędzi** z Command Registry; wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
+| **Command Registry** | jedno źródło prawdy: każde polecenie ma schemat, poziom ryzyka, przykłady PL i z tego samego wpisu powstają narzędzie dla modelu, wzorce silnika lokalnego, pozycja palety `Ctrl+K` i opis „co potrafisz” |
+| **Silnik lokalny** | działa bez modelu: dopasowanie do przykładów z rejestru z rozumieniem czasu („za 20 minut”, „w piątek o 9”, „o osiemnastej trzydzieści”), łańcuchy („otwórz notatnik i ustaw minutnik 5 minut”), procenty, jednostki |
+| **Narzędzia** | notatki (lista/odczyt/szukaj/dopisz/zmień/usuń), zadania (lista/dodaj/odhacz/przełóż/odłóż/usuń), okna (lista/aktywuj/minimalizuj/przyciągnij/kafelkuj/układy), widgety (lista/zmień/usuń), minutnik (start/stop/przedłuż/status), pogoda, kursy krypto i **alerty kursów**, kalkulator, strony WWW, schowek, ustawienia, terminal, pamięć, pliki, wskazywanie elementów, pytania do użytkownika |
+| **Uprawnienia** | narzędzia ryzykowne (usuwanie, zamknięcie wszystkiego, obce adresy, schowek) wymagają zgody: chip **Tak / Nie / Zawsze** przy Core, szybkie odpowiedzi w czacie i głos; model dostaje `DENIED`, gdy odmówisz |
+| **Plan i pytania** | model deklaruje plan (`<plan>`) widoczny jako lista kroków w Process Log i karcie „Logika”; przy dwuznaczności pyta (`ui_ask`) zamiast zgadywać; długie zadania wstrzymują się z pytaniem „kontynuować?” (budżet tur, narzędzi, czasu) |
+| **Pamięć i ciągłość** | historia rozmowy i czat w IndexedDB (wracają po odświeżeniu), streszczenie kroczące długich rozmów, fakty o użytkowniku („zapamiętaj, że…”) wstrzykiwane do kontekstu |
+| **Sygnały i proaktywność** | minutnik, przypomnienia (także zaległe po powrocie do karty), alerty kursów, zmiany połączenia trafiają do **centrum powiadomień** (`Alt+N`) i do następnej rozmowy; w trybie **aktywnym** Jarvis sam zaczyna rozmowę (limit/h, cisza nocna); rutyny: poranny briefing i podsumowanie dnia |
+| **Głos 2.0** | pojedyncze nasłuchiwanie (`Ctrl+Spacja`) albo **czuwanie ze słowem „Jarvis, …”** (`Alt+J`); kolejka mowy z priorytetami, alarm nie ucina odpowiedzi; odpowiedzi na pytania głosem; cichy tryb głosowy |
+| **Okna** | przeciąganie z przyciąganiem do krawędzi (podgląd), kafelkowanie, `Alt+strzałki`, `Alt+Enter`, `Alt+W` (następne), układy zapisane i presety (praca, rynek, skupienie, czysto) |
+| **Process Log** | polecenie, myśli modelu, zapytania, narzędzia z argumentami i wynikami, plan, błędy, czasy; historia z eksportem i **Replay** na Core |
+| **Aplikacje** | Czat (przypinanie odpowiedzi jako widget), Notatnik, Monitor rynku (Binance WebSocket + CoinGecko), Harmonogram (import `.ics`), Pogoda (Open-Meteo), Monitor systemu, Terminal, Kalkulator, Minutnik/Stoper, Ustawienia, Biblioteka |
+| **Pliki** | folder roboczy przez File System Access (Chrome/Edge): lista, odczyt, zapis, eksport notatek do `.md` |
+| **Wydajność** | rysowanie zatrzymane w tle, adaptacyjna jakość efektów przy niskim FPS, ping Hermesa z backoffem, WebSocket rynku pauzowany w tle, Wake Lock przy minutniku i czuwaniu |
+| **PWA** | instalowalna, działa offline (service worker), powiadomienie o nowej wersji |
 
-Wszystkie dane (notatki, zadania, ustawienia) są zapisywane lokalnie w przeglądarce; można je wyeksportować i zaimportować w Ustawieniach.
+Wszystkie dane (notatki, zadania, ustawienia, pamięć, rozmowa) są zapisywane lokalnie w przeglądarce; można je wyeksportować i zaimportować w Ustawieniach.
 
 ## Uruchomienie
 
@@ -58,43 +60,64 @@ Jarvis rozmawia z Hermesem przez API zgodne z OpenAI (`/v1/chat/completions`, st
    API_SERVER_CORS_ORIGINS=https://majkel2403.github.io   # adres, pod którym otwierasz Jarvis OS
    ```
 3. Uruchom `hermes gateway` (serwer nasłuchuje na `http://localhost:8642`).
-4. W Jarvis OS wpisz ten sam klucz i kliknij **Połącz i testuj**.
+4. W Jarvis OS wpisz ten sam klucz i kliknij **Połącz i testuj** — test sprawdza połączenie i wykrywa format narzędzi.
 
-Jarvis wysyła nagłówek `X-Hermes-Session-Key`, więc pamięć długoterminowa Hermesa jest przypisana do tej przeglądarki. Postęp narzędzi agenta (`hermes.tool.progress`) pojawia się w czacie jako „⚡ Hermes: …”.
+Jarvis wysyła nagłówek `X-Hermes-Session-Key`, więc pamięć długoterminowa Hermesa jest przypisana do tej przeglądarki. Postęp narzędzi agenta (`hermes.tool.progress`) pojawia się w czacie i w karcie „Dane zewnętrzne”.
 
 ### Inne źródła modelu Hermes
 
-| Tryb | Adres | Model |
-|---|---|---|
-| Nous Portal | `https://inference-api.nousresearch.com/v1` | `Hermes-4-405B`, `Hermes-4-70B` |
-| Ollama / LM Studio / vLLM | np. `http://localhost:11434/v1` | np. `hermes3` (Ollama: ustaw `OLLAMA_ORIGINS` na adres Jarvisa) |
+| Tryb | Adres | Model | Narzędzia |
+|---|---|---|---|
+| Nous Portal | `https://inference-api.nousresearch.com/v1` | `Hermes-4-405B`, `Hermes-4-70B` | `<tool_call>` |
+| Ollama / LM Studio / vLLM | np. `http://localhost:11434/v1` | np. `hermes3` (Ollama: ustaw `OLLAMA_ORIGINS` na adres Jarvisa) | natywne `tool_calls` lub `<tool_call>` (auto) |
 
 Klucz jest przechowywany wyłącznie w `localStorage` tej przeglądarki (eksport kopii zapasowej go pomija). Gdy Hermes nie odpowiada lub odrzuca klucz, polecenie wykonuje lokalny silnik, a w czacie pojawia się ostrzeżenie. `Esc` przerywa generowanie odpowiedzi.
+
+### Jak model „widzi” Jarvis OS
+
+Każda wiadomość użytkownika jest poprzedzona blokiem `<environment>{…}</environment>` — zwięzłym JSON-em ze stanem środowiska, wysyłanym jako różnica względem poprzedniej tury. Wyniki narzędzi wracają jako `{name, ok, code, data, text}` z kodami `OK · NOT_FOUND · AMBIGUOUS · INVALID_ARGS · DENIED · DUPLICATE · OFFLINE · TIMEOUT · UNSUPPORTED · INTERNAL`, a prompt systemowy zawiera reguły groundingu (nie twierdź, że coś zrobiłeś, bez `ok=true`; odczytaj przed zmianą; pytaj przy dwuznaczności). Szczegóły i schematy: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Skróty klawiszowe
 
 | Skrót | Akcja |
 |---|---|
-| `Ctrl K` / `/` | paleta poleceń |
+| `Ctrl K` / `/` | paleta poleceń (dopasowanie rozmyte, ostatnie, wykonanie polecenia lokalnego) |
 | `Ctrl Spacja` | mów do Jarvisa |
-| `Esc` | zamknij okno / panel / przerwij mowę |
-| Shift + klik na orbie | przypnij panel telemetrii |
+| `Alt J` | czuwanie ze słowem wybudzającym „Jarvis” |
+| `Alt 1` / `Alt 2` / `Alt 3` | czat / Process Log / telemetria |
+| `Alt N` | centrum powiadomień |
+| `Alt W` | następne okno · `Alt ←→↑↓` przyciągnij okno · `Alt Enter` maksymalizuj |
+| `Esc` | zamknij okno / panel / anuluj pytanie / przerwij mowę |
 | Prawy przycisk | menu kontekstowe pulpitu i skrótów |
 
-## Plan rozwoju
+## Testy
 
-Diagnoza, braki, protokół Jarvis ↔ Hermes, zakres sterowania, częstotliwości i harmonogram faz: [docs/ROADMAP.md](docs/ROADMAP.md).
+```bash
+node --test "tests/unit/*.test.js"     # rejestr, silnik lokalny, NLP, kalkulator, parsery Hermesa, reduktor, kontekst, ICS
+node tests/e2e/smoke.js http://localhost:8090   # Chromium (Playwright): boot → polecenia → zgody → pytania → trwałość
+```
+
+Workflow `.github/workflows/ci.yml` uruchamia oba zestawy przy każdym pushu.
 
 ## Struktura
 
 ```
 index.html            szkielet interfejsu
-css/jarvis.css        wygląd i animacje
-js/core.js            stan, dźwięk, głos, menedżer okien
-js/ai.js              akcje systemowe, silnik lokalny, integracja z Hermesem
-js/apps.js            usługi (pogoda, rynek, zadania) i aplikacje
-js/dash.js            dashboard agenta: tryb, pasek statusu, telemetria
-js/main.js            start, efekty, pulpit, dok, paleta, skróty
+css/jarvis.css        wygląd i animacje (neon HUD)
+js/core.js            stan, dźwięk, głos (kolejka, czuwanie), menedżer okien, układy
+js/events.js          Event Bus, maszyna stanów agenta
+js/store.js           IndexedDB (historia, pamięć, sygnały, uchwyty plików)
+js/registry.js        Command Registry: schematy, koercja, uprawnienia, dopasowanie PL, NLP czasu
+js/commands.js        wszystkie polecenia / narzędzia modelu
+js/context.js         Context Packet, sygnały, proaktywność, rutyny, przypomnienia, pamięć
+js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty, plan, pytania, budżety, streszczenia)
+js/process.js         Process Log (kroki, plan, historia, replay)
+js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje
+js/widgets.js         widgety pulpitu
+js/hud.js             10 kart HUD wokół Core
+js/dash.js            wskaźnik trybu, pasek statusu, telemetria
+js/main.js            start, efekty, pulpit, dok, paleta, pytania/zgody, powiadomienia, onboarding, skróty
 sw.js                 service worker (offline)
-assets/               tapeta i ikona
+tests/                testy jednostkowe (Node) i dymne (Playwright)
+docs/ROADMAP.md       plan rozwoju i stan realizacji
 ```

@@ -115,11 +115,14 @@ const STATE = {
   },
   logic() {
     const n = eg.nodes.model;
+    if (eg.plan && eg.plan.steps.length) { const d = eg.plan.done, t = eg.plan.steps.length; return { s: d >= t ? 'done' : 'active', sub: d < t ? 'Plan: ' + cut(eg.plan.steps[d], 30) : 'Plan wykonany (' + t + ' kroków)', pct: d / t, r: d + ' / ' + t }; }
     if (!eg.turns) return { s: 'idle', sub: 'Bez udziału modelu', pct: 0, r: '' };
     if (n?.status === 'active') return { s: 'active', sub: eg.thinkChars ? 'Rozumowanie: ' + eg.thinkChars + ' zn.' : 'Tura modelu ' + eg.turns, pct: null, r: '' };
     return { s: n?.status === 'failed' ? 'failed' : 'done', sub: eg.turns + ' ' + J.pl(eg.turns, 'tura', 'tury', 'tur') + ' modelu', pct: 1, r: '✓' };
   },
   done() {
+    if (eg.hold === 'APPROVAL_REQUIRED') return { s: 'failed', sub: 'Czeka na Twoją zgodę', pct: null, r: '', dot: true };
+    if (eg.hold === 'PAUSED') return { s: 'failed', sub: 'Wstrzymane — budżet tury', pct: null, r: '', dot: true };
     if (eg.taskId) return { s: 'active', sub: 'Zadanie w toku…', pct: null, r: '', dot: true };
     const k = eg.flash.kind, dur = eg.flash.t && eg.startedAt ? eg.flash.t - eg.startedAt : 0;
     if (k === 'ok') return { s: 'done', sub: 'Zakończono w ' + fmtD(dur), pct: 1, r: '', dot: true };
@@ -140,6 +143,8 @@ const mount = () => {
     c.el = el; c.q = { sub: el.querySelector('.hc-sub'), r: el.querySelector('.hc-r'), bar: el.querySelector('.hc-bar i'), wave: el.querySelector('canvas') };
     c.cache = {}; c.st = { s: 'idle' };
     el.style.transitionDelay = (i * 45) + 'ms';
+    el.title = 'Kliknij: szczegóły w Process Log';
+    el.onclick = () => { J.sfx.click(); if (c.id === 'model') J.toast((J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel + (J.hermes.latency ? ' · ping ' + J.hermes.latency + ' ms' : '') : 'Silnik lokalny') + ' · tury: ' + eg.turns + ' · znaki rozumowania: ' + eg.thinkChars); else if (c.id === 'status') $('#btnNet')?.click(); else if (c.id === 'done' && eg.last) $('#resultChip')?.classList.add('show'); else J.proc.open(); };
     hud.appendChild(el);
   });
   layout();

@@ -75,6 +75,7 @@ const step = (kind, title, fields = [], opts = {}) => {
 /* ---------- zadanie ---------- */
 const start = title => {
   cur = { id: J.uid(), title: String(title).slice(0, 200), ts: Date.now(), status: 'run', steps: [], result: '' };
+  plan = null; drawPlan();
   viewing = cur; tab = 'task';
   step('input', 'Polecenie użytkownika', [['Treść', title]], { preview: String(title).slice(0, 70) });
   cur.steps[0].dur = 0;
@@ -117,7 +118,7 @@ const chip = () => {
   n.textContent = t && (cur || t.steps) ? (t.steps.length + ' ' + J.pl(t.steps.length, 'krok', 'kroki', 'kroków')) : '';
   $('#logChip')?.classList.toggle('run', !!cur);
 };
-const statusText = { run: 'wykonuję…', ok: 'zakończono', err: 'błąd', abort: 'przerwano' };
+const statusText = { run: 'wykonuję…', ok: 'zakończono', err: 'błąd', abort: 'przerwano', paused: 'wstrzymane', approval: 'czeka na zgodę' };
 const meta = () => {
   const t = viewing && (viewing === cur ? cur : viewing._live || viewing); if (!t) return;
   const dur = t.status === 'run' ? Date.now() - t.ts : t.dur;
@@ -129,9 +130,11 @@ const render = () => {
   $('#lpHistN').textContent = J.state.history.length;
   const stEl = $('#lpState'), running = !!cur;
   const t = viewing;
-  stEl.textContent = running ? statusText.run : t ? statusText[t.status] || t.status : 'bezczynny';
-  stEl.dataset.s = running ? 'run' : t ? t.status : 'idle';
+  const hold = running && J.engine.hold;
+  stEl.textContent = hold === 'PAUSED' ? statusText.paused : hold === 'APPROVAL_REQUIRED' ? statusText.approval : running ? statusText.run : t ? statusText[t.status] || t.status : 'bezczynny';
+  stEl.dataset.s = hold ? 'hold' : running ? 'run' : t ? t.status : 'idle';
   if (tab === 'hist') return renderHist();
+  drawPlan();
   const box = stepsBox(), foot = $('#lpFoot');
   box.innerHTML = ''; foot.innerHTML = '';
   if (!t) { $('#lpTitle').textContent = ''; $('#lpMeta').textContent = ''; box.innerHTML = '<div class="lp-empty">Brak aktywnego zadania.<br>Log pojawi się, gdy Jarvis zacznie działać — z każdym krokiem, argumentem i wynikiem.</div>'; return; }
@@ -168,9 +171,22 @@ const renderHist = () => {
   });
 };
 
+/* ---------- plan zadania (z <plan> modelu lub łańcucha lokalnego) ---------- */
+let plan = null;
+const drawPlan = () => {
+  const box = $('#lpPlan'); if (!box) return;
+  if (!plan || !plan.steps.length || tab !== 'task' || (viewing && viewing !== cur && !viewing._live)) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.innerHTML = '<div class="lp-plan-h"><span>Plan</span><em>' + plan.done + ' / ' + plan.steps.length + '</em></div>';
+  plan.steps.forEach((t, i) => { const el = h('div', { class: 'lp-step' + (i < plan.done ? ' done' : i === plan.done && cur ? ' now' : '') }, '<i></i><span></span>'); el.querySelector('span').textContent = t; box.appendChild(el); });
+};
+const setPlan = steps => { plan = { steps: (steps || []).map(String), done: 0 }; if (cur) cur.plan = plan; drawPlan(); J.sfx.tick(); };
+const planStep = i => { if (!plan) return; plan.done = Math.min(plan.steps.length, (i ?? plan.done) + 1); drawPlan(); J.ev.emit('plan.step', { index: plan.done - 1 }); J.sfx.tick(); };
+J.on('plan', p => { if (plan && p) { plan.done = p.done; drawPlan(); } });
+
 /* ---------- publiczne API ---------- */
 J.proc = {
-  start, end, step, log,
+  start, end, step, log, plan: setPlan, planStep,
   get current() { return cur; },
   get active() { return !!cur; },
   open: () => setOpen(true),
@@ -186,6 +202,7 @@ J.proc = {
     $('#lpPin').onclick = () => { pinned = !pinned; J.state.ui.logPinned = pinned; J.save(); $('#lpPin').classList.toggle('on', pinned); J.toast(pinned ? 'Process Log będzie otwierał się przy każdym zadaniu' : 'Process Log otwierasz z chipa w rogu'); };
     $$('.lp-tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
     stepsBox().addEventListener('scroll', e => { const b = e.target; b.dataset.follow = (b.scrollHeight - b.scrollTop - b.clientHeight < 40) ? '1' : '0'; });
+    ['approval.requested', 'approval.resolved', 'task.paused', 'task.resumed'].forEach(t => J.ev.on(t, () => { if (cur) render(); }));
     render(); chip();
   }
 };
