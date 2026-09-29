@@ -2,6 +2,8 @@
 
 Data: 29.09.2026. Stan sprawdzony w kodzie (branch `claude/jev-wdrozenie`, PR #2). Dokument służy do planowania; kodu jeszcze nie piszemy.
 
+> **Pełna specyfikacja** (każdy obszar do najmniejszego szczegółu, decyzje, katalogi z kodu, plan wdrożenia W1–W5): [docs/spec/README.md](spec/README.md).
+
 Legenda: `[jest]` działa · `[część]` działa częściowo · `[brak]` do zaprojektowania · `[decyzja]` wymaga decyzji właściciela.
 
 > **Uwaga o źródłach.** Pierwsza wersja tej listy powstała poza repozytorium (pliki `/workspace/jarvis-*.md`, których tu nie ma). Poniżej jej treść, **z poprawionymi statusami** tam, gdzie kod mówi co innego. Poprawki oznaczone jako _(poprawione)_.
