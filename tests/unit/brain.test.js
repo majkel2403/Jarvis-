@@ -83,3 +83,12 @@ test('ics: import wydarzeń', () => {
   assert.equal(ev.length, 2); assert.equal(ev[0].start.time, '09:00'); assert.equal(ev[0].summary, 'Dentysta, kontrola'); assert.equal(ev[1].start.time, '');
   assert.equal(J.ics.import(ics), 2); assert.equal(J.ics.import(ics), 0, 'duplikaty pomijane');
 });
+test('bootstrapConfig: config.local.js i parametry adresu, tylko dozwolone pola', () => {
+  const { load: L } = require('../harness.js');
+  const K = L({ files: ['core.js'], config: { jevKey: 'sk-or-file', jevOn: 'true', hackerField: 'no', city: 'Gdańsk' } });
+  assert.equal(K.state.settings.jevKey, 'sk-or-file'); assert.equal(K.state.settings.jevOn, true); assert.equal(K.state.settings.city, 'Gdańsk'); assert.equal(K.state.settings.hackerField, undefined);
+  const U = L({ files: ['core.js'], location: { href: 'http://localhost/index.html?jevKey=sk-or-url&hermesOn=0&foo=1#x', search: '?jevKey=sk-or-url&hermesOn=0&foo=1' } });
+  assert.equal(U.state.settings.jevKey, 'sk-or-url'); assert.equal(U.state.settings.jevOn, true, 'sam klucz włącza Jeva'); assert.equal(U.state.settings.hermesOn, false);
+  assert.equal(U.configuredFrom, 'url');
+  assert.ok(!/jevKey/.test(U.__ctx.location.href), 'klucz usunięty z adresu'); assert.ok(/foo=1/.test(U.__ctx.location.href), 'obce parametry zostają');
+});

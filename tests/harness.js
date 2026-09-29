@@ -30,7 +30,9 @@ function load(opts = {}) {
   ctx.localStorage = storage(); ctx.sessionStorage = storage();
   if (opts.state) ctx.localStorage.setItem('jarvis-os:v2', JSON.stringify(opts.state));
   ctx.navigator = { onLine: true, userAgent: 'node', language: 'pl-PL', hardwareConcurrency: 4, clipboard: { writeText: async () => { }, readText: async () => 'schowek' }, mediaDevices: null };
-  ctx.location = { origin: 'http://localhost', protocol: 'http:', href: 'http://localhost/' };
+  ctx.location = Object.assign({ origin: 'http://localhost', protocol: 'http:', href: 'http://localhost/', pathname: '/', search: '', hash: '' }, opts.location || {});
+  ctx.history = { replaceState: (a, b, url) => { ctx.location.href = 'http://localhost' + url; ctx.location.search = ''; } };
+  if (opts.config) ctx.JARVIS_CONFIG = opts.config;
   ctx.matchMedia = () => ({ matches: false, addEventListener() { } });
   ctx.innerWidth = 1400; ctx.innerHeight = 800; ctx.devicePixelRatio = 1;
   ctx.addEventListener = () => { }; ctx.removeEventListener = () => { }; ctx.open = () => ({});
@@ -40,6 +42,7 @@ function load(opts = {}) {
   vm.createContext(ctx);
   const files = opts.files || ['core.js', 'events.js', 'store.js', 'registry.js', 'process.js', 'apps.js', 'widgets.js', 'commands.js', 'context.js', 'judge.js', 'ai.js'];
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
+  ctx.J.__ctx = ctx;
   return ctx.J;
 }
 module.exports = { load, mkEl };

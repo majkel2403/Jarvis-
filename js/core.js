@@ -118,6 +118,24 @@ J.state = (() => {
   return s;
 })();
 J.save = J.debounce(() => { try { localStorage.setItem(KEY, JSON.stringify(J.state)); } catch (e) { /* tryb prywatny */ } }, 250);
+/* Konfiguracja z zewnątrz (klucze i ustawienia bez wpisywania w UI):
+   1) window.JARVIS_CONFIG z pliku config.local.js (ignorowany przez git, tylko lokalnie);
+   2) jednorazowo z adresu: index.html?jevKey=sk-or-…&jevOn=1&hermesKey=… — parametry są zapisywane i usuwane z paska adresu.
+   Dozwolone klucze ustawień: tylko z listy poniżej. */
+J.bootstrapConfig = () => {
+  const ALLOW = ['jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
+  const BOOL = ['jevOn', 'jevPrivate', 'hermesOn', 'wakeWord', 'skipBoot'];
+  const apply = (src, from) => { let n = 0; for (const [k, v] of Object.entries(src || {})) { if (!ALLOW.includes(k) || v == null || v === '') continue; J.state.settings[k] = BOOL.includes(k) ? /^(1|true|tak|on|yes)$/i.test(String(v)) : String(v); n++; } if (n) { J.save(); J.configuredFrom = from; } return n; };
+  let n = 0;
+  try { if (window.JARVIS_CONFIG) n += apply(window.JARVIS_CONFIG, 'config.local.js'); } catch (e) { }
+  try {
+    const u = new URL(location.href); const src = {}; let hit = false;
+    for (const k of ALLOW) if (u.searchParams.has(k)) { src[k] = u.searchParams.get(k); u.searchParams.delete(k); hit = true; }
+    if (hit) { n += apply(src, 'url'); if (src.jevKey && src.jevOn == null) { J.state.settings.jevOn = true; J.save(); } history.replaceState?.(null, '', u.pathname + (u.search || '') + u.hash); }
+  } catch (e) { }
+  return n;
+};
+J.bootstrapConfig();
 J.resetAll = () => { try { localStorage.removeItem(KEY); } catch (e) { } location.reload(); };
 
 /* ---------- zdarzenia ---------- */

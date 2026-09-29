@@ -813,6 +813,7 @@ boot().then(() => {
   const msg = `${greet}. Wszystkie systemy online.` + (pending.length ? ` Następne zadanie: ${pending[0].text} o ${pending[0].time}.` : '');
   J.orb.set('idle', msg);
   setTimeout(() => J.voice.speak(msg), 700);
+  if (J.configuredFrom) { const src = J.configuredFrom; J.configuredFrom = null; J.toast('Konfiguracja wczytana z ' + (src === 'url' ? 'adresu (usunięta z paska)' : 'config.local.js') + (S.jevKey ? ' · Jev włączony' : ''), 6000); if (S.jevOn && S.jevKey) setTimeout(() => J.judge.test().then(t => J.notice({ title: 'Jev działa', body: t, kind: 'agent' })).catch(e => J.notice({ title: 'Jev: błąd połączenia', body: e.message, kind: 'hermes' })), 1500); }
   const un = J.notifs.unread(); if (un) setTimeout(() => J.toast('Masz ' + un + ' ' + J.pl(un, 'nieprzeczytane powiadomienie', 'nieprzeczytane powiadomienia', 'nieprzeczytanych powiadomień') + ' (Alt+N)', 5000), 2500);
 });
 })();
