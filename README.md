@@ -81,6 +81,10 @@ Klucz jest przechowywany wyłącznie w `localStorage` tej przeglądarki (eksport
 | Shift + klik na orbie | przypnij panel telemetrii |
 | Prawy przycisk | menu kontekstowe pulpitu i skrótów |
 
+## Plan rozwoju
+
+Diagnoza, braki, protokół Jarvis ↔ Hermes, zakres sterowania, częstotliwości i harmonogram faz: [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## Struktura
 
 ```
