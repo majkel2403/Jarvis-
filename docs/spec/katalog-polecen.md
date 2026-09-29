@@ -2,7 +2,7 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **124** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 17 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **125** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 17 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
@@ -10,7 +10,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|
 | A3 sam, po cichu | 55 |
 | A2 sam + Cofnij | 45 |
-| A1 pyta „Chodzi o…?” | 9 |
+| A1 pyta „Chodzi o…?” | 10 |
 | A0 zawsze zgoda | 15 |
 
 ## Aplikacje i okna
@@ -102,6 +102,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `notes_revert` | Przywróć wersję notatki — Przywraca wersję notatki (version = id wersji albo "previous"). Bieżąca treść staje się nową wersją, więc można wrócić. | **note**: string; **version**: string | safe | A2 | tak | „przywroc poprzednia wersje notatki {note}”, „wroc do starej tresci notatki {note}”, „cofnij notatke {note} do poprzedniej wersji” |
 | `notes_to_task` | Zadanie z notatki — Tworzy zadanie z notatki (treść = tytuł) albo z jej linii (line); zadanie pamięta notatkę (ikona 📝 w Harmonogramie). | **note**: string; line: string; time: string (time); date: string (date) | safe | A2 | tak | „zrob zadanie z notatki {note}”, „dodaj notatke {note} do harmonogramu na {date}”, „przypomnij mi o notatce {note} o {time}” |
 | `notes_folder` | Folder notatki — Przenosi notatkę do folderu (jeden poziom; folder powstaje sam). folder="" wyjmuje z folderu. | **note**: string; **folder**: string | safe | A2 | tak | „przenies notatke {note} do folderu {folder}”, „wloz notatke {note} do {folder}”, „wyjmij notatke {note} z folderu” |
+| `notes_dictate` | Dyktuj do notatki — Tryb dyktowania: każda kolejna wypowiedź jest dopisywana do notatki jako tekst (bez wykonywania poleceń) z interpunkcją słowami („kropka”, „przecinek”, „nowa li | note: string; stop: boolean | safe | A1 | — | „dyktuj do notatki {note}”, „dyktuj do tej notatki”, „koniec dyktowania” |
 
 ## Pulpit i widgety
 

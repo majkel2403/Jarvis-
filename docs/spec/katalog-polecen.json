@@ -5118,5 +5118,40 @@
    "usun zalaczniki"
   ],
   "needsConfirmText": false
+ },
+ {
+  "id": "notes_dictate",
+  "group": "Notatki",
+  "label": "Dyktuj do notatki",
+  "description": "Tryb dyktowania: każda kolejna wypowiedź jest dopisywana do notatki jako tekst (bez wykonywania poleceń) z interpunkcją słowami („kropka”, „przecinek”, „nowa linia”, „znak zapytania”), aż do „koniec dyktowania”, 10 s ciszy albo Esc. stop=true kończy.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "note": {
+     "type": "string",
+     "description": "id albo tytuł; \"current\" = otwarta"
+    },
+    "stop": {
+     "type": "boolean"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [
+   "dyktuj do notatki {note}",
+   "dyktuj do tej notatki",
+   "koniec dyktowania"
+  ],
+  "needsConfirmText": false
  }
 ]

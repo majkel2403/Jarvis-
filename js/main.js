@@ -597,7 +597,7 @@ const wrap = $('#coreWrap');
 $('#core').addEventListener('click', () => { if (J.ear.supported) J.ear.toggle(); else J.chatPanel.show(); });
 J.on('ear', on => $('#btnVoice').classList.toggle('rec', on));
 if (!J.ear.supported) $('#coreHint').textContent = 'kliknij, aby porozmawiać';
-J.on('voice-command', t => J.brain.handle(t, { voice: true, source: 'voice' }));
+J.on('voice-command', t => J.voiceRoute ? J.voiceRoute(t) : J.brain.handle(t, { voice: true, source: 'voice' }));
 J.on('ear-standby', on => { $('#app').classList.toggle('standby', on); $('#btnVoice').classList.toggle('standby', on); });
 
 /* =================== PASEK GÓRNY =================== */
@@ -734,6 +734,10 @@ addEventListener('keydown', e => {
     if (J.proc.isOpen && !J.proc.active) return J.proc.close();
     if (J.notifs.isOpen) return J.notifs.close();
     if (J.ask.pending) return J.ask.cancel();
+    if (J.dictation?.active) return J.dictation.stop();
+    /* tryb skupienia: podwójny Esc wychodzi z trybu */
+    if ($('#app').classList.contains('focus') && Date.now() - (J._lastEsc || 0) < 600) { J._lastEsc = 0; return J.uiRun('focus_mode', { on: false }, { quiet: true }); }
+    J._lastEsc = Date.now();
     if (J.brain.abort()) return;
     if (J.voice.speaking) return J.voice.stop();
     if (J.ear.active) return J.ear.stop();

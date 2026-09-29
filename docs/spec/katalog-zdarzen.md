@@ -29,6 +29,7 @@
 | ui | `agent-ui` | registry.js |
 | ui | `app-view` | apps.js, commands-ext.js |
 | ui | `attach` | commands-w4.js |
+| ui | `dictation` | commands-w4.js |
 | ui | `ear` | core.js |
 | ui | `ear-standby` | core.js |
 | ui | `files` | commands.js |
@@ -40,7 +41,7 @@
 | ui | `market-alert` | context.js |
 | ui | `market-list` | apps.js |
 | ui | `memory` | context.js |
-| ui | `notes` | apps.js, commands-data.js, commands.js |
+| ui | `notes` | apps.js, commands-data.js, commands-w4.js, commands.js |
 | ui | `plan` | commands-w4.js, events.js |
 | ui | `proc-end` | process.js |
 | ui | `routine-step` | commands-w4.js |

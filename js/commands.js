@@ -50,8 +50,11 @@ const findNote = async q => {
   if (inc.length > 1) { const j = await disambiguate('Which note does the user mean?', inc.slice(0, 8), x => x.title); if (j) return { note: j }; return { err: fail('AMBIGUOUS', 'Kilka notatek pasuje: ' + inc.slice(0, 5).map(x => '„' + x.title + '” (' + x.id + ')').join(', ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, title: x.title })) }) }; }
   const body = notes.filter(x => norm(x.body).includes(n));
   if (body.length === 1) return { note: body[0] };
-  return { err: fail('NOT_FOUND', 'Nie znalazłem notatki „' + q + '”. Dostępne: ' + (notes.slice(0, 8).map(x => '„' + x.title + '”').join(', ') || 'brak') + '.') };
+  const may = nearest(notes, q, x => x.title);
+  return { err: fail('NOT_FOUND', 'Nie znalazłem notatki „' + q + '”.' + (may.length ? ' Może: ' + may.map(x => '„' + x.title + '”').join(', ') + '?' : ' Dostępne: ' + (notes.slice(0, 8).map(x => '„' + x.title + '”').join(', ') || 'brak') + '.')) };
 };
+/* podpowiedź najbliższych nazw przy NOT_FOUND (docs/spec/13-bledy.md §1): literówki i fragmenty słów */
+const nearest = (list, q, label, k = 3) => { const sc = J.search?.score; if (!sc) return []; const n = norm(q); return list.map(x => [x, Math.max(sc(n, label(x)), ...n.split(' ').filter(w => w.length >= 4).map(w => sc(w, label(x)) * .8))]).filter(([, v]) => v >= 40).sort((a, b) => b[1] - a[1]).slice(0, k).map(([x]) => x); };
 const findTask = async q => {
   if (!q) return { err: fail('INVALID_ARGS', 'Podaj treść lub id zadania.') };
   const tasks = J.state.tasks, n = norm(q);
@@ -61,7 +64,8 @@ const findTask = async q => {
   const inc = pool.filter(x => norm(x.text).includes(n) || n.includes(norm(x.text)));
   if (inc.length === 1) return { task: inc[0] };
   if (inc.length > 1) { const open = inc.filter(t => !t.done); if (open.length === 1) return { task: open[0] }; const j = await disambiguate('Which task does the user mean?', inc.slice(0, 8), t => (t.time || '--:--') + ' ' + t.text + ' (' + t.date + ')'); if (j) return { task: j }; return { err: fail('AMBIGUOUS', 'Kilka zadań pasuje: ' + inc.slice(0, 5).map(x => (x.time || '--:--') + ' ' + x.text + ' (' + x.id + ')').join('; ') + '. Podaj id.', { candidates: inc.slice(0, 5).map(x => ({ id: x.id, text: x.text, time: x.time, date: x.date })) }) }; }
-  return { err: fail('NOT_FOUND', 'Nie znalazłem zadania „' + q + '”.') };
+  const may = nearest(tasks.filter(t => !t.done), q, t => t.text);
+  return { err: fail('NOT_FOUND', 'Nie znalazłem zadania „' + q + '”.' + (may.length ? ' Może: ' + may.map(t => '„' + t.text + '”').join(', ') + '?' : '')) };
 };
 const taskRow = t => ({ id: t.id, date: t.date, time: t.time, text: t.text, done: t.done, ...(t.priority && t.priority !== 'normal' ? { priority: t.priority } : {}), ...(t.repeat ? { repeat: t.repeat.rule } : {}), ...(t.remind ? { remind: t.remind } : {}), ...(t.subtasks?.length ? { subtasks: t.subtasks.filter(s => s.done).length + '/' + t.subtasks.length } : {}) });
 const noteRow = n => ({ id: n.id, title: n.title, updated: new Date(n.ts).toISOString(), words: n.body.trim().split(/\s+/).filter(Boolean).length, ...(n.tags?.length ? { tags: n.tags } : {}), ...(n.folder ? { folder: n.folder } : {}), ...(n.pinned ? { pinned: true } : {}) });

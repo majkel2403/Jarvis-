@@ -320,5 +320,51 @@ R.add({ id: 'chat_attach', group: 'Czat', label: 'Dołącz do wiadomości', desc
     return ok({ id: it.id, name: it.name, chars: it.text.length, truncated: it.cut }, 'Dołączę „' + it.name + '” do następnej wiadomości' + (it.cut ? ' (przycięte do ' + ATT_MAX + ' znaków)' : '') + '.', null, () => J.attach.remove(it.id));
   } });
 R.get('chat_attach').undoable = true;
+/* =================== DYKTOWANIE DO NOTATKI (docs/spec/12-glos.md §4) =================== */
+const PUNCT = [[/\s*\bnowa linia\b\s*/gi, '\n'], [/\s*\bnowy akapit\b\s*/gi, '\n\n'], [/\s*\bkropka\b/gi, '.'], [/\s*\bprzecinek\b/gi, ','], [/\s*\bznak zapytania\b/gi, '?'], [/\s*\bwykrzyknik\b/gi, '!'], [/\s*\bdwukropek\b/gi, ':'], [/\s*\bmyślnik\b/gi, ' –']];
+J.dictation = {
+  note: null, lastFeed: 0, before: null, _t: null,
+  get active() { return !!J.dictation.note; },
+  punct(t) { let out = String(t || '').trim(); PUNCT.forEach(([re, v]) => { out = out.replace(re, v); }); return out.replace(/([.?!]\s*)([a-ząćęłńóśźż])/g, (m, a, b) => a + b.toUpperCase()); },
+  start(n) {
+    if (J.dictation.note) J.dictation.stop(true);
+    J.dictation.note = n.id; J.dictation.before = n.body; J.dictation.lastFeed = Date.now(); J.notes.version(n, 'user');
+    J.orb?.set?.('listening', 'dyktowanie'); J.emit('dictation', true);
+    clearInterval(J.dictation._t); J.dictation._t = setInterval(() => { if (J.dictation.active && Date.now() - J.dictation.lastFeed > 10000 && !J.ear?.active) J.dictation.stop(); }, 1000);
+    if (J.ear?.supported) J.ear.start();
+  },
+  feed(t) {
+    const n = J.state.notes.find(x => x.id === J.dictation.note); if (!n) return J.dictation.stop();
+    if (/^(koniec dyktowania|zakoncz dyktowanie|stop dyktowanie)$/.test(J.norm(t))) return J.dictation.stop();
+    const txt = J.dictation.punct(t); J.dictation.lastFeed = Date.now(); if (!txt) return;
+    n.body = n.body + (n.body && !/[\s\n]$/.test(n.body) && !/^[.,?!:]/.test(txt) ? ' ' : '') + txt; n.ts = Date.now(); J.save(); J.emit('notes', n.id);
+    if (J.ear?.supported) setTimeout(() => { if (J.dictation.active && !J.ear.active) J.ear.start(); }, 250);
+  },
+  stop(silent) {
+    const id = J.dictation.note; if (!id) return; clearInterval(J.dictation._t);
+    const n = J.state.notes.find(x => x.id === id), before = J.dictation.before; J.dictation.note = null; J.dictation.before = null;
+    J.orb?.set?.('idle'); J.emit('dictation', false); J.ear?.stop?.();
+    if (n && before !== n.body && !silent) { const e = J.undo.push({ id: 'notes_dictate', label: 'Dyktowanie', text: 'Dyktowanie do „' + n.title + '”', undo: () => { n.body = before; J.save(); J.emit('notes', n.id); }, source: 'voice' }); J.undo.offer(e); J.toast?.('Koniec dyktowania — „' + n.title + '”'); }
+  }
+};
+R.add({ id: 'notes_dictate', group: 'Notatki', label: 'Dyktuj do notatki', description: 'Tryb dyktowania: każda kolejna wypowiedź jest dopisywana do notatki jako tekst (bez wykonywania poleceń) z interpunkcją słowami („kropka”, „przecinek”, „nowa linia”, „znak zapytania”), aż do „koniec dyktowania”, 10 s ciszy albo Esc. stop=true kończy.', writes: ['notes'],
+  args: { type: 'object', properties: { note: { type: 'string', description: 'id albo tytuł; "current" = otwarta' }, stop: { type: 'boolean' } } },
+  examples: ['dyktuj do notatki {note}', 'dyktuj do tej notatki', 'koniec dyktowania'],
+  parse(raw, n) { let m; if (/^(koniec dyktowania|zakoncz dyktowanie)$/.test(n)) return { args: { stop: true }, score: 60 }; if (/^dyktuj( do tej notatki)?$/.test(n)) return { args: { note: 'current' }, score: 50 }; if ((m = /^dyktuj do notatki\s+(.+)$/.exec(n))) return { args: { note: raw.slice(n.lastIndexOf(m[1])) }, score: 50 }; return null; },
+  async run({ note, stop }) {
+    if (stop) { if (!J.dictation.active) return ok({ active: false }, 'Dyktowanie nie trwa.'); J.dictation.stop(); return ok({ active: false }, 'Koniec dyktowania.'); }
+    let q = note || 'current'; if (q === 'current') { const st = J.apps.notes?.state?.(J.wm.ctx('notes')); if (!st?.noteId) return fail('INVALID_ARGS', 'Otwórz notatkę albo powiedz, do której dyktować.'); q = st.noteId; }
+    const f = await K.findNote(q); if (f.err) return f.err;
+    J.wm.open('notes', { view: 'note', target: f.note.id }); J.dictation.start(f.note);
+    return ok({ id: f.note.id, active: true }, 'Dyktuję do „' + f.note.title + '”. Mów — „kropka”, „przecinek”, „nowa linia”; „koniec dyktowania” kończy.');
+  } });
+/* wypowiedź głosowa: dyktowanie → tekst; „stop / cicho / dość” ucisza; „nieważne / anuluj” porzuca; reszta = polecenie */
+J.voiceRoute = t => {
+  const n = J.norm(t).replace(/[?!.]+$/, '');
+  if (J.dictation.active) return J.dictation.feed(t);
+  if (/^(stop|cicho|dosc|zamilcz|przestan mowic)$/.test(n) && J.voice?.speaking) { J.voice.stop(); J.orb?.set?.('idle'); return; }
+  if (/^(niewazne|anuluj|nic|zapomnij o tym)$/.test(n)) { J.orb?.set?.('idle'); J.orb?.banner?.(null); J.toast?.('OK, anulowane.'); return; }
+  return J.brain.handle(t, { voice: true, source: 'voice' });
+};
 J.cmdKit.parseRoutine = parseRoutine; J.cmdKit.checkRoutine = checkRoutine; J.cmdKit.chartSpec = chartSpec;
 })();

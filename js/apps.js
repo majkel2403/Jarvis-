@@ -502,6 +502,7 @@ J.apps.notes = {
         <button class="btn sm ghost" id="nPin" title="Przypnij na górze listy">📌</button>
         <button class="btn sm ghost" id="nPrevB" title="Podgląd Markdown">👁</button>
         <button class="btn sm ghost" id="nHistB" title="Historia wersji">🕘</button>
+        <button class="btn sm ghost" id="nDict" title="Dyktuj do tej notatki (koniec: „koniec dyktowania”, 10 s ciszy albo Esc)">🎙</button>
         <button class="btn sm ghost" id="nTask" title="Zrób zadanie z notatki">✓+</button>
         <button class="btn sm ghost" id="nRead" title="Przeczytaj na głos">${icon('sound', 'width="12" height="12"')}</button>
         <button class="btn sm ghost" id="nExp" title="Pobierz jako .md">${icon('download', 'width="12" height="12"')} .md</button>
@@ -600,6 +601,8 @@ J.apps.notes = {
     $('#nPrevB', body).onclick = () => { preview = !preview; renderEd(); };
     $('#nHistB', body).onclick = () => { histOpen = !histOpen; renderEd(); };
     $('#nTask', body).onclick = () => { const n = cur(); if (n) J.uiRun('notes_to_task', { note: n.id }); };
+    $('#nDict', body).onclick = () => { const n = cur(); if (!n) return; if (J.dictation?.active) J.uiRun('notes_dictate', { stop: true }, { offer: false }); else J.uiRun('notes_dictate', { note: n.id }, { offer: false }); };
+    sub(ctx, 'dictation', on => { $('#nDict', body).classList.toggle('rec', !!on); $('#nDict', body).textContent = on ? '● 🎙' : '🎙'; });
     $('#nExp', body).onclick = () => { const n = cur(); if (!n) return; const fm = (n.tags.length || n.folder) ? '---\n' + (n.folder ? 'folder: ' + n.folder + '\n' : '') + (n.tags.length ? 'tags: [' + n.tags.join(', ') + ']\n' : '') + '---\n\n' : ''; const a = h('a', { href: URL.createObjectURL(new Blob([fm + '# ' + n.title + '\n\n' + n.body], { type: 'text/markdown' })), download: (n.title || 'notatka').replace(/[^\w\-ąćęłńóśźż ]/gi, '').trim() + '.md' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
     $('#nRead', body).onclick = () => { const n = cur(); if (n) { const was = J.state.settings.speech; J.state.settings.speech = true; J.voice.speak(n.title + '. ' + n.body); J.state.settings.speech = was; } };
     $('#nRestore', body).onclick = async () => { const n = cur(); if (!n) return; const r = await J.uiRun('notes_restore', { note: n.id }); if (r.ok) { filter = { kind: 'all' }; renderAll(); } };
