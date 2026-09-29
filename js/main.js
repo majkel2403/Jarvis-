@@ -47,6 +47,7 @@ const boot = () => new Promise(resolve => {
 });
 
 /* =================== TŁO: sieć cząsteczek + FPS =================== */
+const RM = matchMedia('(prefers-reduced-motion: reduce)');   // systemowe „ogranicz ruch”
 const fx = (() => {
   const cv = $('#fx'), c = cv.getContext('2d');
   let W, H, pts = [], mouse = { x: -999, y: -999 }, frames = 0, last = performance.now();
@@ -73,7 +74,7 @@ const fx = (() => {
     if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
     c.clearRect(0, 0, W, H);
     const LOW = J.quality === 'low';
-    if (S.particles && !LOW && !$('#app').classList.contains('focus')) {
+    if (S.particles && !LOW && !RM.matches && !$('#app').classList.contains('focus')) {
       const rgb = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim() || '33,217,255';
       for (const p of pts) {
         p.x += p.vx; p.y += p.vy;
@@ -93,7 +94,8 @@ const fx = (() => {
         c.fillStyle = `rgba(${rgb},.75)`; c.beginPath(); c.arc(a.x, a.y, a.r, 0, 7); c.fill();
       }
     }
-    J.hud.frame(now); orbDraw(now); flowDraw(now);
+    const tt = RM.matches ? 3000 : now;   // „ogranicz ruch”: Core i jezioro stoją w miejscu, ale nadal zmieniają kolor i jasność ze stanem
+    J.hud.frame(now); orbDraw(tt); flowDraw(tt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -816,6 +818,6 @@ boot().then(() => {
   setTimeout(() => J.voice.speak(msg), 700);
   if (J.configuredFrom) { const src = J.configuredFrom; J.configuredFrom = null; J.toast('Konfiguracja wczytana z ' + (src === 'url' ? 'adresu (usunięta z paska)' : 'config.local.js') + (S.jevKey ? ' · Jev włączony' : ''), 6000); if (S.jevOn && S.jevKey) setTimeout(() => J.judge.test().then(t => J.notice({ title: 'Jev działa', body: t, kind: 'agent' })).catch(e => J.notice({ title: 'Jev: błąd połączenia', body: e.message, kind: 'hermes' })), 1500); }
   if (J.configViaQuery) { J.configViaQuery = false; setTimeout(() => J.notice({ title: 'Klucz był w adresie strony', body: 'Adres z „?” trafia do serwera, na którym leży strona. Następnym razem użyj znaku # (index.html#jevKey=…) albo pliku config.local.js. Jeśli strona jest publiczna, rozważ wygenerowanie nowego klucza.', kind: 'hermes' }), 3000); }
-  const un = J.notifs.unread(); if (un) setTimeout(() => J.toast('Masz ' + un + ' ' + J.pl(un, 'nieprzeczytane powiadomienie', 'nieprzeczytane powiadomienia', 'nieprzeczytanych powiadomień') + ' (Alt+N)', 5000), 2500);
+  const un = J.notifs.unread(); if (un && Date.now() - (J.lastToastAt || 0) > 8000) setTimeout(() => J.toast('Masz ' + un + ' ' + J.pl(un, 'nieprzeczytane powiadomienie', 'nieprzeczytane powiadomienia', 'nieprzeczytanych powiadomień') + ' (Alt+N)', 5000), 2500);
 });
 })();

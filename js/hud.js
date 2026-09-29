@@ -45,12 +45,16 @@ const layout = () => {
   const d = $('#desktop'); if (!d) return;
   const W = d.clientWidth, H = d.clientHeight; if (!W || !H) return;
   const vw = innerWidth, vh = innerHeight, topbar = d.getBoundingClientRect().top;
-  const k = J.clamp(Math.min(W / 1240, H / 690), .5, 1.12);
+  let k = J.clamp(Math.min(W / 1240, H / 690), .5, 1.12);
+  /* karty sięgają od 300·k nad Core (najwyższa, z wykresem fali) do 289·k pod nim: na niskich ekranach zmniejszamy scenę tak, żeby zmieściły się
+     między paskiem zadania u góry (56 px) a dokiem u dołu (100 px) i nie chowały się pod nimi */
+  if (W >= 760) k = Math.max(.5, Math.min(k, (H - 156) / 589));
   // linia horyzontu tapety (jezioro) — tapeta jest „cover” w elemencie o 30 px większym z każdej strony
   const ww = vw + 60, wh = vh + 60, sc = Math.max(ww / 1920, wh / 1178), sh = 1178 * sc;
   const horizon = -30 + (wh - sh) / 2 + .624 * sh - topbar;
   const R = 108 * k;
-  const cy = J.clamp(horizon - R * 1.03 - 6 * k, H * .3, H * .5);
+  const cyLow = W >= 760 ? Math.max(H * .3, 56 + 300 * k) : H * .3;
+  const cy = J.clamp(horizon - R * 1.03 - 6 * k, cyLow, Math.max(cyLow, H * .5));
   Object.assign(scene, { W, H, k, cx: W / 2, cy, R, foot: cy + 1.37 * R, horizon, narrow: W < 760 });
   const wrap = $('#coreWrap'); wrap.style.left = scene.cx + 'px'; wrap.style.top = cy + 'px'; wrap.style.transform = `scale(${k})`;
   CARDS.forEach(c => {
@@ -65,7 +69,7 @@ const layout = () => {
     if (c.side === 'b') A.x = scene.cx;
     const M = (c.side === 'b' || Math.abs(A.y - B.y) < 8) ? null : { x: A.x + (B.x - A.x) * .52, y: A.y };
     c.A = A; c.B = B; c.pts = M ? [A, M, B] : [A, B];
-    if (c.el) { c.el.style.left = px + 'px'; c.el.style.top = py + 'px'; c.el.style.width = c.w + 'px'; c.el.style.transform = `translate(-50%,-50%) scale(${k})`; }
+    if (c.el) { c.el.style.left = px + 'px'; c.el.style.top = py + 'px'; c.el.style.width = c.w + 'px'; c.el.style.transform = `translate(-50%,-50%) scale(${k})`; c.el.style.setProperty('--k', k); }   // --k: skala karty, używana też przez styl :hover (bez niej karta skakała do skali 1)
   });
 };
 

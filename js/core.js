@@ -88,12 +88,7 @@ const DEFAULTS = () => ({
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
   ],
-  tasks: [
-    { id: J.uid(), date: J.today(), time: '09:00', text: 'Spotkanie zespołu', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '11:30', text: 'Analiza rynku', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '14:00', text: 'Budowa Jarvis OS', done: false, fired: false },
-    { id: J.uid(), date: J.today(), time: '16:00', text: 'Testy środowiska', done: false, fired: false }
-  ],
+  tasks: [],   // bez przykładowych zadań o stałych godzinach: uruchomione wieczorem od razu ogłaszały „zaległe”
   shortcuts: [],
   log: [],
   history: [],
@@ -316,10 +311,11 @@ J.ear = (() => {
 /* ---------- toasty ---------- */
 J.toast = (text, ms = 2600) => {
   const box = J.$('#toasts'); if (!box) return;
+  J.lastToastAt = Date.now();
   const t = J.h('div', { class: 'toast' }, '<i></i><span></span>');
   t.querySelector('span').textContent = text;
   box.appendChild(t);
-  while (box.children.length > 4) box.firstElementChild.remove();
+  while (box.children.length > 2) box.firstElementChild.remove();   // najwyżej dwa naraz — stos powiadomień zasłaniał interfejs
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, ms);
 };
 
