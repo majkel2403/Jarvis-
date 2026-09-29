@@ -132,6 +132,34 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.evaluate(async () => { J.chatPanel.show(); await J.uiRun('chat_thread', { op: 'new', name: 'Test W2' }, { offer: false }); }); await p.waitForTimeout(300);
   assert(await p.evaluate(() => document.querySelector('#chatThread')?.selectedOptions[0]?.textContent === 'Test W2'), 'wątek w nagłówku czatu');
   await p.evaluate(async () => { await J.uiRun('chat_thread', { op: 'switch', name: 'Ogólny' }, { offer: false }); J.wm.closeAll(); });
+  // ===== W3: Notatnik (tagi, kosz, podgląd Markdown), Harmonogram (podzadania, zaległe), Minutnik (lista), Pliki, widget zwinięty =====
+  await p.evaluate(() => { J.chatPanel.hide?.(); const n = J.notes.add('Test W3', '# Nagłówek\n- punkt **mocny**'); J.wm.open('notes', { view: 'note', target: n.id }); }); await p.waitForTimeout(400);
+  await p.fill('.window[data-app="notes"] #nTags', 'praca, dom'); await p.dispatchEvent('.window[data-app="notes"] #nTags', 'change'); await p.waitForTimeout(300);
+  await p.evaluate(() => document.querySelector('.window[data-app="notes"] #nPrevB').click()); await p.waitForTimeout(200);
+  const w3n = await p.evaluate(() => ({ tags: J.state.notes.find(n => n.title === 'Test W3').tags.join(','), h: document.querySelector('.window[data-app="notes"] #nPrev h3')?.textContent, strong: !!document.querySelector('.window[data-app="notes"] #nPrev strong'), chips: [...document.querySelectorAll('.window[data-app="notes"] .nt-filters .chip')].map(c => c.textContent).join('|') }));
+  assert(w3n.tags === 'praca,dom' && w3n.h === 'Nagłówek' && w3n.strong && /#praca/.test(w3n.chips), 'Notatnik W3 ' + JSON.stringify(w3n));
+  await p.evaluate(() => document.querySelector('.window[data-app="notes"] #nDel').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => J.uiRun('app_view', { app: 'notes', view: 'trash' })); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => /Test W3/.test(document.querySelector('.window[data-app="notes"] #nList').textContent) && !document.querySelector('.window[data-app="notes"] #nTrashFoot').hidden), 'kosz w Notatniku');
+  await p.evaluate(() => document.querySelector('.window[data-app="notes"] #nRestore').click()); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => !J.state.notes.find(n => n.title === 'Test W3').deleted), 'przywrócenie z kosza');
+  await p.evaluate(() => { const t = J.tasks.add('10:00', 'Zadanie W3', J.today()); J.wm.open('schedule', { view: 'day', target: J.today() }); window.__t3 = t.id; }); await p.waitForTimeout(400);
+  await p.evaluate(() => document.querySelector('.window[data-app="schedule"] .task[data-id="' + window.__t3 + '"] .n').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))); await p.waitForTimeout(200);
+  await p.fill('.window[data-app="schedule"] .subtasks input.input', 'krok A'); await p.press('.window[data-app="schedule"] .subtasks input.input', 'Enter'); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.state.tasks.find(t => t.id === window.__t3).subtasks.length === 1), 'podzadanie z Harmonogramu');
+  await p.evaluate(() => document.querySelector('.window[data-app="schedule"] .task[data-id="' + window.__t3 + '"] .pdot').click()); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => J.state.tasks.find(t => t.id === window.__t3).priority === 'high'), 'kropka priorytetu');
+  await p.evaluate(() => document.querySelector('.window[data-app="schedule"] #sv button[data-v="week"]').click()); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => J.apps.schedule.state(J.wm.ctx('schedule')).view === 'week' && /Zadanie W3/.test(document.querySelector('.window[data-app="schedule"] #tl').textContent)), 'widok tygodnia');
+  await p.evaluate(async () => { await J.uiRun('start_timer', { seconds: 300, label: 'Herbata' }, { offer: false }); await J.uiRun('start_timer', { seconds: 600, label: 'Pranie' }, { offer: false }); J.wm.open('timer'); }); await p.waitForTimeout(700);
+  assert(await p.evaluate(() => document.querySelectorAll('.window[data-app="timer"] .tm-row').length === 1 && /Pranie/.test(document.querySelector('.window[data-app="timer"] #tml').textContent)), 'lista minutników');
+  await p.evaluate(() => document.querySelector('.window[data-app="timer"] .tm-row [data-a="s"]').click()); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.timers.all().length === 1), 'zatrzymanie drugiego minutnika');
+  await p.evaluate(() => { J.timers.all().forEach(t => t.stop()); J.wm.open('files'); }); await p.waitForTimeout(400);
+  assert(await p.evaluate(() => /Chrome|Edge|folder/i.test(document.querySelector('.window[data-app="files"] #flList').textContent)), 'Pliki: stan bez folderu');
+  await p.evaluate(async () => { const w = J.widgets.create('list', { title: 'Lista W3', items: ['a'] }); await new Promise(r => setTimeout(r, 100)); await J.uiRun('widget_collapse', { widget: w.id, on: true }); window.__w3 = w.id; }); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => document.querySelector('.window[data-app="w:' + window.__w3 + '"]').classList.contains('collapsed') && getComputedStyle(document.querySelector('.window[data-app="w:' + window.__w3 + '"] .win-body')).display === 'none'), 'zwinięty widget');
+  await p.evaluate(() => { J.widgets.remove(window.__w3, { silent: true }); J.wm.closeAll(); });
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {
