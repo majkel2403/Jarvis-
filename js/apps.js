@@ -189,16 +189,19 @@ J.timer = {
     clearInterval(this._t); this._t = setInterval(() => this.tick(), 250);
     J.log('Minutnik uruchomiony', label + ' · ' + J.timer.fmt(sec * 1000), 'info'); J.emit('timer');
   },
-  stop() { this.running = false; clearInterval(this._t); J.emit('timer'); },
+  queue: [],
+  stop(keepQueue) { this.running = false; clearInterval(this._t); if (!keepQueue) this.queue = []; J.emit('timer'); },
   left() { return Math.max(0, this.end - Date.now()); },
   fmt(ms) { const s = Math.ceil(ms / 1000), hh = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return (hh ? hh + ':' + J.pad(mm) : J.pad(mm)) + ':' + J.pad(ss); },
   tick() {
     J.emit('timer');
     if (this.running && this.left() <= 0) {
-      this.stop(); J.sfx.alarm(); J.orb.set('alert', '⏰ ' + this.label + ' — czas minął!');
+      this.stop(true); J.sfx.alarm(); J.orb.set('alert', '⏰ ' + this.label + ' — czas minął!');
       J.toast('⏰ ' + this.label + ' — czas minął!', 6000); J.log('Minutnik zakończony', this.label, 'warn');
       J.voice.speak(this.label + '. Czas minął.'); J.notify?.('Jarvis — minutnik', this.label + ': czas minął');
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 4000);
+      const nx = this.queue.shift();   // pomodoro: kolejny etap startuje sam
+      if (nx) setTimeout(() => { this.start(nx.sec, nx.label); J.toast('▶ ' + nx.label); J.voice.speak(nx.label); }, 3500);
     }
   }
 };
@@ -258,7 +261,7 @@ J.apps.chat = {
     const pill = () => { const ai = J.aiReady(), st = J.hermes.status, p = $('#modePill', body); p.textContent = !ai ? 'tryb lokalny' : st === 'up' ? 'Hermes · ' + J.state.settings.hermesModel : st === 'down' ? 'Hermes offline · tryb lokalny' : 'Hermes · sprawdzam…'; p.classList.toggle('ai', ai && st === 'up'); p.classList.toggle('bad', ai && st === 'down'); };
     pill(); sub(ctx, 'settings', pill); sub(ctx, 'hermes', pill);
     J.chat.bind(box);
-    const sugg = ['Co potrafisz?', 'Jaka jest pogoda?', 'Kurs bitcoina', 'Ustaw minutnik na 5 minut', 'Zanotuj: kupić mleko', 'Przypomnij mi o 18:00 trening', 'Oblicz 15% z 2400', 'Zmień motyw na fiolet'];
+    const sugg = ['Co potrafisz?', 'Briefing dnia', 'Tryb pracy', 'Widget zegara w Tokio', 'Ułóż okna obok siebie', 'Pomodoro 25 5', 'Jaka jest pogoda?', 'Zanotuj: kupić mleko', 'Przypomnij mi o 18:00 trening', 'Konfetti'];
     $('#suggest', body).innerHTML = sugg.map(s => `<button>${esc(s)}</button>`).join('');
     $('#suggest', body).onclick = e => { const b = e.target.closest('button'); if (b) J.brain.handle(b.textContent); };
     const send = () => { const v = input.value.trim(); if (!v) return; input.value = ''; J.brain.handle(v); };

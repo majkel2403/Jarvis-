@@ -55,7 +55,28 @@ async def main():
                 err, _ = await call("window_control", {"app": "w:nie-ma", "action": "close"})
                 assert err, "nieistniejące okno powinno dać błąd"
                 await call("update_widget", {"id": "nie-ma", "content": "x"})
-                print("\n>>> widgety zostawione do wizualnej weryfikacji: E2E zakupy, E2E notatka")
+                print("\n--- nowe możliwości ---")
+                for typ, title, content in [("clock", "E2E zegar Tokio", "Asia/Tokyo"), ("weather", "E2E pogoda", "Kraków"), ("crypto", "E2E kursy", None),
+                                            ("countdown", "E2E odliczanie", "2099-12-24 18:00"), ("progress", "E2E postęp", "3/10")]:
+                    await call("create_widget", {"type": typ, "title": title, "content": content})
+                state = json.loads((await call("get_desktop_state"))[1])
+                prog = next(w for w in state["widgets"] if w["title"] == "E2E postęp")
+                await call("update_widget", {"id": prog["id"], "content": "7/10"})
+                await call("move_window", {"app": note["window_id"], "position": "top-left"})
+                await call("move_window", {"app": "calc", "position": "right"})
+                await call("routine", {"action": "save", "name": "E2E układ", "description": "test", "steps": [
+                    {"tool": "open_app", "args": {"app": "notes"}}, {"tool": "move_window", "args": {"app": "notes", "position": "left"}}]})
+                await call("routine", {"action": "list"})
+                await call("routine", {"action": "run", "name": "E2E układ"})
+                await call("routine", {"action": "delete", "name": "E2E układ"})
+                await call("search_desktop", {"query": "E2E"})
+                await call("daily_briefing", {})
+                await call("start_pomodoro", {"work_min": 1, "break_min": 1, "cycles": 1})
+                await call("notify", {"text": "E2E: test powiadomienia"})
+                await call("visual_effect", {"effect": "confetti"})
+                await call("get_weather", {"city": "Gdańsk"})
+                await call("routine", {"action": "run", "name": "nie ma takiej"})
+                print("\n>>> widgety zostawione do wizualnej weryfikacji: E2E zakupy, E2E notatka, E2E zegar/pogoda/kursy/odliczanie/postęp")
 
 
 asyncio.run(main())

@@ -97,6 +97,7 @@ const DEFAULTS = () => ({
   log: [],
   history: [],
   widgets: [],
+  routines: [],
   ui: { chatClosed: true, logPinned: false },
   winPos: {},
   stats: { actions: 0 }
@@ -109,7 +110,7 @@ J.state = (() => {
   s.settings = Object.assign(d.settings, s.settings || {});
   if (s.settings.look !== 3) { s.settings.look = 3; if (s.settings.accent === '#21d9ff') { s.settings.accent = '#3d8bff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd: domyślny akcent niebiesko-fioletowy
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
-  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets']) if (!Array.isArray(s[k])) s[k] = d[k];
+  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets', 'routines']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
   return s;
 })();
@@ -401,6 +402,23 @@ J.wm = (() => {
       focus(id);
     },
     focus,
+    /* przyciąganie okna: left/right/top/bottom/top-left/top-right/bottom-left/bottom-right/center/full */
+    snap(id, pos) {
+      const w = open[id]; if (!w) return false;
+      if (w.minimized) { w.minimized = false; w.el.classList.remove('hidden', 'minimizing'); }
+      const d = desk().getBoundingClientRect(), W = d.width, H = Math.max(200, d.height - 92), g = 6;
+      const hw = (W - g * 3) / 2, hh = (H - g * 3) / 2;
+      const R = {
+        left: [g, g, hw, H - g], right: [W - hw - g, g, hw, H - g], top: [g, g, W - g * 2, hh], bottom: [g, hh + g * 2, W - g * 2, hh],
+        'top-left': [g, g, hw, hh], 'top-right': [W - hw - g, g, hw, hh], 'bottom-left': [g, hh + g * 2, hw, hh], 'bottom-right': [W - hw - g, hh + g * 2, hw, hh],
+        center: [W * .2, H * .12, W * .6, H * .72]
+      };
+      if (pos === 'full') { w.el.classList.add('max'); focus(id); J.emit('wm-resize', id); return true; }
+      const r = R[pos]; if (!r) return false;
+      w.el.classList.remove('max');
+      Object.assign(w.el.style, { left: Math.round(r[0]) + 'px', top: Math.round(r[1]) + 'px', width: Math.round(Math.max(280, r[2])) + 'px', height: Math.round(Math.max(180, r[3])) + 'px' });
+      savePos(id, w.el); focus(id); J.emit('wm-resize', id); return true;
+    },
     isMax: id => !!open[id]?.el.classList.contains('max'),
     arrange(mode = 'tile') {
       const ids = Object.keys(open).filter(i => !open[i].minimized);

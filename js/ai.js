@@ -99,7 +99,7 @@ const A = J.actions = {
   create_widget({ type, title, content, items }) {
     if (!J.widgets) return { ok: false, text: 'Widgety niedostępne' };
     const w = J.widgets.create(type, { title, content, items });
-    return { ok: true, text: 'Utworzono widget „' + w.title + '” (' + ({ note: 'notatka', list: 'lista', result: 'wynik', calc: 'kalkulator' })[type] + ') na pulpicie' };
+    return { ok: true, text: 'Utworzono widget „' + w.title + '” (' + ({ note: 'notatka', list: 'lista', result: 'wynik', calc: 'kalkulator', clock: 'zegar', weather: 'pogoda', crypto: 'kursy', countdown: 'odliczanie', progress: 'postęp' })[type] + ') na pulpicie' };
   },
   focus_mode({ on }) { J.setFocus?.(on !== false); return { ok: true, text: on === false ? 'Tryb skupienia wyłączony' : 'Tryb skupienia włączony — okna zminimalizowane' }; },
   window_control({ app, action }) {
@@ -167,8 +167,99 @@ const A = J.actions = {
     if (del) { J.state.tasks = J.state.tasks.filter(x => x !== t); J.save(); J.emit('tasks'); return { ok: true, text: 'Usunięto zadanie: ' + t.text }; }
     if (done != null) t.done = !!done; if (text != null) t.text = String(text); if (time != null) { t.time = time; t.fired = false; }
     J.save(); J.emit('tasks'); return { ok: true, text: 'Zaktualizowano zadanie: ' + t.text + (t.done ? ' ✓' : '') };
+  },
+  speak({ text }) {
+    if (!text) return { ok: false, text: 'Brak tekstu do wypowiedzenia' };
+    const S = J.state.settings, was = S.speech; S.speech = true; J.voice.speak(String(text).slice(0, 500)); S.speech = was;
+    return { ok: true, text: 'Powiedziano na głos' };
+  },
+  notify({ text, sound }) {
+    if (!text) return { ok: false, text: 'Brak treści powiadomienia' };
+    J.toast(String(text).slice(0, 200), 6000); if (sound !== false) J.sfx.notify(); J.notify?.('Jarvis', String(text));
+    return { ok: true, text: 'Powiadomienie wyświetlone' };
+  },
+  move_window({ app, position }) {
+    if (!J.apps[app]) return { ok: false, text: 'Nieznane okno: ' + app };
+    if (app === 'chat') return { ok: false, text: 'Czat to stały panel — nie da się go przesuwać' };
+    if (!J.wm.isOpen(app)) J.wm.open(app);
+    return J.wm.snap(app, position) ? { ok: true, text: 'Okno „' + J.apps[app].title + '” → ' + position } : { ok: false, text: 'Nieznana pozycja: ' + position + '. Dostępne: left, right, top, bottom, top-left, top-right, bottom-left, bottom-right, center, full' };
+  },
+  start_pomodoro({ work_min, break_min, cycles }) {
+    const w = J.clamp(+work_min || 25, 1, 180), b = J.clamp(+break_min || 5, 1, 60), n = J.clamp(Math.round(+cycles || 1), 1, 8);
+    const seq = []; for (let i = 1; i <= n; i++) { seq.push({ sec: w * 60, label: 'Pomodoro ' + i + '/' + n + ' — praca' }); seq.push({ sec: b * 60, label: 'Pomodoro ' + i + '/' + n + ' — przerwa' }); }
+    const first = seq.shift(); J.timer.queue = seq; J.timer.start(first.sec, first.label); J.wm.open('timer');
+    return { ok: true, text: 'Pomodoro: ' + n + ' × (' + w + ' min pracy + ' + b + ' min przerwy). Start: ' + first.label + '. Kolejne etapy ruszą same, z głosowym sygnałem.' };
+  },
+  search_desktop({ query }) {
+    const q = norm(String(query || '')).trim(); if (!q) return { ok: false, text: 'Brak frazy wyszukiwania' };
+    const has = (...s) => norm(s.join(' ')).includes(q), S = J.state, hits = [];
+    S.notes.forEach(n => { if (has(n.title, n.body)) hits.push({ type: 'note', id: n.id, title: n.title, snippet: String(n.body).slice(0, 100) }); });
+    S.tasks.forEach(t => { if (has(t.text)) hits.push({ type: 'task', id: t.id, title: t.text, snippet: (t.date || '') + ' ' + (t.time || '') + (t.done ? ' ✓' : '') }); });
+    S.widgets.forEach(w => { const body = w.type === 'list' ? w.data.items.map(i => i.text).join(', ') : w.data.text; if (has(w.title, body)) hits.push({ type: 'widget:' + w.type, id: w.id, title: w.title, snippet: String(body).slice(0, 100) }); });
+    S.shortcuts.forEach(s => { if (has(s.name, s.url || '')) hits.push({ type: 'shortcut', id: s.id, title: s.name, snippet: s.url || s.app }); });
+    return { ok: true, text: hits.length ? JSON.stringify(hits.slice(0, 25)) : 'Nic nie znaleziono dla „' + query + '”' };
+  },
+  async daily_briefing({ widget }) {
+    const S = J.state, now = new Date(), td = J.tasks.today(), pend = td.filter(t => !t.done);
+    const tomorrow = (() => { const d = new Date(now); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + J.pad(d.getMonth() + 1) + '-' + J.pad(d.getDate()); })();
+    const lines = [now.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + J.hhmm()];
+    lines.push(pend.length ? 'Do zrobienia dziś (' + pend.length + '): ' + pend.map(t => (t.time ? t.time + ' ' : '') + t.text).join('; ') : 'Na dziś nic nie zostało do zrobienia.');
+    const done = td.length - pend.length; if (done) lines.push('Ukończone dziś: ' + done + ' z ' + td.length + '.');
+    const tm = S.tasks.filter(t => t.date === tomorrow && !t.done).length; if (tm) lines.push('Jutro czeka ' + tm + ' ' + J.pl(tm, 'zadanie', 'zadania', 'zadań') + '.');
+    try { const d = await Promise.race([J.weather.get(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 4000))]); lines.push('Pogoda: ' + J.weather.describe(d)); } catch (e) { lines.push('Pogoda: chwilowo niedostępna.'); }
+    if (J.timer.running) lines.push('Minutnik: ' + J.timer.label + ', zostało ' + J.timer.fmt(J.timer.left()) + '.');
+    lines.push('Notatek: ' + S.notes.length + ', widgetów na pulpicie: ' + S.widgets.length + '.');
+    const text = lines.join('\n');
+    if (widget) J.widgets.create('result', { title: 'Briefing dnia', content: text, meta: 'Wygenerowano ' + J.hhmm() });
+    return { ok: true, text };
+  },
+  visual_effect({ effect }) {
+    if (effect === 'matrix') { J.matrix?.(); return { ok: true, text: 'Matrix uruchomiony (kliknięcie lub klawisz kończy)' }; }
+    if (effect === 'confetti') { J.confetti?.(); return { ok: true, text: 'Konfetti!' }; }
+    if (effect === 'pulse') { J.orb.set('alert', '✨'); setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 2200); return { ok: true, text: 'Rdzeń pulsuje' }; }
+    return { ok: false, text: 'Dostępne efekty: matrix, confetti, pulse' };
+  },
+  async routine({ action, name, steps, description }) {
+    const key = norm(String(name || '')).trim();
+    const user = () => J.state.routines, findUser = () => user().find(r => norm(r.name).trim() === key);
+    if (action === 'list') return { ok: true, text: JSON.stringify([...Object.entries(BUILTIN_ROUTINES).map(([k, r]) => ({ name: k, builtin: true, about: r.about, steps: r.steps.length })), ...user().map(r => ({ name: r.name, builtin: false, about: r.about || '', steps: r.steps.length }))]) };
+    if (!key) return { ok: false, text: 'Podaj nazwę rutyny (name)' };
+    if (action === 'delete') { const r = findUser(); if (!r) return { ok: false, text: BR[key] ? 'Rutyny wbudowanej nie można usunąć' : 'Nie ma własnej rutyny „' + name + '”' }; J.state.routines = user().filter(x => x !== r); J.save(); J.emit('routines'); return { ok: true, text: 'Usunięto rutynę „' + r.name + '”' }; }
+    if (action === 'save') {
+      if (!Array.isArray(steps) || !steps.length) return { ok: false, text: 'Rutyna potrzebuje niepustej listy steps: [{tool, args}]' };
+      if (steps.length > 15) return { ok: false, text: 'Maksymalnie 15 kroków' };
+      for (const [i, s] of steps.entries()) { if (!s || !TOOLS.some(t => t.name === s.tool)) return { ok: false, text: 'Krok ' + (i + 1) + ': nieznane narzędzie „' + (s && s.tool) + '”' }; if (s.tool === 'routine') return { ok: false, text: 'Rutyna nie może wywoływać rutyn' }; }
+      const rec = { name: String(name).slice(0, 40), about: String(description || '').slice(0, 140), steps: steps.map(s => ({ tool: s.tool, args: s.args || {} })) };
+      const old = findUser(); if (old) Object.assign(old, rec); else user().push(rec);
+      J.save(); J.emit('routines'); return { ok: true, text: 'Zapisano rutynę „' + rec.name + '” (' + rec.steps.length + ' ' + J.pl(rec.steps.length, 'krok', 'kroki', 'kroków') + '). Uruchomisz ją poleceniem: ' + rec.name };
+    }
+    if (action === 'run') {
+      const r = findUser() || BR[key];
+      if (!r) return { ok: false, text: 'Nie ma rutyny „' + name + '”. Dostępne: ' + [...Object.keys(BUILTIN_ROUTINES), ...user().map(x => x.name)].join(', ') };
+      const out = []; let allOk = true;
+      for (const s of r.steps) { const res = await run(s.tool, s.args || {}); out.push((res.ok ? '✓ ' : '✗ ') + s.tool + ' → ' + String(res.text).slice(0, 90)); if (!res.ok) allOk = false; await new Promise(z => setTimeout(z, 280)); }
+      return { ok: allOk, text: 'Rutyna „' + (r.name || name) + '”: ' + out.join(' | ') };
+    }
+    return { ok: false, text: 'action musi być: run, list, save albo delete' };
   }
 };
+
+/* rutyny wbudowane („makra”) — jedno polecenie = seria akcji */
+const BUILTIN_ROUTINES = {
+  'tryb pracy': { about: 'Zamyka wszystko, otwiera Notatnik i Harmonogram obok siebie, niebieski motyw.', steps: [
+    { tool: 'close_app', args: { app: 'all' } }, { tool: 'set_theme', args: { color: 'niebieski' } }, { tool: 'open_app', args: { app: 'notes' } }, { tool: 'open_app', args: { app: 'schedule' } }, { tool: 'arrange_windows', args: { layout: 'tile' } }] },
+  'tryb relaksu': { about: 'Chowa okna, aurora i fioletowy motyw, spokojny zegar.', steps: [
+    { tool: 'close_app', args: { app: 'all' } }, { tool: 'set_wallpaper', args: { wallpaper: 'aurora' } }, { tool: 'set_theme', args: { color: 'fiolet' } }, { tool: 'create_widget', args: { type: 'clock', title: 'Zegar' } }] },
+  'poranek': { about: 'Briefing dnia jako karta, harmonogram i pogoda obok siebie.', steps: [
+    { tool: 'close_app', args: { app: 'all' } }, { tool: 'daily_briefing', args: { widget: true } }, { tool: 'create_widget', args: { type: 'weather', title: 'Pogoda' } }, { tool: 'open_app', args: { app: 'schedule' } }, { tool: 'arrange_windows', args: { layout: 'tile' } }] },
+  'zamknięcie dnia': { about: 'Chowa okna, ciemna tapeta, cichy nastrój.', steps: [
+    { tool: 'arrange_windows', args: { layout: 'minimize_all' } }, { tool: 'set_wallpaper', args: { wallpaper: 'void' } }, { tool: 'set_theme', args: { color: 'fiolet' } }, { tool: 'notify', args: { text: 'Dobranoc. Do zobaczenia jutro.' } }] },
+  'centrum dowodzenia': { about: 'Zegar, pogoda i kursy krypto na pulpicie, ułożone kafelkami.', steps: [
+    { tool: 'close_app', args: { app: 'all' } }, { tool: 'create_widget', args: { type: 'clock', title: 'Zegar' } }, { tool: 'create_widget', args: { type: 'weather', title: 'Pogoda' } }, { tool: 'create_widget', args: { type: 'crypto', title: 'Kursy' } }, { tool: 'arrange_windows', args: { layout: 'tile' } }] },
+  'demo': { about: 'Efektowna prezentacja: puls rdzenia i konfetti.', steps: [{ tool: 'visual_effect', args: { effect: 'pulse' } }, { tool: 'visual_effect', args: { effect: 'confetti' } }] }
+};
+J.routines = { all: () => [...Object.entries(BUILTIN_ROUTINES).map(([name, r]) => ({ name, about: r.about, builtin: true })), ...J.state.routines.map(r => ({ name: r.name, about: r.about, builtin: false }))] };
+const BR = Object.fromEntries(Object.entries(BUILTIN_ROUTINES).map(([k, v]) => [norm(k), { name: k, ...v }]));
 
 /* definicje funkcji dla Hermesa (JSON Schema) */
 const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library'];
@@ -187,15 +278,23 @@ const TOOLS = [
   { name: 'calculate', description: 'Dokładnie oblicza wyrażenie matematyczne (+ - * / ^ % nawiasy sqrt sin cos log ln pi).', input_schema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
   { name: 'get_datetime', description: 'Zwraca aktualną datę i godzinę użytkownika.', input_schema: { type: 'object', properties: {} } },
   { name: 'get_status', description: 'Zwraca stan środowiska: otwarte okna, notatki, zadania na dziś, minutnik, skróty.', input_schema: { type: 'object', properties: {} } },
-  { name: 'create_widget', description: 'Tworzy widget na pulpicie. UWAGA: NIE używaj dla interaktywnych aplikacji — do kalkulatora ZAWSZE open_app({app:"calc"}). Typy: note=edytowalna notatka (content), list=lista checkboxów (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator na pulpicie z polem wyrażenia. Używaj TYLKO gdy użytkownik wprost prosi o "widget", "listę na pulpicie" lub "zachowaj wynik".', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result', 'calc'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
+  { name: 'create_widget', description: 'Tworzy widget na pulpicie. UWAGA: NIE używaj dla interaktywnych aplikacji — do kalkulatora ZAWSZE open_app({app:"calc"}). Typy: note=edytowalna notatka (content), list=lista checkboxów (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator, clock=zegar na żywo (content=strefa IANA np. Asia/Tokyo, puste=lokalny), weather=pogoda na żywo (content=miasto, puste=domyślne), crypto=kursy BTC/ETH/SOL/BNB na żywo, countdown=odliczanie (title=etykieta, content=RRRR-MM-DD lub RRRR-MM-DD GG:MM), progress=pasek postępu (title=cel, content=procent lub 3/10). Używaj TYLKO gdy użytkownik wprost prosi o "widget", "listę na pulpicie" lub "zachowaj wynik".', input_schema: { type: 'object', properties: { type: { type: 'string', enum: ['note', 'list', 'result', 'calc', 'clock', 'weather', 'crypto', 'countdown', 'progress'] }, title: { type: 'string' }, content: { type: 'string', description: 'Treść (note/result)' }, items: { type: 'array', items: { type: 'string' }, description: 'Pozycje listy (list)' } }, required: ['type', 'title'] } },
   { name: 'focus_mode', description: 'Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło).', input_schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } },
   { name: 'window_control', description: 'Steruje jednym oknem: focus (przenieś na wierzch/otwórz), minimize, maximize, restore (przywróć rozmiar), close. app = id aplikacji (np. notes) albo id widgetu (w:xxxx) — listę otwartych okien z id podaje get_status.', input_schema: { type: 'object', properties: { app: { type: 'string' }, action: { type: 'string', enum: ['focus', 'minimize', 'maximize', 'restore', 'close'] } }, required: ['app', 'action'] } },
   { name: 'get_desktop_state', description: 'Zwraca pełny stan pulpitu jako JSON: otwarte okna (id, stan), widgety (id + zawartość), notatki (id), zadania (id), minutnik, skróty, motyw, dostępne aplikacje. Wywołaj ZAWSZE przed edycją/usuwaniem czegokolwiek, żeby poznać id.', input_schema: { type: 'object', properties: {} } },
-  { name: 'update_widget', description: 'Edytuje istniejący widget (id z get_desktop_state). Dla note/result: content. Dla list: items (zastąp całość), add_items (dopisz), toggle (odhacz/odznacz pozycję po tekście lub numerze 1..n), remove_item (usuń pozycję). title zmienia tytuł.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, add_items: { type: 'array', items: { type: 'string' } }, toggle: { type: 'string' }, remove_item: { type: 'string' } }, required: ['id'] } },
+  { name: 'update_widget', description: 'Edytuje istniejący widget (id z get_desktop_state). Dla note/result/clock/weather/countdown/progress: content (zmienia miasto, strefę, datę, procent). Dla list: items (zastąp całość), add_items (dopisz), toggle (odhacz/odznacz pozycję po tekście lub numerze 1..n), remove_item (usuń pozycję). title zmienia tytuł.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, items: { type: 'array', items: { type: 'string' } }, add_items: { type: 'array', items: { type: 'string' } }, toggle: { type: 'string' }, remove_item: { type: 'string' } }, required: ['id'] } },
   { name: 'read_note', description: 'Czyta pełną treść notatki po id (id z get_desktop_state).', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'update_note', description: 'Zmienia tytuł i/lub treść notatki. append=true dopisuje body na końcu zamiast zastępować.', input_schema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, append: { type: 'boolean' } }, required: ['id'] } },
   { name: 'delete_note', description: 'Usuwa notatkę po id. Tylko na wyraźną prośbę użytkownika.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'update_task', description: 'Zmienia zadanie z harmonogramu po id: done (ukończ/odznacz), text, time (HH:MM) albo delete=true (usuń).', input_schema: { type: 'object', properties: { id: { type: 'string' }, done: { type: 'boolean' }, text: { type: 'string' }, time: { type: 'string' }, delete: { type: 'boolean' } }, required: ['id'] } },
+  { name: 'speak', description: 'Mówi podany tekst na głos syntezatorem (np. gdy użytkownik prosi „powiedz…” albo odczytaj coś).', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'notify', description: 'Pokazuje powiadomienie (toast + dźwięk) na pulpicie.', input_schema: { type: 'object', properties: { text: { type: 'string' }, sound: { type: 'boolean' } }, required: ['text'] } },
+  { name: 'move_window', description: 'Przyciąga okno do części ekranu: left, right, top, bottom, top-left, top-right, bottom-left, bottom-right, center, full (maksymalizacja). Otwiera okno, jeśli jest zamknięte.', input_schema: { type: 'object', properties: { app: { type: 'string' }, position: { type: 'string', enum: ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center', 'full'] } }, required: ['app', 'position'] } },
+  { name: 'routine', description: 'Rutyny (makra) — seria akcji pod jedną nazwą. action=run uruchamia (wbudowane: tryb pracy, tryb relaksu, poranek, zamknięcie dnia, centrum dowodzenia, demo — i własne), list pokazuje dostępne, save zapisuje własną (steps: [{tool, args}], max 15 kroków, bez zagnieżdżania rutyn), delete usuwa własną.', input_schema: { type: 'object', properties: { action: { type: 'string', enum: ['run', 'list', 'save', 'delete'] }, name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'array', items: { type: 'object', properties: { tool: { type: 'string' }, args: { type: 'object' } }, required: ['tool'] } } }, required: ['action'] } },
+  { name: 'start_pomodoro', description: 'Uruchamia technikę Pomodoro: work_min pracy (domyślnie 25) + break_min przerwy (5), cycles powtórzeń (1–8). Kolejne etapy startują same z głosowym sygnałem.', input_schema: { type: 'object', properties: { work_min: { type: 'number' }, break_min: { type: 'number' }, cycles: { type: 'number' } } } },
+  { name: 'search_desktop', description: 'Szuka frazy w notatkach, zadaniach, widgetach i skrótach; zwraca trafienia z id.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'daily_briefing', description: 'Briefing dnia: data, zadania na dziś i jutro, pogoda, minutnik, liczba notatek. widget=true zostawia go jako kartę na pulpicie.', input_schema: { type: 'object', properties: { widget: { type: 'boolean' } } } },
+  { name: 'visual_effect', description: 'Efekt wizualny: confetti (świętowanie), matrix (easter egg), pulse (puls rdzenia).', input_schema: { type: 'object', properties: { effect: { type: 'string', enum: ['confetti', 'matrix', 'pulse'] } }, required: ['effect'] } },
   { name: 'arrange_windows', description: 'Układa otwarte okna na pulpicie: tile (kafelki obok siebie), cascade (kaskada) albo minimize_all (pokaż pulpit).', input_schema: { type: 'object', properties: { layout: { type: 'string', enum: ['tile', 'cascade', 'minimize_all'] } }, required: ['layout'] } }
 ];
 
@@ -227,7 +326,7 @@ const local = async (raw, fast = false) => {
 
   if (!fast) {
   if (/^(pomoc|help|\?|co potrafisz|co umiesz|jakie masz (komendy|polecenia|mozliwosci)|komendy)/.test(n))
-    return 'Potrafię: **otwierać aplikacje** („otwórz notatnik”), **notować** („zanotuj: …”), **przypominać** („przypomnij mi o 18:00 trening”), **odliczać** („minutnik 5 minut”), sprawdzać **pogodę** i **kursy krypto**, **liczyć** („oblicz 15% z 2400”), zmieniać **motyw** i **tapetę**, tworzyć **skróty** („dodaj skrót GitHub github.com”), otwierać strony („otwórz YouTube”), szukać w Google, opowiedzieć żart i podać **raport** systemu. Po podłączeniu Hermesa odpowiem na każde pytanie.';
+    return 'Potrafię: **otwierać aplikacje** („otwórz notatnik”), **notować** („zanotuj: …”), **przypominać** („przypomnij mi o 18:00 trening”), **odliczać** („minutnik 5 minut”), sprawdzać **pogodę** i **kursy krypto**, **liczyć** („oblicz 15% z 2400”), zmieniać **motyw** i **tapetę**, tworzyć **skróty** („dodaj skrót GitHub github.com”), otwierać strony („otwórz YouTube”), szukać w Google, opowiedzieć żart i podać **raport** systemu. **Widgety na żywo**: „widget zegara w Tokio”, „widget pogody w Gdańsku”, „widget kursów krypto”, „widget odliczania do 2026-12-24”, „widget postępu 3/10”. **Okna**: „ułóż okna obok siebie”, „przesuń notatnik na lewo”, „zminimalizuj kalkulator”. **Rutyny**: „tryb pracy”, „tryb relaksu”, „poranek”, „centrum dowodzenia”, „zamknięcie dnia”. Do tego „briefing dnia”, „pomodoro 25 5 3”, „konfetti”. Po podłączeniu Hermesa odpowiem na każde pytanie.';
   if (/^(hej|czesc|witaj|siema|dzien dobry|dobry wieczor|dobry|elo|hello|hi|yo)\b/.test(n)) {
     const hr = new Date().getHours();
     return (hr < 5 ? 'Późna pora' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj ponownie' : 'Dobry wieczór') + '. Wszystkie systemy działają. W czym mogę pomóc?';
@@ -243,11 +342,31 @@ const local = async (raw, fast = false) => {
   if (/(tryb skupienia|skup sie|focus)/.test(n)) return act('focus_mode', { on: !/(wylacz|wyłącz)/.test(n) });
 
   let m;
-  if (/widget/.test(n) && /(dodaj|utworz|stworz|zrob|nowy|nowa|wstaw|pokaz|wyswietl|przypnij|postaw|daj|wrzuc)/.test(n)) {
-    const type = /kalkul|liczyl/.test(n) ? 'calc' : /list|zakup|todo|zadan/.test(n) ? 'list' : /wynik|podsum/.test(n) ? 'result' : 'note';
+  if (/widget/.test(n) && !/(usun|zamknij|wylacz|schowaj|ukryj|jak |co to |po co )/.test(n)) {
+    const type = /kalkul|liczyl/.test(n) ? 'calc' : /zegar|godzin|czas\b/.test(n) ? 'clock' : /pogod/.test(n) ? 'weather' : /krypto|kurs|token|bitcoin/.test(n) ? 'crypto' : /odlicz/.test(n) ? 'countdown' : /postep|progres/.test(n) ? 'progress' : /list|zakup|todo|zadan/.test(n) ? 'list' : /wynik|podsum/.test(n) ? 'result' : 'note';
     const ci = o.indexOf(':'), rest = ci >= 0 ? o.slice(ci + 1).trim() : '';
-    const title = { calc: 'Kalkulator', list: 'Lista', result: 'Wynik', note: 'Notatka' }[type];
-    return act('create_widget', { type, title: /zakup/.test(n) ? 'Lista zakupów' : title, content: rest, items: type === 'list' && rest ? rest.split(/[,;\n]+|\s+i\s+/).map(s => s.trim()).filter(Boolean) : undefined });
+    const title = { calc: 'Kalkulator', list: 'Lista', result: 'Wynik', note: 'Notatka', clock: 'Zegar', weather: 'Pogoda', crypto: 'Kursy krypto', countdown: 'Odliczanie', progress: 'Postęp' }[type];
+    const args = { type, title: /zakup/.test(n) ? 'Lista zakupów' : title, content: rest };
+    if (type === 'list' && rest) args.items = rest.split(/[,;\n]+|\s+i\s+/).map(x => x.trim()).filter(Boolean);
+    if (type === 'clock') { const TZ = { tokio: 'Asia/Tokyo', 'nowy jork': 'America/New_York', londyn: 'Europe/London', sydney: 'Australia/Sydney', 'los angeles': 'America/Los_Angeles', paryz: 'Europe/Paris', berlin: 'Europe/Berlin', dubaj: 'Asia/Dubai', pekin: 'Asia/Shanghai', warszaw: 'Europe/Warsaw', moskw: 'Europe/Moscow', 'san francisco': 'America/Los_Angeles' }; const k = Object.keys(TZ).find(c => n.includes(c)); const iana = /\b[A-Z][a-z]+\/[A-Z][A-Za-z_]+\b/.exec(o); args.content = iana ? iana[0] : k ? TZ[k] : ''; if (k) args.title = 'Zegar — ' + k.charAt(0).toUpperCase() + k.slice(1); }
+    if (type === 'weather') { const c = /(?:dla|w|we)\s+([a-ząćęłńóśźż\- ]{3,})$/i.exec(o.trim()); args.content = c ? c[1].trim() : rest; }
+    if (type === 'countdown') { const d = /(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?/.exec(o); args.content = d ? d[1] + (d[2] ? ' ' + d[2] : '') : rest; const lab = /(?:do|na)\s+([^\d:]{3,40}?)(?:\s+\d{4}-|\s*$)/i.exec(o.replace(/widget\w*/i, '')); if (lab) args.title = 'Do: ' + lab[1].trim(); }
+    if (type === 'progress') {
+      const pm = /(\d+(?:[.,]\d+)?\s*\/\s*\d+|\d+(?:[.,]\d+)?\s*%)/.exec(o) || /(\d+(?:[.,]\d+)?)\s*$/.exec(o);
+      args.content = pm ? pm[1].replace(/\s/g, '') : '0';
+      if (pm) { const after = o.slice(pm.index + pm[0].length).replace(/^[\s:,-]+/, '').trim(); const before = o.slice(0, pm.index).replace(/.*?widget\w*\s*(?:post\S*|progres\S*)?\s*(?:(?:dla|do|na)\s+)?:?\s*/i, '').trim(); const lab = after.length > 2 ? after : before.length > 2 ? before : ''; if (lab) args.title = lab.slice(0, 40); }
+    }
+    return act('create_widget', args);
+  }
+  { const rr = J.routines.all().find(r => { const k = norm(r.name); return [k, 'uruchom ' + k, 'wlacz ' + k, 'odpal ' + k, 'rutyna ' + k, 'wykonaj ' + k, 'wlacz rutyne ' + k, 'uruchom rutyne ' + k].includes(n); }); if (rr) return act('routine', { action: 'run', name: rr.name }); }
+  if (/^(briefing|podsumuj (moj )?dzien|co dzis (mam|jest)|plan dnia|raport dnia|daj briefing)/.test(n)) return act('daily_briefing', { widget: /karta|widget|pulpit|przypnij/.test(n) });
+  if (/pomodoro/.test(n) && !/widget/.test(n)) { const nu = n.match(/\d+/g) || []; return act('start_pomodoro', { work_min: nu[0], break_min: nu[1], cycles: nu[2] }); }
+  if (/konfetti/.test(n)) return act('visual_effect', { effect: 'confetti' });
+  if (/^(wlacz |pokaz |uruchom )?matrix$/.test(n)) return act('visual_effect', { effect: 'matrix' });
+  if ((m = /^(?:przesun|przyciagnij|przenies|ustaw|daj|wrzuc)\s+(.+?)\s+(?:na|w|do)\s+(.+)$/.exec(n))) {
+    const app = findApp(m[1]); const P = [['lewy gorny', 'top-left'], ['lewego gornego', 'top-left'], ['prawy gorny', 'top-right'], ['prawego gornego', 'top-right'], ['lewy dolny', 'bottom-left'], ['lewego dolnego', 'bottom-left'], ['prawy dolny', 'bottom-right'], ['prawego dolnego', 'bottom-right'], ['pelny ekran', 'full'], ['caly ekran', 'full'], ['lew', 'left'], ['praw', 'right'], ['gor', 'top'], ['dol', 'bottom'], ['srodek', 'center'], ['srodku', 'center']];
+    const pos = (P.find(([w]) => m[2].includes(w)) || [])[1];
+    if (app && pos) return act('move_window', { app, position: pos });
   }
   if ((m = grab(/^(?:zanotuj|notatka|zapisz notatke|nowa notatka|dodaj notatke|zapisz)\s*:?\s*(.+)$/))) return act('create_note', { title: m[1].slice(0, 40), content: m[1] });
 
@@ -393,11 +512,12 @@ Rozmawiasz z użytkownikiem PRZEZ działający pulpit Jarvis OS w przeglądarce.
 
 ## KATALOG: CO GDZIE
 • Aplikacje (open_app / close_app): calc kalkulator interaktywny · notes notatnik · market kursy krypto · schedule harmonogram · monitor monitor systemu · terminal · weather pogoda · timer minutnik/stoper · settings · library · chat.
-• Widgety na pulpicie (create_widget): note (edytowalna notatka: content) · list (checkboxy: items) · result (karta z wynikiem/podsumowaniem: content) · calc (mini kalkulator na pulpicie). Widget to stały obiekt na pulpicie; aplikacja to okno. „Widget” = create_widget; „otwórz kalkulator/notatnik” = open_app.
+• Widgety na pulpicie (create_widget, edycja update_widget): note (content) · list (items) · result (content) · calc · clock (content=strefa IANA) · weather (content=miasto) · crypto · countdown (content=data) · progress (content=procent lub 3/10). Widget to stały obiekt na pulpicie; aplikacja to okno. „Widget” = create_widget; „otwórz kalkulator/notatnik” = open_app.
 • Dane trwałe: create_note (notatnik), add_task (harmonogram z przypomnieniem głosowym), add_shortcut (ikona na pulpicie), start_timer.
 • Dane z sieci: get_weather, get_crypto_prices, open_url (nowa karta).
 • Wygląd: set_theme, set_wallpaper, focus_mode.
 • Okna: get_status (id + stan), window_control (focus/minimize/maximize/restore/close jednego okna, także widgetu w:xxxx), arrange_windows (tile/cascade/minimize_all), close_app.
+• Rutyny i sztuczki: routine (run/list/save/delete; wbudowane: tryb pracy, tryb relaksu, poranek, zamknięcie dnia, centrum dowodzenia, demo), move_window (przyciąganie okna), start_pomodoro, daily_briefing, search_desktop, visual_effect, speak, notify.
 • Pomoc: jeśli nie pamiętasz, co potrafisz — skills_list() zwróci pełny opis narzędzi i zasad.
 
 ## PRZEPISY NA TYPOWE ZADANIA
@@ -417,8 +537,17 @@ Rozmawiasz z użytkownikiem PRZEZ działający pulpit Jarvis OS w przeglądarce.
 • Prośba spoza możliwości Jarvis OS → powiedz to szczerze i zaproponuj najbliższą alternatywę.`;
 
 /* krótki prompt trybu MCP — reguły pracy siedzą w SOUL.md profilu, tu tylko kontekst chwili */
+const stateBrief = () => {
+  const S = J.state, cut = (t, k) => String(t || '').slice(0, k);
+  const wins = J.wm.list().filter(i => J.apps[i]).map(i => i + '=' + cut(J.apps[i].title, 24) + (J.wm.isMin(i) ? '(min)' : J.wm.isMax(i) ? '(max)' : '')).join('; ') || 'brak';
+  const wid = S.widgets.map(w => w.id + '=' + w.type + ':' + cut(w.title, 24)).join('; ') || 'brak';
+  const td = J.tasks.today().filter(t => !t.done).slice(0, 6).map(t => t.id + '=' + (t.time || '--:--') + ' ' + cut(t.text, 30)).join('; ') || 'brak';
+  const rt = J.state.routines.map(r => r.name).join(', ') || 'brak';
+  return `Aktualny stan pulpitu (możesz go użyć bez wołania get_desktop_state): okna: ${wins}. widgety: ${wid}. zadania dziś do zrobienia: ${td}. notatek: ${S.notes.length}. minutnik: ${J.timer.running ? J.timer.label + ' ' + J.timer.fmt(J.timer.left()) : 'brak'}. własne rutyny: ${rt}.`;
+};
 const SYSTEM_MCP = () => `Rozmawiasz z użytkownikiem przez działający pulpit „Jarvis OS” w jego przeglądarce (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Teraz: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.
 Pulpitem sterujesz WYŁĄCZNIE natywnymi narzędziami mcp__jarvis_desktop__* — od razu, bez opisywania planu. Przed edycją lub usunięciem czegokolwiek wywołaj get_desktop_state (id okien, widgetów, notatek, zadań). Sukces potwierdzaj dopiero wynikiem narzędzia. Nie zamykaj wszystkiego i nie usuwaj bez wyraźnej prośby. Do sterowania pulpitem nie używaj plików, terminala ani skilli.
+${stateBrief()}
 Odpowiedzi są czytane na głos: po polsku, 1–3 zdania, bez tabel i nagłówków.`;
 
 const TC = (name, args) => '<tool_call>\n' + JSON.stringify({ name, arguments: args }) + '\n</tool_call>';

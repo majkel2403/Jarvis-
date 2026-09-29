@@ -17,7 +17,7 @@ Czysty HTML/CSS/JS, bez builda i bez zależności: wystarczy otworzyć `index.ht
 | **Visual Engine** | Core jest żywym monitorem stanu: **Event Bus** (`js/events.js`, zdarzenia z `task_id`: `task.*`, `model.*`, `tool.*`) → maszyna stanów (IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR) → renderer. W spoczynku: szklana kula z orbitami, wiązką i odbiciem w jeziorze. Gdy trwa zadanie, wokół Core pojawia się **10 kart HUD** (`js/hud.js`: Model AI, Analiza polecenia, Tool Calls, Internet, Dane zewnętrzne, Pliki, Status systemu, Wykonywanie, Logika, Zakończenie) połączonych liniami obwodów. Każda karta i każdy impuls pochodzi z realnego zdarzenia (fala Model AI = faktycznie odebrane znaki ze strumienia); brak zdarzenia = karta przygaszona, linia pusta. Nic nie jest animowane „na niby” |
 | **Replay** | w Process Log przy zakończonym zadaniu: „▶ Replay” odtwarza jego przebieg (węzły, przepływ) na Core |
 | **Skróty** | `Alt+1` czat · `Alt+2` Process Log · `Ctrl+K` paleta · `Esc` przerwij |
-| **Widgety** | Notatka, Lista, Wynik zadania, Kalkulator — wiele naraz, przesuwalne; tworzone z docka, menu prawym przyciskiem, palety `Ctrl+K` lub przez Jarvisa (`create_widget`). **Zapisują się** wraz z pozycją i stanem paneli (czat schowany, log przypięty) |
+| **Widgety** | Notatka, Lista, Wynik zadania, Kalkulator oraz **na żywo**: Zegar (dowolna strefa czasowa), Pogoda, Kursy krypto, Odliczanie do daty, Pasek postępu — wiele naraz, przesuwalne; tworzone z docka, menu prawym przyciskiem, palety `Ctrl+K` lub przez Jarvisa (`create_widget`). **Zapisują się** wraz z pozycją i stanem paneli (czat schowany, log przypięty) |
 | **Okna** | przeciąganie, zmiana rozmiaru, minimalizacja do doku, maksymalizacja (dwuklik), pamięć pozycji. Jarvis steruje nimi sam: `window_control` (focus / minimize / maximize / restore / close) i `arrange_windows` (kafelki, kaskada, pokaż pulpit) — także głosem: „ułóż okna”, „ułóż okna kaskadą” |
 | **Aplikacje** | Czat, Notatnik (autozapis, eksport, czytanie na głos), Monitor rynku (Binance WebSocket na żywo + CoinGecko), Harmonogram z przypomnieniami, Pogoda (Open-Meteo, geolokalizacja), Monitor systemu (FPS, pamięć, bateria, sieć), Terminal, Kalkulator, Minutnik/Stoper, Ustawienia, Biblioteka |
 | **Paleta poleceń** | `Ctrl + K` lub `/` — aplikacje, akcje, notatki, skróty, pytanie do Jarvisa |
@@ -74,7 +74,7 @@ Klucz **nigdy nie jest częścią kodu ani repozytorium** — wpisujesz go w Ust
 Każde polecenie przechodzi przez trzy warstwy (`js/ai.js`):
 
 1. **Szybka ścieżka lokalna** — jednoznaczne polecenia sterowania pulpitem („stwórz widget listy zakupów: mleko, chleb”, „ułóż okna obok siebie”, „zminimalizuj notatnik”, „otwórz kalkulator”, „zanotuj…”, „minutnik 5 minut”) wykonuje od razu silnik lokalny (~30 ms), bez pytania Hermesa. Pytania (kończące się `?`), rozmowa, wiedza, pogoda i kursy idą do Hermesa. Wyłączysz to w *Ustawienia → Szybkie polecenia pulpitu*.
-2. **Hermes z natywnymi narzędziami (MCP) — zalecane.** Most `bridge/jarvis_bridge.py` udostępnia Hermesowi **19 prawdziwych narzędzi** `mcp__jarvis_desktop__*` (okna, widgety z edycją, notatki z CRUD, zadania, minutniki, motyw, `get_desktop_state`). Hermes woła je natywnym function calling, a wynik (albo błąd z podpowiedzią) wraca do agenta — bez parsowania tekstu.
+2. **Hermes z natywnymi narzędziami (MCP) — zalecane.** Most `bridge/jarvis_bridge.py` udostępnia Hermesowi **29 prawdziwych narzędzi MCP** `mcp__jarvis_desktop__*` (okna i przyciąganie, 9 typów widgetów z edycją, notatki z CRUD, zadania, pomodoro, rutyny/makra, briefing dnia, wyszukiwanie, efekty, mowa, powiadomienia, `get_desktop_state`). Hermes woła je natywnym function calling, a wynik (albo błąd z podpowiedzią) wraca do agenta — bez parsowania tekstu.
 3. **Tryb awaryjny „prompt”** — gdy most nie działa lub profil Hermesa go nie używa, klient dostaje długi prompt z zasadami i przykładami, a wywołania `<tool_call>` są parsowane z tekstu (obsługuje też pseudo-format `invoke create_widget with type is list …`; agent mielący własne narzędzia >14 razy w turze jest przerywany).
 
 ```
@@ -99,7 +99,17 @@ Jarvis OS (przeglądarka) ──SSE /bridge/events──┐
 
 Testy: `bridge\test_bridge.py` (symulowana przeglądarka + prawdziwy klient MCP), `bridge\demo_e2e.py` (steruje prawdziwym pulpitem), `bridge\mock_hermes.py` (atrapa gatewaya do testów klienta). Uruchamiaj Pythonem z `%USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe`.
 
-Narzędzia po stronie pulpitu (24, `js/ai.js`): `open_app`, `close_app`, `window_control`, `arrange_windows`, `focus_mode`, `get_desktop_state`, `get_status`, `create_widget`, `update_widget`, `create_note`, `read_note`, `update_note`, `delete_note`, `add_task`, `update_task`, `start_timer`, `add_shortcut`, `set_theme`, `set_wallpaper`, `get_weather`, `get_crypto_prices`, `open_url`, `calculate`, `get_datetime`.
+Narzędzia po stronie pulpitu (32, `js/ai.js`): `open_app`, `close_app`, `window_control`, `move_window`, `arrange_windows`, `focus_mode`, `get_desktop_state`, `get_status`, `create_widget` (9 typów), `update_widget`, `create_note`, `read_note`, `update_note`, `delete_note`, `search_desktop`, `add_task`, `update_task`, `start_timer`, `start_pomodoro`, `routine`, `daily_briefing`, `add_shortcut`, `set_theme`, `set_wallpaper`, `visual_effect`, `speak`, `notify`, `get_weather`, `get_crypto_prices`, `open_url`, `calculate`, `get_datetime`.
+
+### Co potrafi Jarvis Desktop (przykłady poleceń)
+- **Widgety na żywo:** „widget zegara w Tokio”, „widget pogody w Gdańsku”, „widget kursów krypto”, „widget odliczania do urodzin 2026-12-24”, „widget postępu nauka angielskiego 80%”; edycja: „zmień postęp na 7/10”, „odhacz mleko”.
+- **Okna:** „ułóż okna obok siebie / kaskadą”, „przesuń notatnik na lewo”, „kalkulator w prawy dolny róg”, „zminimalizuj/zmaksymalizuj X”.
+- **Rutyny (makra):** wbudowane *tryb pracy, tryb relaksu, poranek, zamknięcie dnia, centrum dowodzenia, demo*; własne przez Hermesa („zapamiętaj ten układ jako tryb kodowania”). Uruchomisz je też z palety `Ctrl+K`.
+- **Czas i skupienie:** „pomodoro 50 10 3” (etapy startują same), przypomnienia z godziną, odliczanie do dat.
+- **Sztuczki:** „briefing dnia” (zadania + pogoda), „konfetti”, wyszukiwanie po notatkach/zadaniach/widgetach, mowa i powiadomienia na życzenie, `matrix`.
+- **Pamięć Hermesa:** profil `jarvis-desktop` ma narzędzie `memory` — zapamiętuje Twoje preferencje (motyw, układ okien, nazwy rutyn).
+
+Autostart mostu i gatewaya po zalogowaniu do Windows (opcjonalnie): `powershell -ExecutionPolicy Bypass -File bridge\install-autostart.ps1` (usunięcie: `-Remove`).
 
 > **Bezpieczeństwo mostu:** nasłuchuje tylko na `127.0.0.1`; `/mcp` wymaga tokenu Bearer, kanał przeglądarki tokenu i dozwolonego Origin (CORS + Private Network Access); profil `jarvis-desktop` nie ma terminala ani dostępu do plików.
 

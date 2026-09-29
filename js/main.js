@@ -401,6 +401,7 @@ const palette = (() => {
     { g: 'Akcje', ic: 'focus', t: 'Tryb skupienia', run: () => J.setFocus(!$('#app').classList.contains('focus')) },
     { g: 'Akcje', ic: 'min', t: 'Pokaż pulpit (zminimalizuj okna)', run: () => J.wm.minimizeAll() },
     { g: 'Akcje', ic: 'close', t: 'Zamknij wszystkie okna', run: () => J.wm.closeAll() },
+    ...J.routines.all().map(r => ({ g: 'Rutyny', ic: 'bolt', t: 'Rutyna: ' + r.name, k: r.about || '', s: r.builtin ? 'wbudowana' : 'własna', run: () => J.brain.run('routine', { action: 'run', name: r.name }).then(x => J.toast(x.ok ? '✓ ' + r.name : x.text.slice(0, 120))) })),
     { g: 'Akcje', ic: 'code', t: 'Matrix', run: () => J.matrix() },
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
     ...J.state.notes.slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
@@ -573,6 +574,22 @@ J.matrix = () => {
     requestAnimationFrame(f);
   };
   f(); J.sfx.boot();
+};
+
+
+/* =================== KONFETTI =================== */
+J.confetti = () => {
+  const cv = h('canvas', { style: 'position:fixed;inset:0;width:100%;height:100%;z-index:9999;pointer-events:none' }); document.body.appendChild(cv);
+  const c = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#3d8bff', '#a25cff', '#39e59a', '#ffb84d', '#ff5ec4', '#21d9ff'];
+  const ps = Array.from({ length: 170 }, () => ({ x: innerWidth / 2 + (Math.random() - .5) * 220, y: innerHeight * .38, vx: (Math.random() - .5) * 15, vy: -Math.random() * 14 - 4, r: Math.random() * 5 + 3, c: cols[Math.random() * cols.length | 0], rot: Math.random() * 6, vr: (Math.random() - .5) * .4 }));
+  const t0 = performance.now();
+  const f = now => {
+    const t = now - t0; c.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => { p.vy += .35; p.x += p.vx; p.y += p.vy; p.vx *= .99; p.rot += p.vr; c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.fillStyle = p.c; c.globalAlpha = Math.max(0, 1 - t / 3200); c.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); c.restore(); });
+    if (t < 3200) requestAnimationFrame(f); else cv.remove();
+  };
+  requestAnimationFrame(f); J.sfx.notify();
 };
 
 /* =================== PANEL CZATU (prawy dół; zwinięty = chip) =================== */

@@ -11,7 +11,12 @@ const TYPES = {
   note:   { label: 'Notatka', icon: 'notes', w: 300, h: 260 },
   list:   { label: 'Lista', icon: 'list', w: 290, h: 300 },
   result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260 },
-  calc:   { label: 'Kalkulator', icon: 'calc', w: 290, h: 200 }
+  calc:   { label: 'Kalkulator', icon: 'calc', w: 290, h: 200 },
+  clock:  { label: 'Zegar', icon: 'timer', w: 260, h: 170 },
+  weather:{ label: 'Pogoda', icon: 'weather', w: 300, h: 190 },
+  crypto: { label: 'Kursy krypto', icon: 'market', w: 300, h: 250 },
+  countdown: { label: 'Odliczanie', icon: 'calendar', w: 280, h: 190 },
+  progress:  { label: 'Postęp', icon: 'bolt', w: 300, h: 150 }
 };
 const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
 
@@ -65,6 +70,73 @@ const mounts = {
       navigator.clipboard?.writeText(lastVal).then(() => J.toast('Skopiowano: ' + lastVal), () => J.toast('Nie udało się skopiować'));
     };
     setTimeout(() => inp.focus(), 60);
+  },
+  /* content = strefa IANA (np. "Asia/Tokyo"); pusto = czas lokalny */
+  clock(body, w) {
+    body.innerHTML = '<div class="w-clock"><div class="wc-t">--:--:--</div><div class="wc-d"></div><div class="wc-z"></div></div>';
+    const tz = String(w.data.text || '').trim(); let ok = true;
+    const opt = tz ? { timeZone: tz } : {};
+    try { new Intl.DateTimeFormat('pl-PL', opt); } catch (e) { ok = false; }
+    const o = ok ? opt : {};
+    const draw = () => {
+      const d = new Date();
+      $('.wc-t', body).textContent = d.toLocaleTimeString('pl-PL', { ...o, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      $('.wc-d', body).textContent = d.toLocaleDateString('pl-PL', { ...o, weekday: 'long', day: 'numeric', month: 'long' });
+    };
+    $('.wc-z', body).textContent = ok ? (tz || 'czas lokalny') : 'nieznana strefa „' + tz + '” — pokazuję czas lokalny';
+    draw(); const iv = setInterval(draw, 1000); body._stop = () => clearInterval(iv);
+  },
+  /* content = miasto; pusto = miasto z ustawień */
+  weather(body, w) {
+    body.innerHTML = '<div class="w-weather"><div class="ww-main"><span class="ww-i">…</span><b class="ww-t">--°</b></div><div class="ww-c">Pobieram…</div><div class="ww-s"></div></div>';
+    let dead = false;
+    const load = async () => {
+      try {
+        const d = await J.weather.get(String(w.data.text || '').trim() || undefined); if (dead) return;
+        const c = d.current, [ico, txt] = J.wxInfo(c.weather_code);
+        $('.ww-i', body).textContent = ico; $('.ww-t', body).textContent = Math.round(c.temperature_2m) + '°';
+        $('.ww-c', body).textContent = d.city + ' · ' + txt;
+        $('.ww-s', body).textContent = 'odczuwalna ' + Math.round(c.apparent_temperature) + '° · wiatr ' + Math.round(c.wind_speed_10m) + ' km/h · jutro ' + Math.round(d.daily.temperature_2m_min[1]) + '–' + Math.round(d.daily.temperature_2m_max[1]) + '°';
+      } catch (e) { if (!dead) { $('.ww-c', body).textContent = e.message || 'Brak danych pogody'; } }
+    };
+    load(); const iv = setInterval(load, 10 * 60e3); body._stop = () => { dead = true; clearInterval(iv); };
+  },
+  crypto(body) {
+    body.innerHTML = '<div class="w-crypto"></div>';
+    const box = $('.w-crypto', body), rows = {};
+    J.market.COINS.forEach(c => { const r = h('div', { class: 'wk-r' }, '<b></b><span class="p">—</span><span class="c"></span><canvas></canvas>'); $('b', r).textContent = c.sym; box.appendChild(r); rows[c.sym] = r; });
+    const draw = () => Object.keys(rows).forEach(s => {
+      const d = J.market.data[s], r = rows[s];
+      $('.p', r).textContent = J.fmtMoney(d.price); const ch = $('.c', r); ch.textContent = (d.chg >= 0 ? '▲ +' : '▼ ') + d.chg.toFixed(2) + '%'; ch.className = 'c ' + (d.chg >= 0 ? 'up' : 'down');
+      J.spark($('canvas', r), d.spark, d.chg >= 0 ? '#39e59a' : '#ff5d7a', false);
+    });
+    J.market.subscribe(); const off = J.on('market', draw); requestAnimationFrame(draw);
+    body._stop = () => { off(); J.market.unsubscribe(); };
+  },
+  /* content = data/czas docelowy ("2026-12-24" albo "2026-12-24 18:00"); pusto = północ; title = etykieta */
+  countdown(body, w) {
+    body.innerHTML = '<div class="w-count"><div class="wn-l"></div><div class="wn-t">—</div><div class="wn-s"></div></div>';
+    const raw = String(w.data.text || '').trim();
+    let target = raw ? new Date(raw.replace(' ', 'T')) : (() => { const d = new Date(); d.setHours(24, 0, 0, 0); return d; })();
+    $('.wn-l', body).textContent = w.title;
+    if (isNaN(target)) { $('.wn-t', body).textContent = '?'; $('.wn-s', body).textContent = 'Nie rozumiem daty „' + raw + '” — użyj RRRR-MM-DD lub RRRR-MM-DD GG:MM'; return; }
+    const draw = () => {
+      let s = Math.floor((target - Date.now()) / 1000);
+      if (s <= 0) { $('.wn-t', body).textContent = 'Już!'; $('.wn-s', body).textContent = 'termin minął: ' + target.toLocaleString('pl-PL'); return; }
+      const dd = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60;
+      $('.wn-t', body).textContent = (dd ? dd + ' d ' : '') + J.pad(hh) + ':' + J.pad(mm) + ':' + J.pad(ss);
+      $('.wn-s', body).textContent = 'do ' + target.toLocaleString('pl-PL', { dateStyle: 'medium', timeStyle: 'short' });
+    };
+    draw(); const iv = setInterval(draw, 1000); body._stop = () => clearInterval(iv);
+  },
+  /* content = "60" (procent) albo "3/10"; title = nazwa celu */
+  progress(body, w) {
+    body.innerHTML = '<div class="w-prog"><div class="wp-l"></div><div class="wp-bar"><i></i></div><div class="wp-v"></div></div>';
+    const raw = String(w.data.text || '0').trim(), m = /^(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)$/.exec(raw);
+    let pct = m ? (parseFloat(m[1].replace(',', '.')) / (parseFloat(m[2].replace(',', '.')) || 1)) * 100 : parseFloat(raw.replace(',', '.').replace('%', ''));
+    pct = J.clamp(isNaN(pct) ? 0 : pct, 0, 100);
+    $('.wp-l', body).textContent = w.title; $('.wp-bar i', body).style.width = pct + '%'; $('.wp-v', body).textContent = Math.round(pct) + '%' + (m ? ' · ' + raw : '');
+    body.querySelector('.wp-bar').classList.toggle('done', pct >= 100);
   }
 };
 
@@ -78,7 +150,8 @@ J.widgets = {
       title: w.title, icon: t.icon, w: t.w, h: t.h, widget: true, flush: true,
       mount(body, ctx) {
         ctx.onClose(() => { delete J.apps[key]; J.widgets.list = J.widgets.list.filter(x => x.id !== w.id); J.state.widgets = J.state.widgets.filter(x => x.id !== w.id); delete J.state.winPos[key]; J.save(); });
-        mounts[w.type](body, w);
+        ctx.onClose(() => body._stop?.());
+        mounts[w.type](body, w, ctx);
       }
     };
     J.widgets.list.push(w);
@@ -109,7 +182,7 @@ J.widgets = {
     } else if (patch.content != null) w.data.text = String(patch.content);
     J.save();
     const ctx = J.wm.ctx('w:' + id);
-    if (ctx) { ctx.setTitle(w.title); if (J.apps['w:' + id]) J.apps['w:' + id].title = w.title; mounts[w.type](ctx.body, w); }
+    if (ctx) { ctx.setTitle(w.title); if (J.apps['w:' + id]) J.apps['w:' + id].title = w.title; ctx.body._stop?.(); ctx.body._stop = null; mounts[w.type](ctx.body, w, ctx); }
     return w;
   },
   /* po starcie: odtwórz widgety z poprzedniej sesji w ich pozycjach */

@@ -133,15 +133,15 @@ async def arrange_windows(layout: Literal["tile", "cascade", "minimize_all"]) ->
 
 
 @mcp.tool()
-async def create_widget(type: Literal["note", "list", "result", "calc"], title: str, content: Optional[str] = None, items: Optional[list[str]] = None) -> str:
-    """Tworzy widget na pulpicie. note=edytowalna notatka (content), list=lista z checkboxami (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator. Do interaktywnego kalkulatora użyj open_app calc."""
+async def create_widget(type: Literal["note", "list", "result", "calc", "clock", "weather", "crypto", "countdown", "progress"], title: str, content: Optional[str] = None, items: Optional[list[str]] = None) -> str:
+    """Tworzy widget na pulpicie. note=edytowalna notatka (content), list=lista z checkboxami (items), result=karta z wynikiem/podsumowaniem (content), calc=mini kalkulator, clock=zegar na żywo (content=strefa IANA np. Asia/Tokyo, puste=lokalny), weather=pogoda na żywo (content=miasto, puste=domyślne), crypto=kursy BTC/ETH/SOL/BNB na żywo, countdown=odliczanie (title=etykieta, content=RRRR-MM-DD lub RRRR-MM-DD GG:MM), progress=pasek postępu (title=cel, content=procent lub 3/10). Do interaktywnego kalkulatora użyj open_app calc."""
     return await relay("create_widget", {"type": type, "title": title, "content": content, "items": items})
 
 
 @mcp.tool()
 async def update_widget(id: str, title: Optional[str] = None, content: Optional[str] = None, items: Optional[list[str]] = None,
                         add_items: Optional[list[str]] = None, toggle: Optional[str] = None, remove_item: Optional[str] = None) -> str:
-    """Edytuje istniejący widget (id z get_desktop_state). note/result: content. list: items (zastąp całość), add_items (dopisz), toggle (odhacz/odznacz po tekście lub numerze 1..n), remove_item (usuń pozycję). title zmienia tytuł."""
+    """Edytuje istniejący widget (id z get_desktop_state). note/result/clock/weather/countdown/progress: content (zmienia treść, strefę, miasto, datę, procent). list: items (zastąp całość), add_items (dopisz), toggle (odhacz/odznacz po tekście lub numerze 1..n), remove_item (usuń pozycję). title zmienia tytuł."""
     return await relay("update_widget", {"id": id, "title": title, "content": content, "items": items, "add_items": add_items, "toggle": toggle, "remove_item": remove_item})
 
 
@@ -215,6 +215,66 @@ async def open_url(url: str) -> str:
 async def focus_mode(on: bool) -> str:
     """Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło)."""
     return await relay("focus_mode", {"on": on})
+
+
+@mcp.tool()
+async def speak(text: str) -> str:
+    """Mówi tekst na głos syntezatorem pulpitu (gdy użytkownik prosi „powiedz…” / odczytaj)."""
+    return await relay("speak", {"text": text})
+
+
+@mcp.tool()
+async def notify(text: str, sound: Optional[bool] = None) -> str:
+    """Pokazuje powiadomienie (toast + dźwięk) na pulpicie."""
+    return await relay("notify", {"text": text, "sound": sound})
+
+
+@mcp.tool()
+async def move_window(app: str, position: Literal["left", "right", "top", "bottom", "top-left", "top-right", "bottom-left", "bottom-right", "center", "full"]) -> str:
+    """Przyciąga okno do części ekranu (jak Win+strzałki). Otwiera je, jeśli zamknięte. app = id z get_desktop_state."""
+    return await relay("move_window", {"app": app, "position": position})
+
+
+@mcp.tool()
+async def routine(action: Literal["run", "list", "save", "delete"], name: Optional[str] = None, description: Optional[str] = None, steps: Optional[list[dict]] = None) -> str:
+    """Rutyny (makra) — seria akcji pod jedną nazwą. run uruchamia (wbudowane: tryb pracy, tryb relaksu, poranek, zamknięcie dnia, centrum dowodzenia, demo — oraz własne), list pokazuje dostępne, save zapisuje własną (steps: [{"tool": "open_app", "args": {"app": "notes"}}, ...], max 15 kroków, bez zagnieżdżania), delete usuwa własną. Gdy użytkownik mówi „zapamiętaj ten układ/zrób z tego rutynę”, zbuduj steps z bieżącego stanu pulpitu."""
+    return await relay("routine", {"action": action, "name": name, "description": description, "steps": steps})
+
+
+@mcp.tool()
+async def start_pomodoro(work_min: Optional[float] = None, break_min: Optional[float] = None, cycles: Optional[float] = None) -> str:
+    """Technika Pomodoro: work_min pracy (domyślnie 25) + break_min przerwy (5), cycles powtórzeń (1–8). Kolejne etapy startują same z głosowym sygnałem."""
+    return await relay("start_pomodoro", {"work_min": work_min, "break_min": break_min, "cycles": cycles})
+
+
+@mcp.tool()
+async def search_desktop(query: str) -> str:
+    """Szuka frazy w notatkach, zadaniach, widgetach i skrótach; zwraca trafienia z id."""
+    return await relay("search_desktop", {"query": query})
+
+
+@mcp.tool()
+async def daily_briefing(widget: Optional[bool] = None) -> str:
+    """Briefing dnia: data, zadania na dziś i jutro, pogoda, minutnik, liczba notatek. widget=true zostawia go jako kartę na pulpicie."""
+    return await relay("daily_briefing", {"widget": widget})
+
+
+@mcp.tool()
+async def visual_effect(effect: Literal["confetti", "matrix", "pulse"]) -> str:
+    """Efekt wizualny: confetti (świętowanie sukcesu), matrix (easter egg), pulse (puls rdzenia)."""
+    return await relay("visual_effect", {"effect": effect})
+
+
+@mcp.tool()
+async def get_weather(city: Optional[str] = None) -> str:
+    """Pogoda i prognoza (otwiera okno Pogoda). Bez city — lokalizacja użytkownika."""
+    return await relay("get_weather", {"city": city})
+
+
+@mcp.tool()
+async def get_crypto_prices() -> str:
+    """Aktualne kursy BTC, ETH, SOL, BNB w USD (otwiera Monitor rynku)."""
+    return await relay("get_crypto_prices", {})
 
 
 TOOL_NAMES = sorted(t.name for t in mcp._tool_manager.list_tools())  # noqa: SLF001

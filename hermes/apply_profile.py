@@ -103,6 +103,8 @@ def main() -> int:
         bak = cfg_path.with_name(f"config.yaml.bak-jarvis-desktop-{time.strftime('%Y%m%d-%H%M%S')}")
         shutil.copy2(cfg_path, bak)
         print(f"  kopia zapasowa: {bak.name}")
+    for old in sorted(pdir.glob("config.yaml.bak-jarvis-desktop-*"))[:-3]:   # zostaw 3 ostatnie kopie
+        old.unlink(missing_ok=True)
     cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     env_path.write_text("\n".join(env) + "\n", encoding="utf-8")
     shutil.copy2(HERE / "SOUL.md", soul_path)

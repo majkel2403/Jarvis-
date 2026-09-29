@@ -92,9 +92,9 @@ async def main():
                     tools = await session.list_tools()
                     names = sorted(t.name for t in tools.tools)
                     print("\nMCP: narzędzia")
-                    check("19 narzędzi", len(names) == 19, str(names))
+                    check("29 narzędzi", len(names) == 29, str(len(names)) + " " + str(names))
                     cw = next(t for t in tools.tools if t.name == "create_widget")
-                    check("schema create_widget: enum typów", set(cw.input_schema["properties"]["type"].get("enum", [])) == {"note", "list", "result", "calc"}, json.dumps(cw.input_schema)[:300])
+                    check("schema create_widget: enum typów", set(cw.input_schema["properties"]["type"].get("enum", [])) == {"note", "list", "result", "calc", "clock", "weather", "crypto", "countdown", "progress"}, json.dumps(cw.input_schema)[:300])
 
                     print("\nBrak przeglądarki")
                     r = await session.call_tool("get_desktop_state", {})
