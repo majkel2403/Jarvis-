@@ -396,7 +396,7 @@ J.on('voice-command', t => J.brain.handle(t, { voice: true }));
 $('#btnVoice').innerHTML = icon('mic'); $('#btnFocus').innerHTML = icon('focus');
 $('#btnLog').insertAdjacentHTML('afterbegin', icon('history'));
 const soundIcon = () => { $('#btnSound').innerHTML = icon(S.sound ? 'sound' : 'mute'); $('#btnSound').classList.toggle('on', S.sound); };
-soundIcon(); J.on('settings', () => { soundIcon(); $('#btnAvatar').textContent = S.user; nodes(); });
+soundIcon(); J.on('settings', () => { J.hermesPing(); soundIcon(); $('#btnAvatar').textContent = S.user; nodes(); });
 $('#btnAvatar').textContent = S.user;
 $('#btnVoice').onclick = () => J.ear.toggle();
 $('#btnSound').onclick = () => { S.sound = !S.sound; J.save(); soundIcon(); J.sfx.click(); J.toast(S.sound ? 'Dźwięki włączone' : 'Dźwięki wyciszone'); };
@@ -495,7 +495,7 @@ J.chatPanel = (() => {
   ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, e => {
     if (e.payload.replay) return;
     stop.classList.add('hidden');
-    const l = J.engine.last; if (!l || (l.status === 'completed' && !l.tools)) return;   // zwykła odpowiedź czatu nie tworzy artefaktu
+    const l = J.engine.last; if (!l || (l.status === 'completed' && l.tools < 2 && l.nodes < 2)) return;   // proste polecenia i zwykłe odpowiedzi nie tworzą karty wyniku
     const ok = l.status === 'completed';
     chip.dataset.s = l.status;
     chip.innerHTML = `<b>${ok ? 'Zadanie zakończone' : l.status === 'failed' ? 'Zadanie nie powiodło się' : 'Zadanie przerwane'}</b><span>${l.tools} ${pl(l.tools, 'wywołanie', 'wywołania', 'wywołań')} narzędzi · ${l.nodes} ${pl(l.nodes, 'źródło', 'źródła', 'źródeł')} · ${fmtD(l.dur)}</span><div class="rc-act"></div>`;
@@ -523,6 +523,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigat
 
 boot().then(() => {
   J.widgets.restore();
+  J.hermesPing();
   if (J.state.ui.logPinned && !matchMedia('(max-width:900px)').matches) J.proc.open();
   J.tasks.check();
   const hr = new Date().getHours();

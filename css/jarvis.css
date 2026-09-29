@@ -350,6 +350,7 @@ select.input option{background:#0a1526}
 .composer svg{width:17px;height:17px}
 .mode-pill{margin-left:auto;font-size:9.5px;font-weight:500;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);letter-spacing:.5px}
 .mode-pill.ai{color:var(--ok);border-color:rgba(57,229,154,.4)}
+.mode-pill.bad{color:var(--warn);border-color:rgba(255,184,77,.45)}
 
 /* ---------- PANEL / STATUS (wspólne) ---------- */
 .panel-head{padding:12px 14px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line-soft);font-size:12px;font-weight:700}

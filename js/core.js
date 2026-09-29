@@ -319,6 +319,17 @@ J.wm = (() => {
     });
   };
 
+  /* pulpit zmienia rozmiar (panel logu, czat, okno przeglądarki) → okna mieszczą się w nowych granicach */
+  const reflow = () => {
+    const d = desk().getBoundingClientRect(); if (!d.width || isMobile()) return;
+    Object.values(open).forEach(({ el }) => {
+      if (el.classList.contains('max')) return;
+      const w = Math.min(el.offsetWidth, Math.max(280, d.width - 16)), h = Math.min(el.offsetHeight, Math.max(180, d.height - 92));
+      if (w !== el.offsetWidth) el.style.width = w + 'px'; if (h !== el.offsetHeight) el.style.height = h + 'px';
+      el.style.left = J.clamp(el.offsetLeft, 0, Math.max(0, d.width - w)) + 'px'; el.style.top = J.clamp(el.offsetTop, 0, Math.max(0, d.height - h - 80)) + 'px';
+    });
+  };
+  let ro = null;
   const api = {
     open(id, arg) {
       if (id === 'chat') { J.chatPanel?.show(arg); return true; }   // czat = stały lewy panel
@@ -335,6 +346,7 @@ J.wm = (() => {
         <div class="win-body ${app.flush ? 'flush' : ''}"></div><div class="resize"></div>`;
       el.querySelector('b').textContent = app.title;
       desk().appendChild(el); place(id, el, app);
+      if (!ro && window.ResizeObserver) { ro = new ResizeObserver(J.debounce(reflow, 60)); ro.observe(desk()); }
       const cleanups = [];
       const ctx = {
         el, body: el.querySelector('.win-body'),

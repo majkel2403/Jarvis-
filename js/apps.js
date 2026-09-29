@@ -255,8 +255,8 @@ J.apps.chat = {
         <button class="send" id="chatSend" title="Wyślij">${icon('send')}</button>
       </div></div>`;
     const box = $('#messages', body), input = $('#chatInput', body);
-    const pill = () => { const ai = J.aiReady(); const p = $('#modePill', body); p.textContent = ai ? 'Hermes · ' + J.state.settings.hermesModel : 'tryb lokalny'; p.classList.toggle('ai', ai); };
-    pill(); sub(ctx, 'settings', pill);
+    const pill = () => { const ai = J.aiReady(), st = J.hermes.status, p = $('#modePill', body); p.textContent = !ai ? 'tryb lokalny' : st === 'up' ? 'Hermes · ' + J.state.settings.hermesModel : st === 'down' ? 'Hermes offline · tryb lokalny' : 'Hermes · sprawdzam…'; p.classList.toggle('ai', ai && st === 'up'); p.classList.toggle('bad', ai && st === 'down'); };
+    pill(); sub(ctx, 'settings', pill); sub(ctx, 'hermes', pill);
     J.chat.bind(box);
     const sugg = ['Co potrafisz?', 'Jaka jest pogoda?', 'Kurs bitcoina', 'Ustaw minutnik na 5 minut', 'Zanotuj: kupić mleko', 'Przypomnij mi o 18:00 trening', 'Oblicz 15% z 2400', 'Zmień motyw na fiolet'];
     $('#suggest', body).innerHTML = sugg.map(s => `<button>${esc(s)}</button>`).join('');
@@ -286,7 +286,7 @@ J.chat = (() => {
   };
   const scroll = () => { if (box) box.scrollTop = box.scrollHeight; };
   const api = {
-    bind(b) { box = b; b.innerHTML = ''; if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nPołączenie: Hermes (' + J.state.settings.hermesModel + ').' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
+    bind(b) { box = b; b.innerHTML = ''; if (!items.length) api.add('jarvis', 'Jestem gotowy. To moje środowisko — otwieram aplikacje, tworzę notatki, skróty i przypomnienia, sprawdzam pogodę i rynek. Napisz lub powiedz, co mam zrobić.' + (J.aiReady() ? '\n\nHermes (' + J.state.settings.hermesModel + ') jest skonfigurowany — status połączenia widać w nagłówku.' : '\n\nWskazówka: podłącz Hermesa (Nous Research) w Ustawieniach, a odpowiem na każde pytanie.'), true); else items.forEach(it => b.appendChild(draw(it))); scroll(); },
     unbind(b) { if (box === b) box = null; },
     reset() { items = []; },
     add(role, text, silent) {

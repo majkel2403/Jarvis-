@@ -250,6 +250,15 @@ const cfg = () => {
   return { url: (s.hermesUrl || '').replace(/\/+$/, ''), key: s.hermesKey || '', model: s.hermesModel || 'hermes-agent', provider: s.hermesProvider || 'agent' };
 };
 J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url);
+/* realny status połączenia: 'unknown' | 'up' | 'down' — sprawdzany pingiem /models, nie zakładany */
+J.hermes = { status: 'unknown', checked: 0 };
+const setStatus = st => { const ch = J.hermes.status !== st; J.hermes.status = st; J.hermes.checked = Date.now(); if (ch) J.emit('hermes'); };
+J.hermesPing = async () => {
+  if (!J.aiReady()) { setStatus('unknown'); return 'unknown'; }
+  const c = cfg(); let ok = false;
+  try { const r = await fetch(c.url + '/models', { headers: headers(), signal: AbortSignal.timeout(2500) }); ok = r.status < 500; } catch (e) { ok = false; }
+  setStatus(ok ? 'up' : 'down'); return J.hermes.status;
+};
 
 const TOOL_SPEC = TOOLS.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
 const SYSTEM = () => `Jesteś Jarvis — asystent AI i inteligentna powłoka systemu „Jarvis OS”, który działa w przeglądarce użytkownika (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Dzisiejsza data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.
@@ -433,23 +442,26 @@ J.brain = {
     J.ev.emit('task.created', { title: text });
     let reply, status = 'ok';
     try {
-      if (J.aiReady()) {
-        try { reply = await hermes(text, bubble); }
+      const skipNet = J.aiReady() && J.hermes.status === 'down' && Date.now() - J.hermes.checked < 45000;   // wiemy, że offline — nie czekamy na timeout
+      if (J.aiReady() && !skipNet) {
+        try { reply = await hermes(text, bubble); setStatus('up'); }
         catch (e) {
           if (!e.net) throw e;
           // Hermes nieosiągalny — wykonaj lokalnie, żeby polecenie nie przepadło
           J.proc.step('error', 'Hermes nieosiągalny — przełączam na silnik lokalny', [['Błąd', e.message]], { status: 'err', preview: 'fallback' });
+          setStatus('down');
           const loc = await local(text);
-          reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ ' + e.message;
+          reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ Hermes jest offline — użyłem silnika lokalnego (szczegóły w Process Log).';
         }
       } else {
-        J.proc.step('system', 'Silnik lokalny (bez modelu)', [['Tryb', 'Hermes wyłączony — dopasowanie poleceń regułami']]);
+        J.proc.step('system', 'Silnik lokalny (bez modelu)', [['Tryb', skipNet ? 'Hermes offline (sprawdzono ' + Math.round((Date.now() - J.hermes.checked) / 1000) + ' s temu) — pominięto zapytanie do sieci' : 'Hermes wyłączony — dopasowanie poleceń regułami']]);
         await new Promise(r => setTimeout(r, 300 + Math.random() * 250));
         reply = await local(text);
         if (reply == null) reply = 'Nie rozpoznałem tego polecenia. Wpisz „pomoc”, aby zobaczyć, co potrafię offline — albo podłącz Hermesa w Ustawieniach, a odpowiem na wszystko.';
       }
       bubble.set(reply);
       if (/⏹ przerwano\.$/.test(reply)) status = 'abort';
+      if (skipNet && !/⚠/.test(reply)) reply += '\n\n⚠ Hermes offline — tryb lokalny.';
       J.proc.step('reply', 'Odpowiedź Jarvisa', [['Treść', reply]], { preview: reply.replace(/\s+/g, ' ').slice(0, 70) });
       J.orb.set('idle', 'zadanie zakończone');
       if (opts.voice || J.state.settings.speech) J.voice.speak(reply.split('\n\n⚠')[0]);
@@ -458,8 +470,9 @@ J.brain = {
       J.proc.step('error', 'Błąd asystenta', [['Komunikat', e.message], ['Stos', e.stack]], { status: 'err', preview: e.message.slice(0, 70) });
       status = 'err'; reply = '⚠ ' + e.message;
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 3000);
-    } finally { busy = false; J.ev.emit(status === 'ok' ? 'task.completed' : status === 'abort' ? 'task.cancelled' : 'task.failed', { title: text, result: reply }); J.proc.end(status, reply); }
+    } finally { busy = false; J.ev.emit(status === 'ok' ? 'task.completed' : status === 'abort' ? 'task.cancelled' : 'task.failed', { title: text, result: String(reply || '').split('\n\n⚠')[0] }); J.proc.end(status, reply); }
   }
 };
 J.brain.local = local;
+setInterval(() => { if (J.aiReady() && !J.brain.busy) J.hermesPing(); }, 45000);
 })();
