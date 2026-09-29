@@ -46,6 +46,13 @@ const paintStep = (s, base) => {
     body.appendChild(row);
   });
   body.appendChild(h('div', { class: 'pmeta' }, `<span>${esc(k.label)}</span><span>+${(off / 1000).toFixed(2)} s · ${J.hhmm(new Date(s.ts))}</span>`));
+  /* „Wstaw do czatu” (cytat kroku w polu wiadomości) i „Kopiuj JSON” (bez kluczy) */
+  const acts = h('div', { class: 'pacts' }, '<button class="btn sm ghost" data-a="chat">Wstaw do czatu</button><button class="btn sm ghost" data-a="json">Kopiuj JSON</button>');
+  const plain = () => s.title + (prev ? ' — ' + prev : '') + (s.fields || []).filter(f => f[1]).map(f => '\n' + f[0] + ': ' + String(f[1]).slice(0, 600)).join('');
+  const scrub = t => String(t).replace(/(sk-[a-z0-9-]{6})[a-z0-9-_]+/gi, '$1…').replace(/(Bearer\s+)\S+/gi, '$1…');
+  acts.querySelector('[data-a=chat]').onclick = e => { e.preventDefault(); J.chatPanel?.show?.(); const inp = $('#chatInput'); if (inp) { inp.value = (inp.value ? inp.value + '\n' : '') + '> ' + scrub(plain()).replace(/\n/g, '\n> ') + '\n'; inp.focus(); inp.dispatchEvent(new Event('input')); } };
+  acts.querySelector('[data-a=json]').onclick = e => { e.preventDefault(); navigator.clipboard?.writeText(scrub(JSON.stringify({ kind: s.kind, title: s.title, status: s.status, dur: s.dur, fields: s.fields }, null, 1))).then(() => J.toast('Skopiowano krok'), () => { }); };
+  body.appendChild(acts);
   if (s.status === 'err' && !s.opened) { el.open = true; s.opened = true; }
   return el;
 };

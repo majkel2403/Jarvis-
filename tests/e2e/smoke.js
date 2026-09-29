@@ -15,7 +15,9 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.goto(URL + '/index.html?' + Date.now());
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('jarvis-os:v2', JSON.stringify({ settings: { hermesOn: false, skipBoot: true, speech: false, sound: false }, ui: { onboarded: true, tourDone: true } })); });
   await p.reload(); await p.waitForTimeout(1000);
-  try { await p.click('#bootEnter', { timeout: 3000 }); } catch (e) { await p.keyboard.press('Enter'); }
+  /* ekran startowy: czekamy na przycisk (animacja bywa dłuższa na wolnej maszynie), potem na aktywny pulpit */
+  try { await p.waitForSelector('#bootEnter.show', { timeout: 15000 }); await p.click('#bootEnter', { timeout: 5000 }); } catch (e) { await p.keyboard.press('Enter'); }
+  await p.waitForFunction(() => document.querySelector('#app')?.classList.contains('on') && !document.querySelector('#boot:not(.hidden):not(.gone)')?.offsetParent, null, { timeout: 15000 }).catch(() => { });
   await p.waitForTimeout(1500);
   const say = async t => { const r = await p.evaluate(async t => { await J.brain.handle(t); return document.querySelector('#messages')?.lastElementChild?.textContent || ''; }, t); await p.waitForTimeout(250); return r; };
   const expect = async (t, re) => { const r = await say(t); assert(re.test(r), `„${t}” → ${r}`); return r; };
@@ -186,6 +188,25 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.evaluate(async () => { J.chatPanel.show(); J.notes.add('Załącznik W5', 'treść załącznika'); await J.uiRun('chat_attach', { note: 'Załącznik W5' }, { offer: false }); }); await p.waitForTimeout(200);
   assert(await p.evaluate(() => /Załącznik W5/.test(document.querySelector('#chatAtt')?.textContent || '')), 'chip załącznika w czacie');
   await p.evaluate(() => { J.attach.clear(); J.wm.closeAll(); });
+  // ===== Dodatki: zaznaczanie wielu notatek + akcja zbiorowa z „Cofnij”, notatka przeciągnięta do Harmonogramu, historia kalkulatora, sekcja Jarvis =====
+  await p.evaluate(() => { ['Bulk 1', 'Bulk 2', 'Bulk 3'].forEach(t => J.notes.add(t, 'x')); J.wm.open('notes'); }); await p.waitForTimeout(300);
+  await p.evaluate(() => { const b = t => [...document.querySelectorAll('.window[data-app="notes"] .note-item')].find(x => x.textContent.includes(t)); b('Bulk 1').click(); b('Bulk 3').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); });
+  await p.waitForTimeout(200);
+  assert(await p.evaluate(() => /Zaznaczono: 3/.test(document.querySelector('.window[data-app="notes"] .nt-bulk')?.textContent || '')), 'zaznaczanie wielu (Shift)');
+  await p.evaluate(() => document.querySelector('.window[data-app="notes"] .nt-bulk [data-a="trash"]').click()); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => J.notes.trashed().filter(n => /^Bulk/.test(n.title)).length === 3), 'akcja zbiorowa: do kosza');
+  await p.evaluate(() => J.undo.run()); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => J.notes.live().filter(n => /^Bulk/.test(n.title)).length === 3), 'jedno Cofnij przywraca wszystkie');
+  await p.evaluate(() => J.wm.open('schedule', { view: 'day', target: J.today() })); await p.waitForTimeout(300);
+  await p.evaluate(() => { const dt = new DataTransfer(), src = [...document.querySelectorAll('.window[data-app="notes"] .note-item')].find(x => x.textContent.includes('Bulk 2')); src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); const tl = document.querySelector('.window[data-app="schedule"] #tl'); tl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt })); tl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); });
+  await p.waitForTimeout(300);
+  assert(await p.evaluate(() => J.state.tasks.some(t => t.text === 'Bulk 2' && t.note)), 'notatka przeciągnięta do Harmonogramu = zadanie');
+  await p.evaluate(() => J.wm.open('calc', { view: 'expr', target: '6*7' })); await p.waitForTimeout(300);
+  await p.evaluate(() => { document.querySelector('.window[data-app="calc"] .calc-keys .eq').click(); document.querySelector('.window[data-app="calc"] #chB').click(); });
+  assert(await p.evaluate(() => /6\*7 =\s*42/.test(document.querySelector('.window[data-app="calc"] #chL').textContent)), 'historia kalkulatora');
+  await p.evaluate(() => J.wm.open('monitor')); await p.waitForTimeout(1300);
+  assert(await p.evaluate(() => /^\d+$/.test(document.querySelector('#jAct')?.textContent || '')), 'Monitor: sekcja Jarvis');
+  await p.evaluate(() => J.wm.closeAll());
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {

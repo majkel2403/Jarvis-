@@ -65,6 +65,8 @@ J.widgets = {
         });
         mounts[w.type](body, w, ctx);
         J.widgets.applyCollapse(w);
+        /* dwuklik nazwy = zmiana nazwy (dwuklik reszty nagłówka dalej maksymalizuje) */
+        const tb = ctx.el?.querySelector?.('.win-head b'); if (tb) tb.ondblclick = e => { e.stopPropagation(); J.KEY_ACTIONS?.rename && J.wm.open(key) && J.KEY_ACTIONS.rename.run(); };
       }
     };
     J.widgets.list.push(w);

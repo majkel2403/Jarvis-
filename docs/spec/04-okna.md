@@ -121,7 +121,7 @@ Przypnij na wierzchu · Na spód · Rozmiar › (S, M, L, pół, cały) · Przyc
 | sytuacja | zasada |
 |---|---|
 | Jev wykonał otwarcie/przesunięcie sam | podświetlenie okna, chip „Cofnij” dla A2 |
-| użytkownik przeciąga okno, a agent w tej chwili je przesuwa | wygrywa użytkownik: `wm_move` od agenta w trakcie przeciągania (pointer capture aktywny) zwraca `CONFLICT` „Okno jest właśnie przesuwane” — 🆕 kod w [13-bledy.md](13-bledy.md) |
+| użytkownik przeciąga okno, a agent w tej chwili je przesuwa | wygrywa użytkownik: `wm_move` od agenta w trakcie przeciągania (pointer capture aktywny) zwraca `CONFLICT` „Okno jest właśnie przesuwane” — ✅ kod w [13-bledy.md](13-bledy.md) |
 | polecenie na zamkniętym oknie (`wm_move notes`, notatnik zamknięty) | ✅ `NOT_FOUND` „Notatnik nie jest otwarte.” → 🆕 poprawić odmianę: „Notatnik nie jest otwarty.” (rodzaj z `APP_GENDER`) |
 | wiele okien pasuje („zamknij to” bez fokusu) | chipy z oknami |
 | układ z oknem, którego już nie ma (usunięty widget) | pomijamy okno, komunikat „Pominąłem 1 okno, którego już nie ma.” |

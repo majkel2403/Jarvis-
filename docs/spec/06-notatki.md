@@ -68,7 +68,7 @@ Pełna tabela z poziomami i cofaniem: [02-obiekty-akcje.md](02-obiekty-akcje.md)
 | foldery | tworzone przy pierwszym użyciu, znikają, gdy puste; zmiana nazwy folderu = zmiana w wszystkich notatkach (A1, jedno „Cofnij”) |
 | wersje | lista z datą i autorem, podgląd różnic (dodane na zielono, usunięte przekreślone — porównanie linii), „Przywróć” |
 | notatka → zadanie | z całej notatki (treść = tytuł) albo z zaznaczonej linii; zadanie ma pole `note: <id>` i w Harmonogramie ikonę „📝” otwierającą notatkę |
-| eksport | .txt (✅), .md (🆕: `# tytuł`, tagi jako `tags:` w nagłówku), do folderu roboczego `files_export_note` (✅, nigdy nie nadpisuje) |
+| eksport | .txt (✅), .md (✅: `# tytuł`, tagi jako `tags:` w nagłówku), do folderu roboczego `files_export_note` (✅, nigdy nie nadpisuje) |
 
 ## 5. Wskazywanie notatki (dla poleceń)
 

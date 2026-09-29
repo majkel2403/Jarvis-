@@ -16,7 +16,7 @@ Szablony zostają jako szybki skrót (parser rozpozna „lista zakupy: mleko, ch
 | typ | zawartość (`data`) | edycja w widgecie | przez polecenie |
 |---|---|---|---|
 | `note` | `{text}` | pole tekstowe, zapis przy każdej zmianie | `widgets_update content` |
-| `list` | `{items:[{text,done}]}` | pole „Nowa pozycja…”, zaznaczanie, ✕ usuń | `widgets_update add_items/check_item/uncheck_item/…`; 🆕 `widget_items` |
+| `list` | `{items:[{text,done}]}` | pole „Nowa pozycja…”, zaznaczanie, ✕ usuń | `widgets_update add_items/check_item/uncheck_item/…`; ✅ `widget_items` |
 | `result` | `{text, meta}` | tylko odczyt; „Kopiuj”, „Log” | `widgets_update content` |
 
 Rozmiary startowe: note 300×260, list 290×300, result 340×260. Tytuł ≤ 60 znaków.

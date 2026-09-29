@@ -8,7 +8,7 @@ Nawigacja = zmiana tego, **co widać**, bez zmiany danych. Dlatego wszystkie pol
 |---|---|---|---|
 | Topbar | góra | zegar, stan sieci, stan mózgu (Hermes/Jev), powiadomienia (dzwonek), awatar (Ustawienia), pole wyszukiwania (paleta) | ✅ |
 | Pasek ikon | lewa krawędź | szybki start aplikacji, czat (`Alt 1`), log (`Alt 2`) | ✅ |
-| Dok | dół | aplikacje + skróty, kropka = otwarte okno | ✅ (🆕 kolejność `dock_order`, liczniki na ikonach W3) |
+| Dok | dół | aplikacje + skróty, kropka = otwarte okno | ✅ (✅ kolejność `dock_order`, liczniki na ikonach W3) |
 | Rdzeń (orb) | środek | stan Jarvisa; klik = mów / czat | ✅ |
 | Karty HUD (10) | wokół rdzenia | co robi agent (model, narzędzia, dane…) | ✅ |
 | Panel czatu | lewa strona | rozmowa | ✅ |
@@ -27,7 +27,7 @@ Każda aplikacja dostaje metodę `onArg(arg, ctx)` i `state(ctx)` (✅ jest w No
 
 | aplikacja | widok (`view`) | cel (`target`) | przykład zdania | stan |
 |---|---|---|---|---|
-| notes | `note` | id / fragment tytułu | „otwórz notatkę zakupy” | ✅ (przez `notes_read show`) → 🆕 `app_view` |
+| notes | `note` | id / fragment tytułu | „otwórz notatkę zakupy” | ✅ (przez `notes_read show`) → ✅ `app_view` |
 | notes | `search` | tekst | „pokaż notatki z mlekiem” | 🆕 |
 | notes | `trash` | — | „pokaż kosz” | 🆕 W3 |
 | notes | `folder` / `tag` | nazwa | „notatki z folderu praca” | 🆕 W3 |
@@ -37,8 +37,8 @@ Każda aplikacja dostaje metodę `onArg(arg, ctx)` i `state(ctx)` (✅ jest w No
 | timer | `timer` / `stopwatch` | — | „pokaż stoper” | 🟡 zakładki są, brak `onArg` → 🆕 W1 |
 | market | `coin` | BTC/ETH/SOL/BNB (+ obserwowane) | „pokaż ethereum w rynku” | 🆕 W1 (przewinięcie i podświetlenie karty) |
 | market | `alerts` | — | „pokaż alerty” | 🆕 W3 |
-| weather | `city` | nazwa miasta | „pogoda w Gdańsku” | ✅ `onArg` jest (`J.wm.open('weather','Gdańsk')`) → 🆕 podpięcie pod `app_view` W1 |
-| settings | `section` | openrouter, akcent, tapeta, interfejs, glos, uzytkownik, hermes, agent, jev, pamiec, pliki, dane (+🆕 skroty, powiadomienia, uklady, rutyny) | „otwórz ustawienia jev” | ✅ `settings_open` |
+| weather | `city` | nazwa miasta | „pogoda w Gdańsku” | ✅ `onArg` jest (`J.wm.open('weather','Gdańsk')`) → ✅ podpięcie pod `app_view` W1 |
+| settings | `section` | openrouter, akcent, tapeta, interfejs, glos, uzytkownik, hermes, agent, jev, pamiec, pliki, dane (+✅ skroty, powiadomienia, uklady, rutyny) | „otwórz ustawienia jev” | ✅ `settings_open` |
 | terminal | `run` | polecenie terminala (tylko wpisuje, nie wykonuje) | „otwórz terminal z neofetch” | 🆕 W1 |
 | calc | `expr` | wyrażenie (wpisuje) | „otwórz kalkulator z 2+2” | 🆕 W1 |
 | library | `apps` / `shortcut` | — / nazwa skrótu | „pokaż skróty” | 🆕 W1 |

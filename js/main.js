@@ -654,7 +654,10 @@ J.KEY_ACTIONS = {
   newNote: { label: 'Nowa notatka', def: 'Ctrl+Alt+N', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
   search: { label: 'Szukaj wszędzie', def: 'Ctrl+Shift+F', run: () => palette.open('') },
   overlay: { label: 'Nakładka diagnostyczna', def: 'Alt+Shift+D', run: () => J.debugOverlay(!J.state.ui.debugOverlay) },
-  help: { label: 'Ściąga skrótów', def: 'F1', run: () => J.keysHelp() }
+  help: { label: 'Ściąga skrótów', def: 'F1', run: () => J.keysHelp() },
+  /* F2 / Delete działają na aktywnym oknie: notatka (tytuł / do kosza), widget (nazwa / usuń z „Cofnij”) */
+  rename: { label: 'Zmień nazwę (notatka, widget)', def: 'F2', run: () => { const f = J.wm.focused(); if (f === 'notes') { const t = J.wm.ctx('notes')?.body.querySelector('#nTitle'); t?.focus(); t?.select(); return; } if (f?.startsWith('w:')) { const w = J.widgets.list.find(x => 'w:' + x.id === f); if (!w) return; const v = prompt('Nowa nazwa widgetu:', w.title); if (!v || !v.trim()) return; w.type === 'spec' ? J.uiRun('widget_edit', { widget: w.id, patch: { title: v.trim().slice(0, 60) } }) : J.uiRun('widgets_update', { widget: w.id, title: v.trim().slice(0, 60) }); } } },
+  remove: { label: 'Usuń (notatka do kosza, widget)', def: 'Delete', run: () => { const f = J.wm.focused(); if (f === 'notes') { const st = J.apps.notes.state(J.wm.ctx('notes')); if (st?.noteId) J.uiRun('notes_delete', { note: st.noteId }); } else if (f?.startsWith('w:')) J.wm.close(f); } }
 };
 /* ---------- testy diagnostyczne (Ustawienia → O programie) ---------- */
 J.diagnostics = async () => {

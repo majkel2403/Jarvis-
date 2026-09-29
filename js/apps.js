@@ -399,6 +399,8 @@ J.chat = (() => {
     if (it.role === 'link') { const a = h('a', { href: it.text, target: '_blank', rel: 'noopener' }); a.textContent = it.text; e.appendChild(a); it.el = e; return e; }
     if (it.typing) e.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>'; else e.innerHTML = fmt(it.text);
     if (it.role === 'jarvis' && it.text) { const pin = h('button', { class: 'msg-pin', title: 'Przypnij jako widget' }, icon('pin', 'width="11" height="11"')); pin.onclick = () => J.widgets.create('result', { title: it.text.slice(0, 40), content: it.text, meta: 'Z czatu · ' + J.hhmm() }); e.appendChild(pin); }
+    /* moja wiadomość: ✎ wstawia ją do pola (popraw i wyślij), ↻ wysyła jeszcze raz — widoczne przy ostatniej (CSS) */
+    if (it.role === 'user' && it.text) { const bar = h('span', { class: 'msg-acts' }, '<button type="button" title="Popraw (wstaw do pola)" aria-label="Popraw wiadomość">✎</button><button type="button" title="Wyślij ponownie" aria-label="Wyślij ponownie">↻</button>'); bar.children[0].onclick = () => { const inp = J.$('#chatInput'); if (inp) { inp.value = it.text; inp.focus(); inp.dispatchEvent(new Event('input')); } }; bar.children[1].onclick = () => J.brain.handle(it.text); e.appendChild(bar); }
     it.el = e; return e;
   };
   const scroll = () => { if (box) box.scrollTop = box.scrollHeight; };
@@ -488,7 +490,7 @@ J.apps.notes = {
     const argId = typeof arg === 'string' ? arg : va?.view === 'note' ? va.target : null;
     let sel = (argId && J.state.notes.find(n => n.id === argId && !n.deleted)?.id) || J.notes.live()[0]?.id, q = va?.view === 'search' ? String(va.target || '').toLowerCase() : '';
     let filter = va?.view === 'trash' ? { kind: 'trash' } : va?.view === 'tag' ? { kind: 'tag', v: String(va.target || '').replace(/^#/, '') } : va?.view === 'folder' ? { kind: 'folder', v: va.target } : { kind: 'all' };
-    let preview = false, histOpen = false;
+    let preview = false, histOpen = false, lastClick = null; const multi = new Set();
     body.innerHTML = `<div class="notes">
       <div class="notes-side"><div class="top"><input class="input" placeholder="Szukaj…" id="nq" aria-label="Szukaj w notatkach"><button class="btn" id="nNew" title="Nowa notatka" aria-label="Nowa notatka">${icon('plus', 'width="14" height="14"')}</button></div>
         <div class="nt-filters" id="nFil"></div><div class="notes-list" id="nList"></div></div>
@@ -528,13 +530,31 @@ J.apps.notes = {
     };
     const renderList = () => {
       const items = visible();
+      [...multi].forEach(id => { if (!items.some(x => x.id === id)) multi.delete(id); });
       list.innerHTML = '';
+      if (multi.size > 1) {
+        const bar = h('div', { class: 'nt-bulk' }, '<b></b><span class="sp"></span>' + (inTrash() ? '<button class="btn sm" data-a="restore">Przywróć</button>' : '<button class="btn sm ghost" data-a="folder">📁</button><button class="btn sm ghost" data-a="tag">#</button><button class="btn sm ghost danger" data-a="trash">🗑</button>') + '<button class="btn sm ghost" data-a="x" aria-label="Odznacz">×</button>');
+        bar.querySelector('b').textContent = 'Zaznaczono: ' + multi.size;
+        const ids = [...multi], notesOf = () => ids.map(id => J.state.notes.find(x => x.id === id)).filter(Boolean);
+        const bulk = (label, apply, undo) => { const l = notesOf(), snap = l.map(x => ({ x, tags: [...x.tags], folder: x.folder, deleted: x.deleted })); apply(l); J.save(); J.emit('notes'); multi.clear(); const e = J.undo.push({ id: 'notes_bulk', label, text: label + ' (' + l.length + ')', undo: () => { snap.forEach(o => Object.assign(o.x, { tags: o.tags, folder: o.folder, deleted: o.deleted })); J.save(); J.emit('notes'); }, source: 'ui' }); J.undo.offer(e); };
+        bar.querySelector('[data-a=x]').onclick = () => { multi.clear(); renderList(); };
+        bar.querySelector('[data-a=trash]')?.addEventListener('click', () => bulk('Do kosza', l => l.forEach(x => { x.deleted = Date.now(); })));
+        bar.querySelector('[data-a=restore]')?.addEventListener('click', () => bulk('Przywrócono', l => l.forEach(x => { x.deleted = null; })));
+        bar.querySelector('[data-a=folder]')?.addEventListener('click', () => { const f = prompt('Folder dla ' + ids.length + ' notatek (puste = bez folderu):', ''); if (f != null) bulk('Folder „' + f.trim() + '”', l => l.forEach(x => { x.folder = f.trim().slice(0, 40); })); });
+        bar.querySelector('[data-a=tag]')?.addEventListener('click', () => { const t = prompt('Tag dla ' + ids.length + ' notatek:', ''); const c = J.norm(t || '').replace(/^#/, '').replace(/[^a-z0-9_-]/g, '').slice(0, 24); if (c) bulk('Tag #' + c, l => l.forEach(x => { if (!x.tags.includes(c) && x.tags.length < 10) x.tags.push(c); })); });
+        list.appendChild(bar);
+      }
       if (!items.length) { if (J.ui?.state) J.ui.state(list, 'empty', { text: inTrash() ? 'Kosz jest pusty.' : q ? 'Nic nie pasuje do „' + q + '”.' : 'Brak notatek. Kliknij + albo powiedz „zanotuj …”.' }); else list.innerHTML = '<div class="empty">Brak notatek</div>'; }
       items.forEach(n => {
-        const b = h('button', { class: 'note-item' + (n.id === sel ? ' sel' : ''), 'data-id': n.id }, '<b></b><span></span>');
+        const b = h('button', { class: 'note-item' + (n.id === sel ? ' sel' : '') + (multi.has(n.id) ? ' multi' : ''), 'data-id': n.id, draggable: inTrash() ? 'false' : 'true' }, '<b></b><span></span>');
+        b.ondragstart = e => { e.dataTransfer.setData('text/x-note', n.id); e.dataTransfer.setData('text/plain', n.title); e.dataTransfer.effectAllowed = 'copy'; };
         b.querySelector('b').textContent = (n.pinned && !inTrash() ? '📌 ' : '') + (n.title || 'Bez tytułu');
         b.querySelector('span').textContent = (inTrash() ? 'usunięta ' + new Date(n.deleted).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) : new Date(n.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + (n.folder ? ' · 📁 ' + n.folder : '') + (n.tags.length ? ' · ' + n.tags.map(t => '#' + t).join(' ') : '');
-        b.onclick = () => { sel = n.id; histOpen = false; renderList(); renderEd(); J.emit('app-view'); };
+        b.onclick = e => {
+          /* Ctrl/Shift + klik = zaznaczanie wielu (pasek akcji zbiorowych) */
+          if (e.ctrlKey || e.metaKey || e.shiftKey) { if (e.shiftKey && lastClick) { const ids = items.map(x => x.id), a = ids.indexOf(lastClick), z = ids.indexOf(n.id); ids.slice(Math.min(a, z), Math.max(a, z) + 1).forEach(id => multi.add(id)); } else multi.has(n.id) ? multi.delete(n.id) : multi.add(n.id); if (sel && !multi.size) multi.add(sel); lastClick = n.id; renderList(); return; }
+          multi.clear(); lastClick = n.id; sel = n.id; histOpen = false; renderList(); renderEd(); J.emit('app-view');
+        };
         list.appendChild(b);
       });
     };
@@ -666,7 +686,7 @@ J.apps.schedule = {
         /* przeciągnij zadanie na dzień = przenieś */
         b.ondragover = e => { e.preventDefault(); b.classList.add('drop'); };
         b.ondragleave = () => b.classList.remove('drop');
-        b.ondrop = e => { e.preventDefault(); b.classList.remove('drop'); const id = e.dataTransfer.getData('text/x-task'); if (id) J.uiRun('tasks_update', { task: id, date: key }); };
+        b.ondrop = e => { e.preventDefault(); b.classList.remove('drop'); const id = e.dataTransfer.getData('text/x-task'), nid = e.dataTransfer.getData('text/x-note'); if (id) J.uiRun('tasks_update', { task: id, date: key }); else if (nid) J.uiRun('notes_to_task', { note: nid, date: key }); };
         days.appendChild(b);
       }
     };
@@ -721,6 +741,10 @@ J.apps.schedule = {
       }
     };
     const renderAll = () => { renderDays(); render(); };
+    /* notatka upuszczona na listę = zadanie na oglądany dzień (przeciąganie między aplikacjami) */
+    tl.ondragover = e => { if ([...(e.dataTransfer?.types || [])].includes('text/x-note')) { e.preventDefault(); tl.classList.add('drop'); } };
+    tl.ondragleave = () => tl.classList.remove('drop');
+    tl.ondrop = e => { tl.classList.remove('drop'); const nid = e.dataTransfer.getData('text/x-note'); if (nid) { e.preventDefault(); J.uiRun('notes_to_task', { note: nid, date: view === 'day' ? day : J.today() }); } };
     $$('#sv button', body).forEach(b => b.onclick = () => { view = b.dataset.v; renderAll(); J.emit('app-view'); });
     $('#dPrev', body).onclick = () => { offset--; renderDays(); if (view === 'week') render(); };
     $('#dNext', body).onclick = () => { offset++; renderDays(); if (view === 'week') render(); };
@@ -802,7 +826,7 @@ J.apps.monitor = {
   title: 'Monitor systemu', icon: 'monitor', minW: 340, minH: 320, w: 440, h: 470,
   onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'section') ctx?.goSection?.(v.target); },
   mount(body, ctx, arg) {
-    ctx.goSection = sec => { const id = { fps: 'sFps', klatki: 'sFps', pamiec: 'sMem', pamięć: 'sMem', siec: 'sNet', sieć: 'sNet', dane: 'sSto', bateria: 'sBat', okna: 'sWin' }[J.norm(sec || '')] || 'sFps'; flash($('#' + id, body)?.closest('.stat')); };
+    ctx.goSection = sec => { const id = { jarvis: 'jAct', koszt: 'jHer', jev: 'jJev', fps: 'sFps', klatki: 'sFps', pamiec: 'sMem', pamięć: 'sMem', siec: 'sNet', sieć: 'sNet', dane: 'sSto', bateria: 'sBat', okna: 'sWin' }[J.norm(sec || '')] || 'sFps'; flash($('#' + id, body)?.closest('.stat')); };
     setTimeout(() => { const va = viewOf(arg); if (va?.view === 'section') ctx.goSection(va.target); }, 80);
     body.innerHTML = `<div class="stats">
       <div class="stat wide"><span>Klatki / s</span><strong id="sFps">—</strong><canvas id="cFps"></canvas></div>
@@ -814,7 +838,15 @@ J.apps.monitor = {
       <div class="stat"><span>Bateria</span><strong id="sBat">—</strong></div>
       <div class="stat"><span>Okna / akcje</span><strong id="sWin">—</strong></div>
       <div class="stat"><span>Dane lokalne</span><strong id="sSto">—</strong></div>
-    </div>`;
+    </div>
+    <div class="label" style="margin-top:14px">Jarvis</div>
+    <div class="stats" id="sJar">
+      <div class="stat"><span>Akcje dziś</span><strong id="jAct">—</strong></div>
+      <div class="stat"><span>Hermes dziś</span><strong id="jHer">—</strong></div>
+      <div class="stat"><span>Jev (miesiąc)</span><strong id="jJev">—</strong></div>
+      <div class="stat"><span>Jev — stan</span><strong id="jBrk">—</strong></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="btn sm ghost" id="jDiag">Kopiuj diagnostykę (JSON, bez kluczy)</button></div>`;
     const hist = { fps: [], mem: [], lag: [] };
     let bat = null; navigator.getBattery?.().then(b => bat = b).catch(() => { });
     let last = performance.now();
@@ -839,7 +871,14 @@ J.apps.monitor = {
       J.spark($('#cFps', body), hist.fps, accent());
       J.spark($('#cMem', body), hist.mem, J.state.settings.accent2);
       J.spark($('#cLag', body), hist.lag, '#ffb84d');
+      /* sekcja Jarvis: akcje dziś, koszt Hermesa dziś, Jev w miesiącu, bezpiecznik */
+      const dd = (J.state.stats.daily || {})[J.today()] || {}, hd = J.state.stats.hermesDay?.d === J.today() ? J.state.stats.hermesDay : { calls: 0, cost: 0 };
+      $('#jAct', body).textContent = dd.actions || 0;
+      $('#jHer', body).textContent = hd.calls + ' · $' + (+hd.cost || 0).toFixed(4);
+      $('#jJev', body).textContent = J.judge ? J.judge.budget.calls() + ' · $' + (+J.judge.budget.used() || 0).toFixed(4) : 'n/d';
+      $('#jBrk', body).textContent = !J.judge?.enabled?.() ? 'wyłączony' : J.judge.breaker.open ? 'pauza: ' + (J.judge.breaker.reason || '') : J.judge.status.state;
     };
+    $('#jDiag', body).onclick = async () => { const d = { app: 'Jarvis OS', ts: new Date().toISOString(), ua: navigator.userAgent, fps: J.fps, windows: J.wm.info().map(w => w.id), stats: { actions: J.state.stats.actions, daily: J.state.stats.daily, hermesDay: J.state.stats.hermesDay }, jev: J.judge ? { state: J.judge.status.state, calls: J.judge.status.calls, lastError: J.judge.status.lastError, breaker: J.judge.breaker.open ? J.judge.breaker.reason : null } : null, hermes: { on: !!J.state.settings.hermesOn, status: J.hermes?.status }, checks: J.diagnostics ? (await J.diagnostics()).map(([ok, n, info]) => ({ ok, n, info })) : [] }; const t = JSON.stringify(d, null, 1); navigator.clipboard?.writeText(t).then(() => J.toast('Skopiowano diagnostykę'), () => J.toast('Nie udało się skopiować')); };
     tick(); const iv = setInterval(tick, 1000); ctx.onClose(() => clearInterval(iv));
   }
 };
@@ -914,7 +953,7 @@ J.apps.terminal = {
 const TERM = (() => {
     let print = () => { };
     const cmds = {
-      help: () => print(`<span class="c">Dostępne polecenia:</span>
+      help: a => a ? (() => { const c = J.registry.get(a.trim()) || J.registry.list().find(x => J.norm(x.label) === J.norm(a)); if (!c) return print('<span class="e">nie znam polecenia „' + esc(a) + '”</span> — spróbuj help (lista terminala) albo nazwy z rejestru, np. help add_task'); const props = Object.entries(c.args.properties || {}); print('<span class="c">' + esc(c.id) + '</span> — ' + esc(c.label) + '\n' + esc(c.description) + (props.length ? '\n<span class="d">argumenty:</span> ' + props.map(([k, v]) => esc(k) + ((c.args.required || []).includes(k) ? '*' : '') + (v.enum ? '=' + esc(v.enum.join('|')) : '')).join(', ') : '') + ((c.examples || []).length ? '\n<span class="d">przykłady:</span> ' + c.examples.slice(0, 3).map(esc).join(' · ') : '') + '\n<span class="d">ryzyko:</span> ' + esc(c.risk) + (c.undoable ? ' · da się cofnąć' : '')); })() : print(`<span class="c">Dostępne polecenia:</span> <span class="d">(help &lt;polecenie&gt; — opis polecenia rejestru, np. help add_task)</span>
   help            ta lista            open &lt;app&gt;     otwórz aplikację
   ls / apps       lista aplikacji     close &lt;app|all&gt; zamknij okno
   note &lt;tekst&gt;     nowa notatka        task HH:MM &lt;t&gt;  nowe zadanie
@@ -972,7 +1011,12 @@ J.apps.calc = {
   onArg(arg, ctx) { const v = viewOf(arg); if (v?.view === 'expr') ctx?.setExpr?.(v.target); },
   mount(body, ctx, arg) {
     let expr = '';
-    body.innerHTML = `<div class="calc-disp"><div class="expr" id="ce"></div><div class="res" id="cr">0</div></div><div class="calc-keys" id="ck"></div>`;
+    body.innerHTML = `<div class="calc-disp"><button class="calc-hb" id="chB" title="Historia obliczeń" aria-label="Historia obliczeń">⟲</button><div class="expr" id="ce"></div><div class="res" id="cr" title="Kliknij, aby skopiować wynik">0</div></div><div class="calc-hist" id="chL" hidden></div><div class="calc-keys" id="ck"></div>`;
+    /* historia 20 wyników (klik = wstaw wynik), kopiowanie wyniku kliknięciem */
+    const hist = () => (J.state.ui.calcHist = J.state.ui.calcHist || []);
+    const drawHist = () => { const l = $('#chL', body); l.innerHTML = ''; if (!hist().length) l.appendChild(h('div', { class: 'empty' }, 'Brak obliczeń.')); hist().forEach(x => { const b = h('button', { class: 'calc-hi' }, '<small></small><b></b>'); b.querySelector('small').textContent = x.e + ' ='; b.querySelector('b').textContent = x.r; b.onclick = () => { expr += String(x.r); show(); l.hidden = true; }; l.appendChild(b); }); };
+    $('#chB', body).onclick = () => { const l = $('#chL', body); l.hidden = !l.hidden; if (!l.hidden) drawHist(); };
+    $('#cr', body).onclick = () => { const t = $('#cr', body).textContent; navigator.clipboard?.writeText(t).then(() => J.toast('Skopiowano: ' + t), () => { }); };
     const keys = ['C', '(', ')', '÷', '7', '8', '9', '×', '4', '5', '6', '−', '1', '2', '3', '+', '%', '0', ',', '='];
     const map = { '÷': '/', '×': '*', '−': '-', ',': '.' };
     const ck = $('#ck', body);
@@ -981,7 +1025,7 @@ J.apps.calc = {
     const press = k => {
       J.sfx.click();
       if (k === 'C') expr = '';
-      else if (k === '=') { try { const r = J.calc(expr); J.log('Obliczenie', expr + ' = ' + r); expr = String(r); } catch (e) { $('#cr', body).textContent = 'Błąd'; return; } }
+      else if (k === '=') { try { const r = J.calc(expr); J.log('Obliczenie', expr + ' = ' + r); if (expr && String(r) !== expr) { hist().unshift({ e: expr, r }); hist().length = Math.min(hist().length, 20); J.save(); } expr = String(r); } catch (e) { $('#cr', body).textContent = 'Błąd'; return; } }
       else if (k === '⌫') expr = expr.slice(0, -1);
       else expr += map[k] || k;
       show();

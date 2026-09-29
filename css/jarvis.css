@@ -871,3 +871,12 @@ label.mini{font-size:10.5px;display:flex;gap:4px;align-items:center;color:var(--
 .minimap{position:fixed;right:16px;bottom:96px;width:150px;border:1px solid var(--line-soft);border-radius:8px;background:rgba(4,10,28,.72);backdrop-filter:blur(8px);z-index:40}
 .minimap .mm-w{position:absolute;border:1px solid rgba(var(--accent-rgb),.45);background:rgba(var(--accent-rgb),.12);border-radius:2px;padding:0}
 .minimap .mm-w.on{background:rgba(var(--accent-rgb),.4)}
+.nt-bulk{display:flex;align-items:center;gap:4px;padding:6px 8px;margin-bottom:6px;border:1px solid rgba(var(--accent-rgb),.4);border-radius:9px;font-size:11px;background:rgba(var(--accent-rgb),.08)}.nt-bulk .sp{flex:1}
+.note-item.multi{background:rgba(var(--accent-rgb),.18);border-color:rgba(var(--accent-rgb),.45)}
+.tasks.drop{outline:2px dashed var(--accent);outline-offset:4px;border-radius:10px}
+.msg.user{position:relative}.msg-acts{display:none;position:absolute;left:-44px;top:50%;transform:translateY(-50%);gap:2px}
+.msg.user:last-of-type .msg-acts,.msg.user:hover .msg-acts{display:flex}.msg-acts button{background:none;border:0;color:var(--dim);font-size:12px;padding:2px 4px;cursor:pointer}.msg-acts button:hover{color:var(--accent)}
+.calc-disp{position:relative}.calc-hb{position:absolute;left:8px;top:6px;background:none;border:0;color:var(--dim);font-size:14px;cursor:pointer}
+.calc-hist{max-height:150px;overflow:auto;border:1px solid var(--line-soft);border-radius:8px;margin:0 0 6px}.calc-hi{display:flex;justify-content:space-between;gap:8px;width:100%;background:none;border:0;border-bottom:1px solid var(--line-soft);padding:5px 8px;color:inherit;font-family:var(--mono);font-size:11px;cursor:pointer}.calc-hi small{color:var(--dim)}
+.lp-ins{margin-left:6px}
+.pacts{display:flex;gap:4px;margin-top:6px}

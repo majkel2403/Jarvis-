@@ -14,7 +14,7 @@ Notatnik i Harmonogram mają osobne dokumenty ([06](06-notatki.md), [07](07-zada
 | wątki (`chat_thread`) | lista w nagłówku (rozwijana): nazwa, data ostatniej wiadomości; każdy wątek ma własne `history/items/summary` w IndexedDB (`chat.thread.<id>.*`); ⚑ domyślny wątek „Ogólny”; maks. 50 wątków |
 | szukanie (`chat_search`) | lupa w nagłówku → pole; wyniki z fragmentem i datą; klik przewija do wiadomości i ją podświetla |
 | eksport (`chat_export`) | Markdown: `## Ty` / `## Jarvis`, akcje jako cytaty; zakres: bieżący wątek / wszystkie |
-| wyczyść (`chat_clear`) | A0; dziś przycisk ⟳ czyści bez pytania → 🆕 pyta i daje „Cofnij” 10 min (kopia w pamięci) |
+| wyczyść (`chat_clear`) | A0; dziś przycisk ⟳ czyści bez pytania → ✅ pyta i daje „Cofnij” 10 min (kopia w pamięci) |
 | pole wielowierszowe | `Shift Enter` nowa linia, auto-wysokość do 6 linii |
 | edycja ostatniej wiadomości | „✎” → wiadomość wraca do pola, odpowiedź Jarvisa (i skutki odwracalne — przez „Cofnij”) zostaje oznaczona „zastąpiona” |
 | ponów odpowiedź | „↻” wysyła tę samą wiadomość jeszcze raz (bez ponownego wykonywania narzędzi, jeśli wynik zapisał się w historii) |
