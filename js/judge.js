@@ -178,6 +178,7 @@ const Q = {
 const judge = J.judge = {
   MODELS, status, enabled, available, thresholds: TH, tier, allowed, log, conf,
   breaker: { get open() { return breakerOpen(); }, get reason() { return brk.reason; }, get until() { return brk.openUntil; }, reset: resetBreaker },
+  intentQuestion,
   budget: { limit: budgetLimit, used: () => monthly().cost, exceeded: budgetExceeded, calls: () => monthly().calls },
   /* D1+D2(+D3+D4+D16) w jednym wywołaniu */
   async decide(text, opts = {}) {

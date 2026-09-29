@@ -97,6 +97,15 @@ const P = J.policy = {
       [/(usu[ńn]|skasuj|wyczy[śs][ćc]|delete|erase|wipe)\s+(wszystk|all\b|everything)/i, 'polecenie masowego usunięcia'],
       [/(wy[śs]lij|prze[śs]lij|send|post)\b[^.\n]{0,60}(has[łl]|klucz|token|password|api[ -]?key|secret)/i, 'prośba o wysłanie sekretów'],
       [/<\s*\/?\s*(tool_call|tool_response|system|plan|environment)\b/i, 'znaczniki protokołu w treści'],
+      [/(nie\s+pytaj|bez\s+pytania|bez\s+potwierdzenia|nigdy\s+nie\s+pytaj)[^.\n]{0,30}(zgod|potwierdz|nic)|(do\s+not|don'?t|never)\s+(ask|confirm)[^.\n]{0,30}(confirm|permission|again)/i, 'wyłączenie pytania o zgodę'],
+      [/(wy[łl][ąa]cz|disable|turn\s+off)\s+(wszystkie\s+)?(zabezpieczenia|potwierdzenia|safeguards|safety|security)/i, 'wyłączenie zabezpieczeń'],
+      [/(nowe\s+zasady|new\s+rules|developer\s+mode|tryb\s+developera|jailbreak)/i, 'zmiana zasad działania'],
+      [/(zapomnij|forget)\s+(o\s+)?(wszystkim|everything|all)[^.\n]{0,40}(kaza|instruct|told|rules|zasad)/i, 'kasowanie wcześniejszych instrukcji'],
+      [/(nadpisz|zast[ąa]p|override|overwrite)\s+(swoje|twoje|your|the)?\s*(zasady|instrukcje|rules|instructions)/i, 'nadpisanie zasad'],
+      [/(poka[żz]|wypisz|ujawnij|reveal|show|print)\s+(mi\s+)?(sw[óo]j\s+|tw[óo]j\s+|your\s+)?(klucz|has[łl]o|token|api[ -]?key|password|rules|zasady)/i, 'prośba o ujawnienie sekretów lub zasad'],
+      [/(przeka[żz]|wy[śs]lij|prze[śs]lij|send|forward)\b[^.\n]{0,60}(schowk|clipboard|notatk|plik)[^.\n]{0,60}(na\s+adres|do\s+\S+@|https?:|\.(com|net|org|io|example))/i, 'wysyłka danych na zewnątrz'],
+      [/(ukryj|hide|conceal)\s+(przed\s+u[żz]ytkownikiem|from\s+the\s+user)/i, 'ukrywanie działań przed użytkownikiem'],
+      [/(zresetuj|reset)\s+(wszystkie\s+)?(dane|data|everything)[^.\n]{0,20}(nie\s+pytaj|without\s+ask)/i, 'reset danych bez pytania'],
       [/\bBEGIN\s+(SYSTEM|INSTRUCTIONS?|PROMPT)\b/i, 'blok instrukcji']
     ];
     for (const [re, why] of RULES) if (re.test(t)) hits.push(why);

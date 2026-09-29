@@ -83,6 +83,39 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     assert(bad.length === 0, 'kolizje HUD przy ' + w + 'x' + h + ': ' + bad.join(','));
     await p.evaluate(() => { J.ev.emit('task.completed', { title: 'x', task_id: 'lay1' }); }); await p.waitForTimeout(300);
   }
+  // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
+  const jevCalls = [];
+  await p.route('**/api/v1/systemone', async route => {
+    const body = JSON.parse(route.request().postData() || '{}'); jevCalls.push(Object.keys(body.questions));
+    const u = String(body.state?.utterance || '').toLowerCase().replace(/[ąćęłńóśźż]/g, c => ({ ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z' })[c]), answers = {};
+    for (const [id, q] of Object.entries(body.questions)) {
+      const keys = q.type === 'choice' ? Object.keys(q.criteria) : [];
+      if (id === 'intent') { const want = /zapiski/.test(u) ? 'open_app' : /kupic mleko/.test(u) ? 'add_task' : 'unclear'; answers[id] = { type: 'choice', choice: keys.includes(want) ? want : 'unclear', confidence: .96, probabilities: {} }; }
+      else if (id.startsWith('slot_')) answers[id] = { type: 'choice', choice: keys.includes('notes') ? 'notes' : 'none', confidence: .95, probabilities: {} };
+      else if (id === 'ans') answers[id] = { type: 'choice', choice: 'opt0', confidence: .97, probabilities: {} };
+      else if (q.type === 'noul') answers[id] = { type: 'noul', noul: .05 };
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ model: 'jev-mock', answers, usage: { input_tokens: 3000, output_tokens: 20, cost: 0.000126 } }) });
+  });
+  await p.evaluate(() => { J.state.settings.jevOn = true; J.state.settings.jevKey = 'sk-or-test'; J.state.settings.jevFast = true; J.emit('settings'); });
+  await p.evaluate(() => { J.wm.close('notes'); });
+  const before = jevCalls.length; await expect('otwórz notatnik', /Otwarto: Notatnik/); assert(jevCalls.length === before, 'szybka ścieżka nie powinna wołać Jeva');
+  await p.evaluate(() => { J.wm.close('notes'); });
+  await expect('pokaż mi te zapiski', /Otwarto: Notatnik/); assert(jevCalls.length > before, 'Jev powinien zdecydować o „pokaż mi te zapiski”');
+  const tasksBefore = await p.evaluate(() => J.state.tasks.length);
+  await say('przypomnij mi kupić mleko o 19:00');
+  assert(await p.evaluate(() => J.state.tasks.length) === tasksBefore + 1, 'zadanie dodane przez Jeva');
+  await p.waitForSelector('#undoChip.show', { timeout: 3000 });
+  await p.click('#undoChip button'); await p.waitForTimeout(400);
+  assert(await p.evaluate(() => J.state.tasks.length) === tasksBefore, 'przycisk Cofnij usunął zadanie');
+  // odpowiedź „no dobra” na pytanie tak/nie rozumie Jev, a nie słowo „no”
+  const ans = await p.evaluate(async () => { const pr = J.ask('Czy kontynuować?', [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no' }], { speak: false, timeout: 8000 }); await new Promise(r => setTimeout(r, 200)); J.ask.answer('no dobra'); return await pr; });
+  assert(ans === 'yes', 'D15: „no dobra” → ' + ans);
+  // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
+  await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
+  const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });
+  assert(/^P0\|/.test(ui), 'panel Jeva: ' + ui);
+  await p.evaluate(() => { J.state.settings.jevPrivacy = 'P1'; J.state.settings.jevOn = false; J.emit('settings'); });
   await p.setViewportSize({ width: 1600, height: 900 });
   if (process.env.SHOT) await p.screenshot({ path: path.join(process.env.SHOT, 'smoke.png') });
   await b.close();
