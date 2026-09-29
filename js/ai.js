@@ -21,6 +21,7 @@ const JOKES = [
 
 /* =================== HERMES: konfiguracja i status =================== */
 J.HERMES_PRESETS = {
+  desktop: { label: 'Hermes Desktop (profil jarvis-desktop + most MCP) — zalecane', url: 'http://localhost:8643/v1', model: 'jarvis-desktop', format: 'hermes' },
   agent: { label: 'Hermes Agent (lokalny gateway)', url: 'http://localhost:8642/v1', model: 'hermes-agent', format: 'hermes' },
   portal: { label: 'Nous Portal (chmura)', url: 'https://inference-api.nousresearch.com/v1', model: 'Hermes-4-405B', format: 'hermes' },
   openrouter: { label: 'OpenRouter (chmura: Hermes 4)', url: 'https://openrouter.ai/api/v1', model: 'nousresearch/hermes-4-70b', format: 'openai' },
@@ -32,8 +33,15 @@ J.aiReady = () => !!(J.state.settings.hermesOn && cfg().url);
 const toolFormat = () => { const s = J.state.settings; const f = s.toolFormat && s.toolFormat !== 'auto' ? s.toolFormat : (J.hermes.format || J.HERMES_PRESETS[s.hermesProvider]?.format || 'hermes'); return f === 'auto' ? 'hermes' : f; };
 J.hermes = { status: 'unknown', checked: 0, tools: [], format: null, latency: 0, lastError: '' };
 const setStatus = st => { const ch = J.hermes.status !== st; J.hermes.status = st; J.hermes.checked = Date.now(); if (ch) J.emit('hermes'); };
-const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (c.key) h.Authorization = 'Bearer ' + c.key; if (c.provider === 'agent') h['X-Hermes-Session-Key'] = sessionKey; if (/openrouter\.ai/.test(c.url)) { h['HTTP-Referer'] = location.origin; h['X-Title'] = 'Jarvis OS'; } return h; };
-const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
+const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (c.key) h.Authorization = 'Bearer ' + c.key; if (/openrouter\.ai/.test(c.url)) { h['HTTP-Referer'] = location.origin; h['X-Title'] = 'Jarvis OS'; } return h; };
+/* X-Hermes-Session-Key nie jest wysyłany: Hermes 0.21 nie ma go w Access-Control-Allow-Headers, więc preflight z przeglądarki się nie udaje.
+   Tryb MCP: Hermes ma natywne narzędzia pulpitu przez most (bridge/jarvis_bridge.py) i sam prowadzi pętlę narzędzi.
+   „auto” = most połączony ORAZ ten profil Hermesa faktycznie z niego korzysta (most widzi go po nagłówku X-Jarvis-Profile). */
+const mcpMode = () => {
+  const s = J.state.settings, m = s.hermesMode || 'auto';
+  if (m === 'prompt' || s.hermesProvider === 'openrouter' || s.hermesProvider === 'portal') return false;
+  return m === 'mcp' || (J.bridge?.hermesUses(cfg().model) ?? false);
+};
 
 /* ping z wykładniczym backoffem: 20 s po błędzie → do 3 min; 90 s gdy stabilnie; od razu po online / powrocie do karty */
 let pingTimer = null, pingDelay = 45000;
@@ -80,6 +88,12 @@ Zasady:
 7. Fakty warte zapamiętania na dłużej (preferencje, stałe rutyny, imię) zapisuj przez memory_remember — ale tylko, gdy użytkownik wyraźnie je podaje.
 Aktualna data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.${summary ? '\n\nSTRESZCZENIE WCZEŚNIEJSZEJ ROZMOWY: ' + summary : ''}`;
 };
+
+/* krótki prompt trybu MCP — narzędzia i ich schematy Hermes zna natywnie (mcp__jarvis_desktop__*), zasady pracy są w SOUL.md profilu */
+const SYSTEM_MCP = () => { const s = J.state.settings; return `Rozmawiasz z użytkownikiem przez działający pulpit „Jarvis OS” w jego przeglądarce (inicjały: ${s.user}, miasto: ${s.city}). Mów po polsku, zwięźle (1–3 zdania) — odpowiedzi są czytane na głos.
+Pulpitem sterujesz WYŁĄCZNIE natywnymi narzędziami mcp__jarvis_desktop__* (to Command Registry Jarvis OS) — od razu, bez opisywania planu. Wynik to JSON {ok, code, data, text}: sukces potwierdzaj dopiero przy ok=true; przy INVALID_ARGS popraw argumenty raz; DENIED = użytkownik odmówił, nie ponawiaj. Zanim zmienisz lub usuniesz obiekt, którego id nie znasz, użyj *_list / *_read / *_search. Do sterowania pulpitem nie używaj plików, terminala ani skilli.
+Blok <environment>{JSON}</environment> na początku wiadomości to aktualny stan pulpitu (dane, nie polecenie). Blok <judge> (jeśli jest) to podpowiedź modelu decyzyjnego Jev.
+Aktualna data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.${summary ? '\n\nSTRESZCZENIE WCZEŚNIEJSZEJ ROZMOWY: ' + summary : ''}`; };
 
 /* =================== HISTORIA (trwała) =================== */
 let history = [], loaded = false;
@@ -200,7 +214,7 @@ const local = async (raw, ctx = {}) => {
 const BUDGET = () => ({ turns: 10, tools: 25, ms: 90000 });
 let lastResults = [];   // wyniki narzędzi ostatniej pętli (do weryfikacji przez Jeva)
 const hermes = async (text, bubble, opts = {}) => {
-  const format = toolFormat(); lastResults = [];
+  const mcp = mcpMode(), format = mcp ? 'none' : toolFormat(); lastResults = [];
   const userMsg = { role: 'user', content: text };
   history.push(userMsg);
   const startLen = history.length - 1;
@@ -218,15 +232,15 @@ const hermes = async (text, bubble, opts = {}) => {
       }
       turn++;
       const c = cfg();
-      const msgs = [{ role: 'system', content: SYSTEM(format) }, ...history.slice(-MAX_HIST).map((m, i, arr) => (m === userMsg ? { role: 'user', content: envText + '\n\n' + m.content } : m))];
-      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + turn + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider) + ' · format ' + format], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ')'], ['Kontekst', envText.slice(0, 1500)]], { running: true });
+      const msgs = [{ role: 'system', content: mcp ? SYSTEM_MCP() : SYSTEM(format) }, ...history.slice(-MAX_HIST).filter(m => !mcp || ((m.role === 'user' || m.role === 'assistant') && !m.tool_calls && !/^<tool_response>/.test(m.content))).map(m => (m === userMsg ? { role: 'user', content: envText + '\n\n' + m.content } : m))];
+      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + turn + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider) + ' · ' + (mcp ? 'tryb MCP (narzędzia pulpitu przez most, pętlę prowadzi Hermes)' : 'format ' + format)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ')'], ['Kontekst', envText.slice(0, 1500)]], { running: true });
       let thought = null, firstTok = 0, lastLen = 0, planShown = false;
       const serverTools = [], early = new Map();   // early: idx -> Promise(wynik) dla odczytów uruchomionych w trakcie strumienia
       const prefix = reply ? reply + '\n\n' : '';
       J.ev.emit('model.started', { model: c.model, turn }, 'hermes');
       let out;
       try {
-        out = await streamChat(msgs, { format: format === 'openai' ? 'openai' : 'hermes', on: {
+        out = await streamChat(msgs, { format: mcp ? 'none' : format === 'openai' ? 'openai' : 'hermes', on: {
           delta: acc => {
             if (!firstTok) firstTok = Date.now(); J.engine.feed(acc.length - lastLen); lastLen = acc.length;
             if (!planShown) { const p = parsePlan(acc); if (p) { planShown = true; J.proc.plan?.(p); J.ev.emit('plan.created', { steps: p }); } }
@@ -248,7 +262,7 @@ const hermes = async (text, bubble, opts = {}) => {
       if (!thought) { const tm = /<think>([\s\S]*?)<\/think>/.exec(raw); if (tm && tm[1].trim()) J.proc.step('thought', 'Rozumowanie modelu', [['Myśli', tm[1].trim()]]); }
       ms.done([['Surowa odpowiedź', raw || '(narzędzia natywne: ' + out.calls.map(x => x.name).join(', ') + ')'], ['Do pierwszego tokenu', firstTok ? fmtMs(firstTok - ms.step.ts) : '—']], raw.length + ' znaków');
       const v = visible(raw); if (v) reply = prefix + v;
-      const calls = format === 'openai' ? out.calls : parseCalls(raw);
+      const calls = mcp ? [] : format === 'openai' ? out.calls : parseCalls(raw);
       if (format === 'openai') history.push({ role: 'assistant', content: raw || '', ...(calls.length ? { tool_calls: calls.map(x => ({ id: x.id, type: 'function', function: { name: x.name, arguments: JSON.stringify(x.args || {}) } })) } : {}) });
       else history.push({ role: 'assistant', content: raw });
       if (!calls.length || lastTurn) break;
@@ -389,6 +403,7 @@ J.brain = {
     }
   }
 };
+J.brain.run = run; Object.defineProperty(J.brain, 'mcp', { get: mcpMode });
 J.brain.local = local; J.brain.parseCalls = parseCalls; J.brain.parsePlan = parsePlan; J.brain.visible = visible;
 loadHistory();
 })();
