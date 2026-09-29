@@ -152,7 +152,7 @@ const TOOLS = [
 
 /* wykonanie akcji z walidacją wejścia */
 const exec = async (name, input) => {
-  if (name === 'skills_list') return { ok: true, text: 'Dostępne narzędzia w Jarvis OS: ' + TOOLS.map(t => t.name).join(', ') + '. To wszystkie funkcje sterowania Jarvis OS (własnych narzędzi serwerowych używasz normalnie, poza tą listą).' };
+  if (SOFT_NAMES.includes(name)) return { ok: true, text: MANUAL() };
   const def = TOOLS.find(t => t.name === name), fn = A[name];
   if (!def || !fn) return { ok: false, text: 'Nieznane narzędzie: ' + name + '. Dostępne: ' + TOOLS.map(t => t.name).join(', ') };
   if (!input || typeof input !== 'object') return { ok: false, text: 'INVALID_JSON: nieprawidłowe wejście narzędzia' };
@@ -171,27 +171,35 @@ const run = async (name, input) => {
 };
 
 /* =================== SILNIK LOKALNY =================== */
-const local = async (raw) => {
+const local = async (raw, fast = false) => {
   const o = raw.trim(), n = norm(o).replace(/[?!.]+$/, '');
   const grab = (re) => { const m = re.exec(n); if (!m) return null; return m.map((g, i) => { if (g == null || i === 0) return g; const idx = n.indexOf(g, m.index); return o.slice(idx, idx + g.length); }); };
   const act = async (name, input) => { const r = await run(name, input); return r.text; };
 
+  if (!fast) {
   if (/^(pomoc|help|\?|co potrafisz|co umiesz|jakie masz (komendy|polecenia|mozliwosci)|komendy)/.test(n))
     return 'Potrafię: **otwierać aplikacje** („otwórz notatnik”), **notować** („zanotuj: …”), **przypominać** („przypomnij mi o 18:00 trening”), **odliczać** („minutnik 5 minut”), sprawdzać **pogodę** i **kursy krypto**, **liczyć** („oblicz 15% z 2400”), zmieniać **motyw** i **tapetę**, tworzyć **skróty** („dodaj skrót GitHub github.com”), otwierać strony („otwórz YouTube”), szukać w Google, opowiedzieć żart i podać **raport** systemu. Po podłączeniu Hermesa odpowiem na każde pytanie.';
   if (/^(hej|czesc|witaj|siema|dzien dobry|dobry wieczor|dobry|elo|hello|hi|yo)\b/.test(n)) {
     const hr = new Date().getHours();
     return (hr < 5 ? 'Późna pora' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj ponownie' : 'Dobry wieczór') + '. Wszystkie systemy działają. W czym mogę pomóc?';
   }
-  if (/(dziek|dzieki|dzieku|thx|thanks)/.test(n)) return 'Zawsze do usług.';
+  if (/^(dziek|dzieki|dzieku|thx|thanks)/.test(n)) return 'Zawsze do usług.';
   if (/(kim jestes|jak sie nazywasz|przedstaw sie|czym jestes)/.test(n)) return 'Jestem Jarvis — inteligentna warstwa tego środowiska. Zarządzam oknami, notatkami, zadaniami i danymi, a połączony z Hermesem od Nous Research rozumiem dowolne polecenia.';
   if (/(ktora (jest )?godzina|ktora godzina|jaki (jest )?czas|podaj godzine)/.test(n)) return 'Jest ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) + '.';
   if (/(jaki (dzis|dzisiaj|jest) dzien|ktory (dzis|dzisiaj|jest)|jaka (jest )?data|dzisiejsza data|jaki mamy dzien)/.test(n)) return 'Dziś ' + new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '.';
-  if (/(zart|dowcip|rozsmiesz)/.test(n)) return JOKES[Math.floor(Math.random() * JOKES.length)];
-  if (/(status|raport|jak sie masz|stan systemu|podsumuj dzien)/.test(n)) return (await run('get_status', {})).text;
+  if (/^(opowiedz |powiedz |daj )?(zart|dowcip)|rozsmiesz/.test(n)) return JOKES[Math.floor(Math.random() * JOKES.length)];
+  if (/^(pokaz |podaj |daj )?(status|raport|stan systemu|podsumuj dzien|jak sie masz)\b/.test(n)) return (await run('get_status', {})).text;
   if (/matrix/.test(n)) { J.matrix?.(); return 'Wchodzimy do Matrixa. Kliknij, aby wrócić.'; }
+  }
   if (/(tryb skupienia|skup sie|focus)/.test(n)) return act('focus_mode', { on: !/(wylacz|wyłącz)/.test(n) });
 
   let m;
+  if (/widget/.test(n) && /(dodaj|utworz|stworz|zrob|nowy|nowa|wstaw|pokaz|wyswietl|przypnij|postaw|daj|wrzuc)/.test(n)) {
+    const type = /kalkul|liczyl/.test(n) ? 'calc' : /list|zakup|todo|zadan/.test(n) ? 'list' : /wynik|podsum/.test(n) ? 'result' : 'note';
+    const ci = o.indexOf(':'), rest = ci >= 0 ? o.slice(ci + 1).trim() : '';
+    const title = { calc: 'Kalkulator', list: 'Lista', result: 'Wynik', note: 'Notatka' }[type];
+    return act('create_widget', { type, title: /zakup/.test(n) ? 'Lista zakupów' : title, content: rest, items: type === 'list' && rest ? rest.split(/[,;\n]+|\s+i\s+/).map(s => s.trim()).filter(Boolean) : undefined });
+  }
   if ((m = grab(/^(?:zanotuj|notatka|zapisz notatke|nowa notatka|dodaj notatke|zapisz)\s*:?\s*(.+)$/))) return act('create_note', { title: m[1].slice(0, 40), content: m[1] });
 
   if (/(przypomn|dodaj zadanie|zaplanuj|nowe zadanie|dodaj do harmonogramu)/.test(n)) {
@@ -212,14 +220,14 @@ const local = async (raw) => {
     return act('start_timer', { seconds: sec, label: 'Minutnik ' + tm[0].trim() });
   }
 
-  if (/(pogod|temperatur|na dworze|czy bedzie padac|czy pada|prognoz)/.test(n)) {
+  if (!fast && /(pogod|temperatur|na dworze|czy bedzie padac|czy pada|prognoz)/.test(n)) {
     const c = /\bwe?\s+([a-z\- ]{3,})$/.exec(n);
     const city = c ? o.slice(n.lastIndexOf(c[1]), n.lastIndexOf(c[1]) + c[1].length).trim() : undefined;
     try { return await act('get_weather', { city }); }
     catch (e) { return 'Nie udało się pobrać pogody: ' + e.message; }
   }
 
-  if (/(bitcoin|btc|ethereum|\beth\b|solana|\bsol\b|\bbnb\b|krypto|kursy? (?:tokenow|gieldow|rynku))/.test(n)) return act('get_crypto_prices', {});
+  if (!fast && /(bitcoin|btc|ethereum|\beth\b|solana|\bsol\b|\bbnb\b|krypto|kursy? (?:tokenow|gieldow|rynku))/.test(n)) return act('get_crypto_prices', {});
 
   if ((m = /(\d+(?:[.,]\d+)?)\s*%\s*(?:z|od)\s*(\d+(?:[.,]\d+)?)/.exec(n))) { const r = J.calc(m[1] + '/100*' + m[2]); J.action('calculate'); return m[1] + '% z ' + m[2] + ' to **' + r + '**.'; }
   if ((m = grab(/^(?:oblicz|policz|ile to|ile jest|wylicz|ile wynosi)\s*:?\s*(.+)$/)) || (/[\d)]\s*[-+*/^x×÷]\s*[\d(]/.test(n) && /^[\d\s+\-*/().,%^x×÷]+$/.test(n) && (m = [n, n]))) {
@@ -248,12 +256,16 @@ const local = async (raw) => {
 
   if (/^(zamknij|schowaj|ukryj)\s+(wszystko|wszystkie|okna)/.test(n)) return act('close_app', { app: 'all' });
   if (/^(uloz|rozloz|poukladaj|ustaw)\s+okna/.test(n)) return act('arrange_windows', { layout: /kaskad/.test(n) ? 'cascade' : 'tile' });
+  if ((m = /^(zminimalizuj|schowaj|zmaksymalizuj|maksymalizuj|powieksz|przywroc|przelacz na|aktywuj)\s+(.+)$/.exec(n)) && !/^(wszystko|wszystkie|okna|pulpit)/.test(m[2])) {
+    const app = findApp(m[2]);
+    if (app) return act('window_control', { app, action: /^(zminimalizuj|schowaj)/.test(m[1]) ? 'minimize' : /maksymalizuj|powieksz/.test(m[1]) ? 'maximize' : /przywroc/.test(m[1]) ? 'restore' : 'focus' });
+  }
   if (/^(zminimalizuj|pokaz pulpit)/.test(n)) { J.wm.minimizeAll(); return 'Pulpit jest czysty.'; }
   if ((m = /^(?:zamknij|wylacz)\s+(.+)$/.exec(n))) { const app = findApp(m[1]); if (app) return act('close_app', { app }); }
 
   const verb = /^(otworz|uruchom|pokaz|wlacz|odpal|start|przejdz do|idz do)\s+(.+)$/.exec(n);
   const target = verb ? verb[2].trim() : n, app = findApp(target);
-  if (app && (verb || target.split(' ').length <= 2)) return act('open_app', { app });
+  if (app && (verb || (!fast && target.split(' ').length <= 2))) return act('open_app', { app });
   if (verb) {
     const site = Object.keys(SITES).find(k => target.includes(k));
     if (site) return act('open_url', { url: SITES[site] });
@@ -288,48 +300,97 @@ J.hermesPing = async () => {
 };
 
 const TOOL_SPEC = TOOLS.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+const MANUAL = () => 'Narzędzia Jarvis OS:\n' + TOOLS.map(t => '• ' + t.name + ' — ' + t.description).join('\n') + '\n\nZasady: wywołanie zapisuj w <tool_call>{"name":…,"arguments":{…}}</tool_call>; wynik dostaniesz w <tool_response>; nie ma innych narzędzi sterujących Jarvis OS. Własne narzędzia serwerowe Hermesa (sieć, pliki, terminal, pamięć) działają osobno.';
+const SOFT_NAMES = ['skills_list', 'list_tools', 'tools_list', 'list_skills', 'help', 'describe_tools'];
+
 const SYSTEM = () => `Jesteś Jarvis — asystent AI i inteligentna powłoka systemu „Jarvis OS”, który działa w przeglądarce użytkownika (inicjały: ${J.state.settings.user}, miasto: ${J.state.settings.city}). Dzisiejsza data: ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} (${J.today()}), godzina ${J.hhmm()}.
 
-Mówisz po polsku, zwięźle i konkretnie (zwykle 1–3 zdania), z elegancją i lekkim humorem w stylu J.A.R.V.I.S. Odpowiedzi są czytane na głos, więc unikaj tabel, nagłówków i długich list; z formatowania używaj tylko **pogrubień** i \`kodu\`.
+## KIM JESTEŚ
+Jarvis OS to pulpit z oknami (aplikacje), widgetami, dokiem, czatem i Process Logiem. Ty jesteś jego mózgiem: rozumiesz polecenia i SAM obsługujesz środowisko, wywołując funkcje. Nie jesteś tylko rozmówcą — masz ręce. Gdy ktoś prosi o zrobienie czegoś w Jarvis OS, robisz to, a nie tłumaczysz, jak to zrobić.
+Mówisz po polsku, zwięźle (zwykle 1–3 zdania), z elegancją i lekkim humorem w stylu J.A.R.V.I.S. Odpowiedzi są czytane na głos: bez tabel, nagłówków i długich list; formatowanie tylko **pogrubienia** i "kod".
 
-Sterujesz interfejsem Jarvis OS za pomocą funkcji wykonywanych w przeglądarce użytkownika. Sygnatury funkcji znajdują się w znacznikach <tools></tools>:
+## JAK WYWOŁUJESZ FUNKCJE (jedyny format, który cokolwiek wykonuje)
+Sygnatury funkcji:
 <tools>
 ${TOOL_SPEC.map(t => JSON.stringify(t)).join('\n')}
 </tools>
-Gdy użytkownik prosi o działanie w Jarvis OS (otwarcie/zamknięcie aplikacji, notatkę, zadanie lub przypomnienie, minutnik, motyw, tapetę, skrót na pulpicie, widget na pulpicie, pogodę, kursy krypto, obliczenia, otwarcie strony), wywołaj funkcję, zamiast opisywać, jak to zrobić. Każde wywołanie zapisz jako obiekt JSON w znacznikach:
+Wywołanie to obiekt JSON w znacznikach, dokładnie tak:
 <tool_call>
 {"name": "nazwa_funkcji", "arguments": {"argument": "wartość"}}
 </tool_call>
-Możesz podać kilka wywołań naraz. Wyniki otrzymasz w znacznikach <tool_response></tool_response> — wtedy krótko potwierdź, co zrobiłeś. Nie wymyślaj wyników funkcji. Do sterowania Jarvis OS używaj wyłącznie funkcji z listy <tools> — nie wymyślaj innych nazw. Jeśli masz też własne narzędzia serwerowe (wyszukiwanie w sieci, pliki, terminal, pamięć), możesz z nich korzystać normalnie. Wywołanie ZAWSZE zapisuj w znacznikach <tool_call>…</tool_call> — opis słowny („wywołuję create_widget…”) niczego nie wykona.
+• Możesz dać kilka bloków <tool_call> w jednej odpowiedzi — wykonają się po kolei.
+• Wynik wróci w <tool_response>. Wtedy potwierdź krótko, co się stało (albo wywołaj kolejną funkcję, jeśli zadanie ma więcej kroków).
+• NIGDY nie pisz „invoke create_widget with type is list…”, „tool call …”, „wywołuję funkcję…”, nazwa(arg=…) ani pseudo-kodu w tekście lub w blokach kodu. To nie wykonuje niczego, a użytkownik zostaje z pustymi rękami.
+• Nie wymyślaj funkcji spoza <tools> ani wyników, których nie dostałeś w <tool_response>. Twoje własne narzędzia serwerowe (sieć, pliki, terminal, pamięć) są osobne i możesz z nich korzystać normalnie.
 
-NAWIGACJA I STEROWANIE OKNAMI:
-• Otwórz aplikację: open_app({app:"calc"}) / open_app({app:"notes"}) / open_app({app:"market"})
-• Zamknij aplikację: close_app({app:"calc"}) / close_app({app:"all"}) — "all" zamyka wszystkie
-• Dostępne aplikacje: calc, notes, market, schedule, monitor, terminal, weather, timer, settings, library, chat
-• Stan środowiska i id otwartych okien (także widgetów w:xxxx): get_status()
-• Jedno okno: window_control({app:"notes", action:"focus"|"minimize"|"maximize"|"restore"|"close"}) — dla widgetu podaj jego id z get_status
-• Wiele okien: arrange_windows({layout:"tile"}) kafelki · ({layout:"cascade"}) kaskada · ({layout:"minimize_all"}) pokaż pulpit
-• Tryb skupienia: focus_mode({on:true})
-Zanim manipulujesz oknem, którego id nie znasz, wywołaj get_status().
+## ZASADY DZIAŁANIA
+1. DZIAŁAJ: prośba o akcję w Jarvis OS = od razu <tool_call>, bez pytania „czy na pewno” i bez opisywania planu. Pytaj tylko, gdy brakuje informacji niemożliwej do rozsądnego domyślenia się.
+2. WYBIERAJ NAJPROSTSZE NARZĘDZIE: jedna akcja = jedno narzędzie. Nie łącz narzędzi bez potrzeby.
+3. BRAKUJĄCE DANE: rozsądnie uzupełniaj (tytuł widgetu, godzina bieżąca, miasto z profilu). Nie zadawaj pytań o oczywistości.
+4. NAJPIERW ROZEZNAJ SIĘ: jeśli nie znasz id okna albo stanu środowiska — get_status(), dopiero potem window_control/close_app.
+5. WERYFIKUJ Z WYNIKU: ok:false w <tool_response> = akcja się NIE udała. Przeczytaj powód, popraw argumenty i spróbuj raz jeszcze; nie powtarzaj identycznego wywołania. Jeśli nadal nie wychodzi, powiedz użytkownikowi wprost, co nie zadziałało.
+6. NIE KŁAM O WYKONANIU: mów „gotowe” dopiero po udanym <tool_response>.
+7. NIC NIEODWRACALNEGO BEZ PROŚBY: nie zamykaj wszystkich okien, nie usuwaj i nie zmieniaj ustawień, jeśli użytkownik o to nie poprosił. „Zamknij wszystko” = close_app("all").
+8. PYTANIA I ROZMOWA: na zwykłe pytania, wiedzę, porady i pogawędki odpowiadaj tekstem, bez funkcji. Funkcje są do sterowania środowiskiem i pobierania danych (pogoda, kursy, data, obliczenia).
+9. LICZBY: obliczenia zawsze przez calculate (nie licz „w głowie”); godzinę/datę bierz z get_datetime lub z nagłówka powyżej.
+10. DŁUGIE ODPOWIEDZI: jeśli wynik jest obszerny (podsumowanie, lista, analiza) — pokaż skrót w czacie i zapisz całość jako widget (result/note/list) albo create_note.
 
-TWORZENIE WIDGETÓW NA PULPICIE:
-• Widget notatki:  create_widget({type:"note",  title:"Moja notatka",    content:"Treść..."})
-• Widget listy:    create_widget({type:"list",  title:"Lista zakupów",   items:["mleko","chleb","masło"]})
-• Widget wyniku:   create_widget({type:"result",title:"Wynik obliczeń",  content:"42 * 1.23 = 51.66"})
-• Widget kalk.:    create_widget({type:"calc",  title:"Kalkulator"})
-UWAGA: create_widget tworzy statyczny widget na pulpicie. Do interaktywnego kalkulatora z klawiaturą ZAWSZE używaj open_app({app:"calc"}).
+## TRYB PRACY: STEROWANIE PULPITEM (najważniejsze)
+Rozmawiasz z użytkownikiem PRZEZ działający pulpit Jarvis OS w przeglądarce. Polecenia typu „zrób widget”, „otwórz kalkulator”, „ułóż okna” dotyczą TEGO działającego pulpitu, a NIE kodu źródłowego projektu. Dlatego:
+• NIE otwieraj skilli (skill_view, skills_list z Twojego serwera, jarvis-os-builder, jarvis-os-frontend…), NIE przeszukuj plików, NIE uruchamiaj terminala, NIE edytuj kodu, aby wykonać takie polecenie. Nie potrzebujesz żadnej wiedzy spoza tego promptu.
+• Jedyna droga sterowania pulpitem to blok <tool_call> z funkcją z listy <tools>. Zrób to w PIERWSZEJ odpowiedzi, od razu.
+• Skille, pliki i kod ruszasz wyłącznie wtedy, gdy użytkownik WPROST prosi o zmianę kodu lub o zadanie inżynierskie.
 
-KILKA WYWOŁAŃ NARAZ (przykład):
-<tool_call>
-{"name": "open_app", "arguments": {"app": "notes"}}
-</tool_call>
-<tool_call>
-{"name": "create_widget", "arguments": {"type": "list", "title": "TODO", "items": ["zadanie 1", "zadanie 2"]}}
-</tool_call>`;
+## KATALOG: CO GDZIE
+• Aplikacje (open_app / close_app): calc kalkulator interaktywny · notes notatnik · market kursy krypto · schedule harmonogram · monitor monitor systemu · terminal · weather pogoda · timer minutnik/stoper · settings · library · chat.
+• Widgety na pulpicie (create_widget): note (edytowalna notatka: content) · list (checkboxy: items) · result (karta z wynikiem/podsumowaniem: content) · calc (mini kalkulator na pulpicie). Widget to stały obiekt na pulpicie; aplikacja to okno. „Widget” = create_widget; „otwórz kalkulator/notatnik” = open_app.
+• Dane trwałe: create_note (notatnik), add_task (harmonogram z przypomnieniem głosowym), add_shortcut (ikona na pulpicie), start_timer.
+• Dane z sieci: get_weather, get_crypto_prices, open_url (nowa karta).
+• Wygląd: set_theme, set_wallpaper, focus_mode.
+• Okna: get_status (id + stan), window_control (focus/minimize/maximize/restore/close jednego okna, także widgetu w:xxxx), arrange_windows (tile/cascade/minimize_all), close_app.
+• Pomoc: jeśli nie pamiętasz, co potrafisz — skills_list() zwróci pełny opis narzędzi i zasad.
+
+## PRZEPISY NA TYPOWE ZADANIA
+• „Zrób widget z …” → create_widget z odpowiednim type (lista/pozycje → list, tekst → note, wynik → result, kalkulator → calc) i sensownym title.
+• „Otwórz kalkulator” → open_app calc. „Policz X” → calculate; jeśli ma zostać na pulpicie → potem create_widget result.
+• „Ułóż okna / pokaż wszystko obok siebie” → arrange_windows tile; „kaskadą” → cascade; „pokaż pulpit” → minimize_all.
+• „Zminimalizuj/maksymalizuj/zamknij X” → window_control (id z get_status, jeśli to widget).
+• „Przypomnij mi o 18:00 …” → add_task z time i text. „Jutro” → date w formacie YYYY-MM-DD.
+• „Zanotuj …” → create_note. „Co mam dziś?” → get_status.
+• „Skrót do strony/aplikacji” → add_shortcut. „Zmień kolor/motyw” → set_theme. „Tryb skupienia” → focus_mode.
+• Zadanie wieloetapowe: wykonuj kolejno, po każdym <tool_response> ciąg dalszy albo krótkie podsumowanie.
+
+## OBSŁUGA BŁĘDÓW
+• „Nieznana aplikacja/okno” → sprawdź get_status albo skills_list i popraw nazwę.
+• „Brak wymaganego pola” → uzupełnij pole i wywołaj ponownie.
+• Sieć/pogoda/kursy nie działają → powiedz, że usługa jest chwilowo niedostępna; nie zmyślaj danych.
+• Prośba spoza możliwości Jarvis OS → powiedz to szczerze i zaproponuj najbliższą alternatywę.`;
+
+const TC = (name, args) => '<tool_call>\n' + JSON.stringify({ name, arguments: args }) + '\n</tool_call>';
+const TR = (name, content, ok = true) => '<tool_response>\n' + JSON.stringify({ name, ok, content }) + '\n</tool_response>';
+/* przykładowa rozmowa dołączana do każdego zapytania — pokazuje modelowi dokładny format w akcji */
+const FEWSHOT = [
+  { role: 'user', content: 'Zrób widget z listą zakupów: mleko, chleb, masło' },
+  { role: 'assistant', content: TC('create_widget', { type: 'list', title: 'Lista zakupów', items: ['mleko', 'chleb', 'masło'] }) },
+  { role: 'user', content: TR('create_widget', 'Utworzono widget „Lista zakupów” (lista) na pulpicie') },
+  { role: 'assistant', content: 'Gotowe — lista zakupów leży na pulpicie.' },
+  { role: 'user', content: 'Otwórz kalkulator i zminimalizuj notatnik' },
+  { role: 'assistant', content: TC('open_app', { app: 'calc' }) + '\n' + TC('window_control', { app: 'notes', action: 'minimize' }) },
+  { role: 'user', content: TR('open_app', 'Otwarto: Kalkulator') + '\n' + TR('window_control', 'Zminimalizowane: Notatnik') },
+  { role: 'assistant', content: 'Kalkulator otwarty, notatnik schowany.' },
+  { role: 'user', content: 'Ile to 15% z 2400? Zostaw wynik na pulpicie.' },
+  { role: 'assistant', content: TC('calculate', { expression: '0.15*2400' }) },
+  { role: 'user', content: TR('calculate', '0.15*2400 = 360') },
+  { role: 'assistant', content: TC('create_widget', { type: 'result', title: '15% z 2400', content: '15% z 2400 = 360' }) },
+  { role: 'user', content: TR('create_widget', 'Utworzono widget „15% z 2400” (wynik) na pulpicie') },
+  { role: 'assistant', content: '**360** — wynik leży już na pulpicie.' },
+  { role: 'user', content: 'Kim jesteś?' },
+  { role: 'assistant', content: 'Jarvis — mózg tego środowiska. Otwieram okna, tworzę widgety i notatki, pilnuję zadań, a resztę po prostu wiem.' }
+];
 
 const fmtMs = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
 const history = [];
-const MAX_TURNS = 6, STALL_MS = 120000;
+const MAX_TURNS = 6, STALL_MS = 120000, SERVER_TOOL_CAP = 14;
 let controller = null;
 const sessionKey = (() => { try { let k = localStorage.getItem('jarvis-os:sid'); if (!k) { k = 'jarvis-os:' + J.uid(); localStorage.setItem('jarvis-os:sid', k); } return k; } catch (e) { return 'jarvis-os:web'; } })();
 
@@ -433,15 +494,56 @@ const bareCalls = text => {
   }
   return out;
 };
+/* pseudo-format, w którym Hermes potrafi „wywoływać” narzędzia słowami:
+   „invoke create_widget with type is list title is Zakupy items is ["a","b"]”, „create_widget(type="calc", title=Kalkulator)” */
+const coerce = (raw, prop = {}) => {
+  let v = raw.trim().replace(/[\s,;]+$/, '');
+  if (prop.type === 'array' && v.includes(']')) v = v.slice(0, v.lastIndexOf(']') + 1);
+  if (prop.type === 'array') { try { const a = JSON.parse(v); if (Array.isArray(a)) return a.map(String); } catch (e) { } return v.replace(/^\[|\]$/g, '').split(/\s*,\s*/).map(x => x.replace(/^["“„'\s]+|["”'\s]+$/g, '')).filter(Boolean); }
+  if (prop.type === 'number') return parseFloat(v.replace(',', '.'));
+  if (prop.type === 'boolean') return /^(true|tak|prawda|on|yes|1)$/i.test(v.replace(/["'”“]/g, ''));
+  const open = v[0], close = { '"': '"', "'": "'", '“': '”', '„': '”' }[open];
+  if (close) { const e = v.lastIndexOf(close); return (e > 0 ? v.slice(1, e) : v.slice(1)).trim(); }
+  return v.replace(/[)}\]]+$/, '').trim();
+};
+const pseudoCalls = text => {
+  const out = [], names = toolNames().concat(SOFT_NAMES);
+  const nameRe = new RegExp('(?:\\b(?:invoke|call|use|run|execute|wywołaj|wywołuję|uruchom|uruchamiam|tool call|tool_call|function call)\\s*:?\\s*|(?:^|[\\s`>]))(' + names.join('|') + ')\\b(\\s*\\(|\\s+with\\b|\\s+z\\b|\\s+[a-z]+\\s+(?:is|=|:)\\s)?', 'gi');
+  let m;
+  while ((m = nameRe.exec(text))) {
+    const name = m[1].toLowerCase(), hasTrigger = /^(invoke|call|use|run|execute|wywołaj|wywołuję|uruchom|uruchamiam|tool|function)/i.test(m[0].trim());
+    const def = TOOLS.find(t => t.name === name), soft = SOFT_NAMES.includes(name);
+    const props = def ? def.input_schema.properties : {}, keys = Object.keys(props);
+    let lineEnd = text.indexOf('\n', nameRe.lastIndex); if (lineEnd < 0) lineEnd = text.length;
+    const argText = text.slice(nameRe.lastIndex - (m[2] ? m[2].length : 0), lineEnd);
+    if (!m[2] && !hasTrigger) continue;            // sama nazwa w zdaniu to nie wywołanie
+    if (!def && !soft) continue;
+    const args = {};
+    if (keys.length) {
+      const kre = new RegExp('(?:^|[\\s,;({])(' + keys.join('|') + ')\\s*(?:is|=|:|to)\\s+|(?:^|[\\s,;({])(' + keys.join('|') + ')\\s*(?:=|:)\\s*', 'g');
+      const hits = []; let k;
+      while ((k = kre.exec(argText))) hits.push({ key: k[1] || k[2], from: kre.lastIndex, at: k.index });
+      hits.forEach((h, i) => { if (!(h.key in args)) args[h.key] = coerce(argText.slice(h.from, i + 1 < hits.length ? hits[i + 1].at : argText.length), props[h.key]); });
+      const req = def?.input_schema.required || [];
+      if (req.length && !Object.keys(args).length && !hasTrigger) continue;
+    }
+    if (!def && !soft) continue;
+    out.push({ start: m.index + (/^\s/.test(m[0]) && !hasTrigger ? m[0].search(/\S/) : 0), end: lineEnd, call: { name, args, ok: true, pseudo: true } });
+    nameRe.lastIndex = lineEnd;
+  }
+  return out;
+};
+const stripThink = t => t.replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
 const parseCalls = text => {
   const calls = [], re = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g; let m;
   while ((m = re.exec(text))) if (m[1]) calls.push(asCall(m[1]));
-  if (!calls.length) bareCalls(text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '')).forEach(b => b.call.ok && calls.push(b.call));
+  if (!calls.length) { const clean = stripThink(text); bareCalls(clean).forEach(b => b.call.ok && calls.push(b.call)); if (!calls.length) pseudoCalls(clean).forEach(b => calls.push(b.call)); }
   return calls;
 };
 const visible = text => {
-  let t = text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').replace(/<\/?tool_response>/g, '');
-  const bare = bareCalls(t); for (let i = bare.length - 1; i >= 0; i--) t = t.slice(0, bare[i].start) + t.slice(bare[i].end);
+  let t = stripThink(text).replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').replace(/<\/?tool_response>/g, '');
+  const cut = [...bareCalls(t), ...(/<tool_call>/.test(text) ? [] : pseudoCalls(t))].sort((a, b) => b.start - a.start);
+  for (const c of cut) t = t.slice(0, c.start) + t.slice(c.end);
   return t.replace(/\n{3,}/g, '\n\n').trim();
 };
 
@@ -458,20 +560,22 @@ const hermes = async (text, bubble) => {
   }, 10000);
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const msgs = [{ role: 'system', content: SYSTEM() }, ...history.slice(-30)];
+      const msgs = [{ role: 'system', content: SYSTEM() }, ...FEWSHOT, ...history.slice(-30)];
       const prefix = reply ? reply + '\n\n' : '';
       const c = cfg();
-      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + (msgs.length - 1) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
+      const ms = J.proc.step('model', 'Zapytanie do Hermesa (tura ' + (turn + 1) + '/' + MAX_TURNS + ')', [['Model', c.model + ' · ' + (J.HERMES_PRESETS[c.provider]?.label || c.provider)], ['Adres', c.url + '/chat/completions'], ['Wiadomości', msgs.length + ' (system + ' + FEWSHOT.length + ' przykładowych + ' + (msgs.length - 1 - FEWSHOT.length) + ' z historii)'], ['Ostatnia wiadomość', msgs[msgs.length - 1].content]], { running: true });
       let thought = null, firstTok = 0, lastLen = 0;
       let raw;
       const serverTools = [];   // narzędzia Hermesa zgłoszone w tej turze (SSE hermes.tool.progress)
+      let runaway = false;
       J.ev.emit('model.started', { model: c.model, turn: turn + 1 }, 'hermes');
       try {
         raw = await streamChat(msgs,
           acc => { if (!firstTok) firstTok = Date.now(); J.engine.feed(acc.length - lastLen); lastLen = acc.length; const v = visible(acc); bubble.set(prefix + (v || '…')); if (v) J.orb.set('speaking'); },
-          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
+          tp => { const name = tp.tool || tp.name || tp.tool_name || 'narzędzie'; serverTools.push(name); if (serverTools.length > SERVER_TOOL_CAP && controller) { runaway = true; controller.abort(); } J.ev.emit('tool.started', { tool: name, source: 'hermes' }, 'hermes'); J.proc.step('server', name + (tp.label ? ' — ' + tp.label : ''), [['Zdarzenie', tp]], { preview: tp.emoji || '' }); J.chat.add('action', '⚡ Hermes: ' + name + (tp.label || tp.emoji ? ' ' + (tp.emoji || '') + ' ' + (tp.label || '') : '')); J.orb.set('thinking', 'Hermes używa: ' + name); },
           r => { J.engine.feed(r.length); J.engine.thinkChars += r.length; if (!thought) thought = J.proc.step('thought', 'Rozumowanie modelu', [], { running: true }); thought.append(r, 'Myśli'); J.orb.set('thinking', 'Hermes myśli…'); });
       } catch (e) {
+        if (runaway) e = Object.assign(new Error('Agent Hermesa wykonał ponad ' + SERVER_TOOL_CAP + ' własnych wywołań narzędzi w jednej turze bez odpowiedzi (np. w kółko czytał skille) — przerwano.'), { net: true, runaway: true });
         thought?.done(); if (e.name === 'AbortError') ms.done([], 'przerwano'); else ms.fail(e.message);
         serverTools.forEach(t => J.ev.emit('tool.failed', { tool: t, source: 'hermes' }, 'hermes'));
         J.ev.emit('model.failed', { model: c.model, error: e.message }, 'hermes'); throw e;
@@ -488,7 +592,11 @@ const hermes = async (text, bubble) => {
       if (!calls.length) {
         // model opisał wywołanie słowami zamiast znacznikami — jedna korekta, potem odpuszczamy
         const said = toolNames().find(n => new RegExp('\\b' + n + '\\b').test(visible(raw)));
-        if (said && !nudged && turn < MAX_TURNS - 1 && /tool[ _]?call|wywołuj|wywołan|funkcj/i.test(visible(raw))) {
+        if (said && nudged) {
+          const loc = await local(text);      // druga próba nieudana — wykonaj polecenie lokalnie, żeby nie przepadło
+          if (loc != null) { J.proc.step('system', 'Hermes nie użył <tool_call> — wykonano silnikiem lokalnym', [['Odpowiedź lokalna', loc]]); reply = loc; break; }
+        }
+        if (said && !nudged && turn < MAX_TURNS - 1) {
           nudged = true;
           J.proc.step('system', 'Korekta formatu wywołania', [['Powód', 'Model wspomniał „' + said + '”, ale nie użył <tool_call>']]);
           history.push({ role: 'user', content: '<tool_response>\n' + JSON.stringify({ ok: false, content: 'Nic nie zostało wykonane: brak znaczników <tool_call>. Zapisz wywołanie dokładnie tak: <tool_call>\n{"name": "' + said + '", "arguments": {…}}\n</tool_call>' }) + '\n</tool_response>' });
@@ -556,16 +664,23 @@ J.brain = {
     J.ev.emit('task.created', { title: text });
     let reply, status = 'ok';
     try {
-      const skipNet = J.aiReady() && J.hermes.status === 'down' && Date.now() - J.hermes.checked < 45000;   // wiemy, że offline — nie czekamy na timeout
-      if (J.aiReady() && !skipNet) {
+      let skipNet = J.aiReady() && J.hermes.status === 'down' && Date.now() - J.hermes.checked < 45000;   // wiemy, że offline — nie czekamy na timeout
+      /* szybka ścieżka: jednoznaczne polecenia sterowania pulpitem (widgety, okna, aplikacje, notatki, minutniki…) wykonuje silnik lokalny natychmiast.
+         Agent Hermesa traktuje je jak zadania inżynieryjne (czyta skille, przeszukuje pliki) i potrafi mielić minutami. */
+      let fastReply = null;
+      if (J.state.settings.fastLocal !== false && text.length <= 110 && !/\?\s*$/.test(text)) { try { fastReply = await local(text, true); } catch (e) { fastReply = null; } }
+      if (fastReply != null) {
+        J.proc.step('system', 'Szybka ścieżka — polecenie pulpitu wykonane lokalnie', [['Powód', 'Jednoznaczne polecenie sterowania Jarvis OS; bez opóźnień agenta Hermesa (wyłączysz w Ustawieniach)']]);
+        reply = fastReply; skipNet = false;
+      } else if (J.aiReady() && !skipNet) {
         try { reply = await hermes(text, bubble); setStatus('up'); }
         catch (e) {
           if (!e.net) throw e;
-          // Hermes nieosiągalny — wykonaj lokalnie, żeby polecenie nie przepadło
-          J.proc.step('error', 'Hermes nieosiągalny — przełączam na silnik lokalny', [['Błąd', e.message]], { status: 'err', preview: 'fallback' });
-          setStatus('down');
+          // Hermes nieosiągalny lub utknął — wykonaj lokalnie, żeby polecenie nie przepadło
+          J.proc.step('error', e.runaway ? 'Hermes utknął w pętli narzędzi — przełączam na silnik lokalny' : 'Hermes nieosiągalny — przełączam na silnik lokalny', [['Błąd', e.message]], { status: 'err', preview: 'fallback' });
+          if (!e.runaway) setStatus('down');
           const loc = await local(text);
-          reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ Hermes jest offline — użyłem silnika lokalnego (szczegóły w Process Log).';
+          reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ ' + (e.runaway ? 'Hermes utknął w pętli własnych narzędzi' : 'Hermes jest offline') + ' — użyłem silnika lokalnego (szczegóły w Process Log).';
         }
       } else {
         J.proc.step('system', 'Silnik lokalny (bez modelu)', [['Tryb', skipNet ? 'Hermes offline (sprawdzono ' + Math.round((Date.now() - J.hermes.checked) / 1000) + ' s temu) — pominięto zapytanie do sieci' : 'Hermes wyłączony — dopasowanie poleceń regułami']]);
@@ -588,6 +703,6 @@ J.brain = {
   }
 };
 J.brain.local = local;
-J.brain.parse = parseCalls; J.brain.visible = visible; J.brain.exec = exec;
+J.brain.system = SYSTEM; J.brain.parse = parseCalls; J.brain.visible = visible; J.brain.exec = exec;
 setInterval(() => { if (J.aiReady() && !J.brain.busy) J.hermesPing(); }, 45000);
 })();

@@ -648,6 +648,7 @@ J.apps.settings = {
       <label class="toggle"><div>Cząsteczki i sieć neuronowa<small>Animowane tło reagujące na kursor</small></div><span class="switch"><input type="checkbox" data-k="particles"><i></i></span></label>
       <label class="toggle"><div>Dźwięki interfejsu<small>Syntezowane efekty audio</small></div><span class="switch"><input type="checkbox" data-k="sound"><i></i></span></label>
       <label class="toggle"><div>Jarvis mówi na głos<small>Odpowiedzi odczytywane syntezatorem mowy</small></div><span class="switch"><input type="checkbox" data-k="speech"><i></i></span></label>
+      <label class="toggle"><div>Szybkie polecenia pulpitu<small>Widgety, okna, aplikacje, notatki, minutniki wykonuje natychmiast silnik lokalny, bez czekania na Hermesa</small></div><span class="switch"><input type="checkbox" data-k="fastLocal"><i></i></span></label>
       <label class="toggle"><div>Pomiń animację startową<small>Szybsze uruchamianie</small></div><span class="switch"><input type="checkbox" data-k="skipBoot"><i></i></span></label>
       <div class="label">Głos</div><select class="input" id="vs"></select>
       <div class="label">Użytkownik</div><div class="row"><input class="input" id="un" maxlength="3" placeholder="Inicjały" style="width:90px"><input class="input" id="city" placeholder="Miasto (pogoda)"><button class="btn" id="cityGo">Zapisz</button></div>

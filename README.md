@@ -69,6 +69,18 @@ Jarvis wysyła nagłówek `X-Hermes-Session-Id`, więc pamięć długoterminowa 
 
 Klucz **nigdy nie jest częścią kodu ani repozytorium** — wpisujesz go w Ustawieniach, trafia wyłącznie do `localStorage` tej przeglądarki (eksport kopii zapasowej go pomija). Hermes Agent uruchamiaj natywnie w Windows (nie przez WSL). Gdy Hermes nie odpowiada lub odrzuca klucz, polecenie wykonuje lokalny silnik, a w czacie pojawia się ostrzeżenie. `Esc` przerywa generowanie odpowiedzi.
 
+## Jak Jarvis steruje sobą (zasady działania)
+
+Każde polecenie przechodzi przez trzy warstwy (`js/ai.js`):
+
+1. **Szybka ścieżka lokalna** — jednoznaczne polecenia sterowania pulpitem („stwórz widget listy zakupów: mleko, chleb”, „ułóż okna obok siebie”, „zminimalizuj notatnik”, „otwórz kalkulator”, „zanotuj…”, „minutnik 5 minut”) wykonuje od razu silnik lokalny (~30 ms), bez pytania Hermesa. Pytania (kończące się `?`), rozmowa, wiedza, pogoda i kursy idą do Hermesa. Wyłączysz to w *Ustawienia → Szybkie polecenia pulpitu*.
+2. **Hermes** — dostaje w promptcie: tożsamość, 10 zasad działania (działaj zamiast opisywać, weryfikuj wynik z `ok`, nie kłam o wykonaniu, nic nieodwracalnego bez prośby…), katalog „co gdzie”, przepisy na typowe zadania, obsługę błędów oraz **16 przykładowych wiadomości** pokazujących dokładny format `<tool_call>`. Model widzi też pełne sygnatury 18 narzędzi; `skills_list()` zwraca mu podręcznik.
+3. **Zabezpieczenia** — parser rozumie `<tool_call>`, niezamknięty tag, gołe JSON-y i pseudo-format Hermesa (`invoke create_widget with type is list …`); gdy model opisze wywołanie słowami, dostaje jedną korektę, a potem polecenie wykonuje silnik lokalny. Pętla identycznych wywołań (3×), zawieszony strumień (120 s bez danych) i agent mielący własne narzędzia serwerowe (>14 wywołań w turze) są przerywane z przejściem na silnik lokalny.
+
+Narzędzia (18): `open_app`, `close_app`, `window_control`, `arrange_windows`, `get_status`, `focus_mode`, `create_widget` (note · list · result · calc), `create_note`, `add_task`, `start_timer`, `add_shortcut`, `set_theme`, `set_wallpaper`, `get_weather`, `get_crypto_prices`, `open_url`, `calculate`, `get_datetime`.
+
+> **Uwaga o Hermes Agent.** To pełny agent inżynieryjny z własnymi skillami (np. `jarvis-os-*`). Na polecenia o „Jarvis OS” potrafi zacząć od czytania skilli zamiast wywołać `<tool_call>`. Dlatego proste polecenia obsługuje szybka ścieżka, a do trybu pulpitu najlepiej użyć osobnego, lekkiego profilu Hermesa bez skilli programistycznych.
+
 ## Skróty klawiszowe
 
 | Skrót | Akcja |
