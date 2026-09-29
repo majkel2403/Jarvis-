@@ -18,7 +18,7 @@ const MAX_EVENTS = 400;
 
 /* ---------- Event Bus ---------- */
 const subs = {};
-let seq = 0;
+let seq = 0, replayTimers = [];
 const byTask = new Map();       // task_id -> [events]
 J.ev = {
   emit(type, payload = {}, source = 'jarvis') {
@@ -30,6 +30,23 @@ J.ev = {
   },
   on(type, fn) { (subs[type] = subs[type] || []).push(fn); return () => { subs[type] = subs[type].filter(f => f !== fn); }; },
   events: id => byTask.get(id) || [],
+  /* Replay: odtwarza zapisany przebieg na Core (rekonstrukcja ścieżki, nie nagranie).
+     Czas skompresowany do max ~7 s; przerywa się, gdy zacznie się prawdziwe zadanie. */
+  replay(events, title = '') {
+    J.ev.stopReplay();
+    if (!events?.length || engine.taskId) return false;
+    const t0 = events[0].t, span = Math.max(1, events[events.length - 1].t - t0), k = Math.min(1, 7000 / span);
+    engine.replaying = true; J.orb.set('thinking', 'Replay: ' + title.slice(0, 50));
+    replayTimers = events.map(e => setTimeout(() => {
+      if (!engine.replaying) return;
+      J.ev.emit(e.type, { tool: e.tool, node: e.node, title, replay: true, task_id: 'replay' }, e.source || 'jarvis');
+    }, Math.max(0, (e.t - t0) * k) + 200));
+    replayTimers.push(setTimeout(() => { engine.replaying = false; J.orb.set('idle', 'koniec replay'); }, (span * k) + 4600));
+    return true;
+  },
+  stopReplay() { replayTimers.forEach(clearTimeout); replayTimers = []; if (engine.replaying) { engine.replaying = false; engine.taskId = null; engine.nodes = {}; setMode('IDLE'); } },
+  /* zdarzenia zadania w postaci zwięzłej do zapisania w historii */
+  compact(id) { const l = byTask.get(id) || []; if (!l.length) return []; const t0 = l[0].timestamp; return l.slice(0, 200).map(e => ({ t: e.timestamp - t0, type: e.type, tool: e.payload.tool, node: e.payload.node, source: e.source })); },
   /* kategoria węzła dla narzędzia (klienckiego lub serwerowego Hermesa) */
   nodeFor(tool) {
     const t = String(tool || '').toLowerCase();
@@ -80,6 +97,7 @@ const reduce = e => {
   const p = e.payload;
   switch (e.type) {
     case 'task.created':
+      if (!p.replay) J.ev.stopReplay();
       engine.taskId = e.task_id; engine.nodes = {}; engine.packets = []; engine.startedAt = e.timestamp; engine.toolCalls = 0;
       setMode('THINKING'); engine.activity = .35; break;
     case 'model.started': { const n = node('model'); n.status = 'active'; n.active++; n.calls++; packet('model', 'out'); recompute(); break; }
@@ -95,7 +113,7 @@ const reduce = e => {
       const ok = e.type === 'task.completed';
       Object.values(engine.nodes).forEach(n => { if (n.status === 'active') { n.status = 'done'; n.doneAt = e.timestamp; n.active = 0; } });
       engine.flash = { t: e.timestamp, kind: ok ? 'ok' : e.type === 'task.failed' ? 'err' : 'cancel' };
-      engine.last = { task_id: e.task_id, title: p.title || '', status: e.type.slice(5), tools: engine.toolCalls || 0, nodes: Object.keys(engine.nodes).filter(k => k !== 'model').length, dur: e.timestamp - (engine.startedAt || e.timestamp), result: p.result || '' };
+      if (!p.replay) engine.last = { task_id: e.task_id, title: p.title || '', status: e.type.slice(5), tools: engine.toolCalls || 0, nodes: Object.keys(engine.nodes).filter(k => k !== 'model').length, dur: e.timestamp - (engine.startedAt || e.timestamp), result: p.result || '' };
       setMode(ok ? 'COMPLETED' : e.type === 'task.failed' ? 'ERROR' : 'IDLE'); engine.activity = ok ? .2 : .3;
       engine.taskId = null;
       setTimeout(() => { if (engine.taskId === null && (engine.mode === 'COMPLETED' || engine.mode === 'ERROR')) setMode(engine.listening ? 'LISTENING' : 'IDLE'); }, 3600);

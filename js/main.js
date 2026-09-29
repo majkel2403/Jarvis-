@@ -145,7 +145,8 @@ function flowDraw(now) {
   const W = Math.round(box.width), H = Math.round(box.height);
   if (flowCv.width !== W * dpr || flowCv.height !== H * dpr) { flowCv.width = W * dpr; flowCv.height = H * dpr; }
   fc.setTransform(dpr, 0, 0, dpr, 0, 0); fc.clearRect(0, 0, W, H);
-  const eg = J.engine, wall = Date.now(), cx = W / 2, cy = H / 2;
+  const eg = J.engine; flowCv.classList.toggle('over', !!eg.taskId);   // podczas pracy węzły są widoczne nad oknami
+  const wall = Date.now(), cx = W / 2, cy = H / 2;
   const acc = J.rgb(S.accent), col = eg.rgb() || acc;
   const rx = Math.min(W * .3, 270), ry = Math.min(H * .34, 235);
   // Core: puls zakończenia (biały → szmaragdowy / bursztynowy) — tylko po realnym task.*
@@ -277,7 +278,8 @@ const palette = (() => {
     ...Object.entries(J.apps).filter(([, a]) => !a.widget).map(([id, a]) => ({ g: 'Aplikacje', ic: a.icon, t: a.title, k: id + ' ' + (LABEL[id] || ''), run: () => J.wm.open(id) })),
     { g: 'Akcje', ic: 'mic', t: 'Mów do Jarvisa', s: 'Ctrl Spacja', run: () => J.ear.start() },
     ...Object.entries(J.widgets.TYPES).map(([k, t]) => ({ g: 'Widgety', ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
-    { g: 'Akcje', ic: 'history', t: 'Pokaż / ukryj Process Log', run: () => J.proc.toggle() },
+    { g: 'Akcje', ic: 'history', t: 'Pokaż / ukryj Process Log', s: 'Alt 2', run: () => J.proc.toggle() },
+    { g: 'Akcje', ic: 'chat', t: 'Pokaż / ukryj czat', s: 'Alt 1', run: () => J.chatPanel.toggle() },
     { g: 'Akcje', ic: 'notes', t: 'Nowa notatka', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
     { g: 'Akcje', ic: 'timer', t: 'Minutnik 5 minut', run: () => { J.timer.start(300, 'Minutnik 5 min'); J.wm.open('timer'); } },
     { g: 'Akcje', ic: 'timer', t: 'Pomodoro 25 minut', run: () => { J.timer.start(1500, 'Pomodoro'); J.wm.open('timer'); } },
@@ -419,6 +421,8 @@ addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.isOpen ? palette.close() : palette.open(); }
   else if (mod && e.code === 'Space') { e.preventDefault(); J.ear.toggle(); }
+  else if (e.altKey && e.key === '1') { e.preventDefault(); J.chatPanel.toggle(); }
+  else if (e.altKey && e.key === '2') { e.preventDefault(); J.proc.toggle(); }
   else if (e.key === 'Escape') {
     if (ctxEl) return closeCtx();
     if (palette.isOpen) return palette.close();
@@ -467,7 +471,7 @@ J.chatPanel = (() => {
   const panel = $('#chatPanel'), host = $('#chatHost'), narrow = matchMedia('(max-width:900px)');
   const ctx = { el: panel, body: host, onClose() { }, setTitle() { }, close() { } };
   J.apps.chat.mount(host, ctx);
-  const set = on => { if (on && narrow.matches) J.proc.close(); panel.classList.toggle('open', on); $('#workspace').classList.toggle('chat-closed', !on); $('#btnChat').classList.toggle('on', on); };
+  const set = on => { if (on && narrow.matches) J.proc.close(); panel.classList.toggle('open', on); $('#workspace').classList.toggle('chat-closed', !on); $('#btnChat').classList.toggle('on', on); if (!narrow.matches) { J.state.ui.chatClosed = !on; J.save(); } };
   const focusInput = () => setTimeout(() => $('#chatInput', host)?.focus(), 30);
   const api = {
     show(arg) { set(true); focusInput(); if (arg) J.brain.handle(arg); },
@@ -476,7 +480,7 @@ J.chatPanel = (() => {
     get isOpen() { return narrow.matches ? panel.classList.contains('open') : !$('#workspace').classList.contains('chat-closed'); }
   };
   narrow.addEventListener('change', () => set(!narrow.matches));
-  set(!narrow.matches);
+  set(narrow.matches ? false : !J.state.ui.chatClosed);
   $('#edgeL').onclick = () => api.show(); $('#edgeR').onclick = () => J.proc.open();
   return api;
 })();
@@ -487,8 +491,9 @@ J.chatPanel = (() => {
   const pl = J.pl;
   const fmtD = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
   stop.onclick = () => J.brain.abort();
-  J.ev.on('task.created', () => { stop.classList.remove('hidden'); chip.classList.remove('show'); clearTimeout(chipT); });
-  ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, () => {
+  J.ev.on('task.created', e => { if (e.payload.replay) return; stop.classList.remove('hidden'); chip.classList.remove('show'); clearTimeout(chipT); });
+  ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, e => {
+    if (e.payload.replay) return;
     stop.classList.add('hidden');
     const l = J.engine.last; if (!l || (l.status === 'completed' && !l.tools)) return;   // zwykła odpowiedź czatu nie tworzy artefaktu
     const ok = l.status === 'completed';
@@ -517,6 +522,8 @@ addEventListener('offline', () => { nodes(); J.toast('Utracono połączenie z in
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
 boot().then(() => {
+  J.widgets.restore();
+  if (J.state.ui.logPinned && !matchMedia('(max-width:900px)').matches) J.proc.open();
   J.tasks.check();
   const hr = new Date().getHours();
   const greet = (hr < 5 ? 'Dobranoc' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj' : 'Dobry wieczór');

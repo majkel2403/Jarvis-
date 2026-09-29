@@ -18,7 +18,7 @@ const mounts = {
   note(body, w) {
     body.innerHTML = '<textarea class="w-note" placeholder="Zacznij pisać…" spellcheck="false"></textarea>';
     const ta = $('textarea', body); ta.value = w.data.text || '';
-    ta.oninput = () => { w.data.text = ta.value; };
+    ta.oninput = () => { w.data.text = ta.value; J.save(); };
     setTimeout(() => { if (!ta.value) ta.focus(); }, 60);
   },
   list(body, w) {
@@ -29,12 +29,12 @@ const mounts = {
       items.forEach((it, i) => {
         const r = h('label', { class: 'w-item' + (it.done ? ' done' : '') }, '<input type="checkbox"><span></span><button type="button" class="x" title="Usuń">' + icon('close', 'width="11" height="11"') + '</button>');
         $('input', r).checked = !!it.done; $('span', r).textContent = it.text;
-        $('input', r).onchange = e => { it.done = e.target.checked; draw(); };
-        $('.x', r).onclick = () => { items.splice(i, 1); draw(); };
+        $('input', r).onchange = e => { it.done = e.target.checked; J.save(); draw(); };
+        $('.x', r).onclick = () => { items.splice(i, 1); J.save(); draw(); };
         box.appendChild(r);
       });
     };
-    $('form', body).onsubmit = e => { e.preventDefault(); const inp = $('input', e.target), v = inp.value.trim(); if (!v) return; items.push({ text: v, done: false }); inp.value = ''; draw(); box.scrollTop = box.scrollHeight; };
+    $('form', body).onsubmit = e => { e.preventDefault(); const inp = $('input', e.target), v = inp.value.trim(); if (!v) return; items.push({ text: v, done: false }); inp.value = ''; J.save(); draw(); box.scrollTop = box.scrollHeight; };
     draw();
   },
   result(body, w) {
@@ -49,6 +49,19 @@ const mounts = {
 J.widgets = {
   TYPES,
   list: [],
+  /* rejestruje aplikację-okno dla widgetu; zapis stanu: J.state.widgets (treść) + winPos (pozycja) */
+  register(w) {
+    const t = TYPES[w.type], key = 'w:' + w.id;
+    J.apps[key] = {
+      title: w.title, icon: t.icon, w: t.w, h: t.h, widget: true, flush: true,
+      mount(body, ctx) {
+        ctx.onClose(() => { delete J.apps[key]; J.widgets.list = J.widgets.list.filter(x => x.id !== w.id); J.state.widgets = J.state.widgets.filter(x => x.id !== w.id); delete J.state.winPos[key]; J.save(); });
+        mounts[w.type](body, w);
+      }
+    };
+    J.widgets.list.push(w);
+    return key;
+  },
   create(type, opts = {}) {
     const t = TYPES[type]; if (!t) throw new Error('Nieznany typ widgetu: ' + type);
     const title = String(opts.title || t.label).slice(0, 60);
@@ -56,15 +69,14 @@ J.widgets = {
       ? { items: (Array.isArray(opts.items) ? opts.items : String(opts.content || '').split('\n')).map(x => String(x).replace(/^[-•*\s]+/, '').trim()).filter(Boolean).map(text => ({ text, done: false })) }
       : { text: String(opts.content || ''), meta: opts.meta || '' };
     const w = { id: J.uid(), type, title, data };
-    const key = 'w:' + w.id;
-    J.apps[key] = {
-      title, icon: t.icon, w: t.w, h: t.h, widget: true, flush: true,
-      mount(body, ctx) { ctx.onClose(() => { delete J.apps[key]; J.widgets.list = J.widgets.list.filter(x => x.id !== w.id); }); mounts[type](body, w); }
-    };
-    J.widgets.list.push(w);
-    // kaskadowe ułożenie: każdy nowy widget trochę niżej i w prawo
-    J.wm.open(key);
+    J.state.widgets.push(w); J.save();
+    const key = J.widgets.register(w); J.wm.open(key); J.wm.remember(key);
     return w;
+  },
+  /* po starcie: odtwórz widgety z poprzedniej sesji w ich pozycjach */
+  restore() {
+    J.state.widgets = J.state.widgets.filter(w => TYPES[w.type] && w.data);
+    J.state.widgets.forEach(w => { if (!J.apps['w:' + w.id]) J.wm.open(J.widgets.register(w)); });
   },
   menu(x, y) { return J.widgets._menu?.(x, y); }
 };

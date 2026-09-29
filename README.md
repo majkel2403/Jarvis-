@@ -15,7 +15,9 @@ Czysty HTML/CSS/JS, bez builda i bez zależności: wystarczy otworzyć `index.ht
 | **Układ 3 paneli** | po lewej **czat z Jarvisem**, w środku **główny pulpit**, po prawej **Process Log** (wysuwa się, gdy Jarvis pracuje) |
 | **Process Log** | log tylko bieżącego zadania: polecenie, myśli modelu, zapytania do Hermesa, wywołania narzędzi z argumentami, wynikami, błędami i czasem; zakończone zadania trafiają do **historii** (eksport .json, przypięcie wyniku na pulpit) |
 | **Visual Engine** | Core jest żywym monitorem stanu: **Event Bus** (`js/events.js`, zdarzenia z `task_id`: `task.*`, `model.*`, `tool.*`) → maszyna stanów (IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR) → renderer. Węzły (Model, Internet, Pliki, Notatki…) pojawiają się dopiero, gdy narzędzie faktycznie ruszy; pakiety danych płyną tylko przy realnej pracy; po zadaniu puls Core i karta wyniku z „Przypnij”. Nic nie jest animowane „na niby” |
-| **Widgety** | Notatka, Lista, Wynik zadania — wiele naraz, przesuwalne; tworzone z docka, menu prawym przyciskiem, palety `Ctrl+K` lub przez Jarvisa (`create_widget`). Układ pulpitu nie jest jeszcze zapisywany |
+| **Replay** | w Process Log przy zakończonym zadaniu: „▶ Replay” odtwarza jego przebieg (węzły, przepływ) na Core |
+| **Skróty** | `Alt+1` czat · `Alt+2` Process Log · `Ctrl+K` paleta · `Esc` przerwij |
+| **Widgety** | Notatka, Lista, Wynik zadania — wiele naraz, przesuwalne; tworzone z docka, menu prawym przyciskiem, palety `Ctrl+K` lub przez Jarvisa (`create_widget`). **Zapisują się** wraz z pozycją i stanem paneli (czat schowany, log przypięty) |
 | **Okna** | przeciąganie, zmiana rozmiaru, minimalizacja do doku, maksymalizacja (dwuklik), pamięć pozycji |
 | **Aplikacje** | Czat, Notatnik (autozapis, eksport, czytanie na głos), Monitor rynku (Binance WebSocket na żywo + CoinGecko), Harmonogram z przypomnieniami, Pogoda (Open-Meteo, geolokalizacja), Monitor systemu (FPS, pamięć, bateria, sieć), Terminal, Kalkulator, Minutnik/Stoper, Ustawienia, Biblioteka |
 | **Paleta poleceń** | `Ctrl + K` lub `/` — aplikacje, akcje, notatki, skróty, pytanie do Jarvisa |

@@ -92,6 +92,8 @@ const DEFAULTS = () => ({
   shortcuts: [],
   log: [],
   history: [],
+  widgets: [],
+  ui: { chatClosed: false, logPinned: false },
   winPos: {},
   stats: { actions: 0 }
 });
@@ -102,8 +104,8 @@ J.state = (() => {
   if (!s) return d;
   s.settings = Object.assign(d.settings, s.settings || {});
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
-  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history']) if (!Array.isArray(s[k])) s[k] = d[k];
-  s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
+  for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets']) if (!Array.isArray(s[k])) s[k] = d[k];
+  s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
   return s;
 })();
 J.save = J.debounce(() => { try { localStorage.setItem(KEY, JSON.stringify(J.state)); } catch (e) { /* tryb prywatny */ } }, 250);
@@ -270,7 +272,7 @@ J.wm = (() => {
   const isMobile = () => innerWidth <= 640;
 
   const savePos = (id, el) => {
-    if (el.classList.contains('max') || isMobile() || id.startsWith('w:')) return;
+    if (el.classList.contains('max') || isMobile()) return;
     J.state.winPos[id] = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }; J.save();
   };
   const focus = id => {
@@ -381,6 +383,7 @@ J.wm = (() => {
       if (w.el.classList.contains('focused')) return api.minimize(id);
       focus(id);
     },
+    remember: id => { if (open[id]) savePos(id, open[id].el); },
     isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,
     isFocused: id => !!open[id]?.el.classList.contains('focused'),

@@ -78,6 +78,7 @@ kbd{font-family:var(--mono);font-size:.85em;padding:1px 6px;border-radius:5px;bo
 
 /* ---------- DESKTOP ---------- */
 #flowCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#flowCanvas.over{z-index:99990}
 .task-stop{pointer-events:auto;margin-left:6px;border:1px solid rgba(255,93,122,.5);background:rgba(255,93,122,.12);color:#ffc2cc;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:600}
 .task-stop:hover{background:rgba(255,93,122,.28);color:#fff}
 .result-chip{position:absolute;z-index:19;left:50%;top:calc(50% + 172px);transform:translate(-50%,14px);opacity:0;pointer-events:none;min-width:250px;max-width:min(360px,90%);padding:11px 14px;border:1px solid rgba(57,229,154,.45);border-radius:14px;background:rgba(4,20,22,.86);backdrop-filter:blur(14px);box-shadow:0 0 30px rgba(57,229,154,.16);display:flex;flex-direction:column;gap:3px;text-align:center;transition:.5s cubic-bezier(.2,.9,.3,1.1)}
@@ -154,7 +155,7 @@ kbd{font-family:var(--mono);font-size:.85em;padding:1px 6px;border-radius:5px;bo
 .live{width:7px;height:7px;flex:none;background:var(--ok);border-radius:50%;box-shadow:0 0 9px var(--ok);animation:breathe 1s infinite}
 
 /* ---------- SYS (dolny lewy) ---------- */
-.sys{position:absolute;z-index:18;bottom:22px;left:18px;color:#dcecff;font-size:10px;display:flex;gap:18px;align-items:center;cursor:default}
+.sys{position:absolute;z-index:18;bottom:92px;left:18px;color:#dcecff;font-size:10px;display:flex;gap:18px;align-items:center;cursor:default}
 .sys strong{font-size:13px}.sys .muted{color:var(--muted)}
 .sysline{display:flex;gap:9px;align-items:center;padding:6px 10px;border-radius:10px;transition:.2s}
 .sysline.click{cursor:pointer}.sysline.click:hover{background:rgba(var(--accent-rgb),.08)}

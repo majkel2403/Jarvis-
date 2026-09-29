@@ -88,7 +88,7 @@ const end = (status, result) => {
   const t = cur; t.status = status; t.dur = Date.now() - t.ts; t.result = String(result || '');
   t.steps.forEach(s => { if (s.status === 'run') { s.status = 'ok'; s.dur = Date.now() - s.ts; } });
   // do historii trafia wersja bez elementów DOM i z ucięciem długich pól
-  const saved = { id: t.id, title: t.title, ts: t.ts, dur: t.dur, status: t.status, result: cap(t.result),
+  const saved = { id: t.id, title: t.title, ts: t.ts, dur: t.dur, status: t.status, result: cap(t.result), events: J.ev.compact(t.id),
     steps: t.steps.map(s => ({ id: s.id, kind: s.kind, title: s.title, status: s.status, ts: s.ts, dur: s.dur, preview: s.preview, fields: (s.fields || []).map(f => [f[0], cap(f[1]), f[2]]) })) };
   J.state.history.unshift(saved); J.state.history.length = Math.min(J.state.history.length, MAX_HISTORY); J.save();
   cur = null; viewing = saved; Object.defineProperty(saved, '_live', { value: t, enumerable: false });   // panel dalej pokazuje ten sam log (z żywymi elementami)
@@ -142,6 +142,12 @@ const render = () => {
     const b2 = h('button', { class: 'btn sm ghost' }, J.icon('download', 'width="12" height="12"') + ' Eksport .json');
     b2.onclick = () => { const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify({ title: t.title, ts: t.ts, dur: t.dur, status: t.status, result: t.result, steps: live.steps.map(({ el, ...r }) => r) }, null, 2)], { type: 'application/json' })), download: 'process-log-' + t.id + '.json' }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
     foot.append(b1, b2);
+    if (live.events?.length || t.events?.length) {
+      const b3 = h('button', { class: 'btn sm ghost' }, '▶ Replay');
+      b3.title = 'Odtwórz przebieg zadania na Core';
+      b3.onclick = () => { if (!J.ev.replay(t.events, t.title)) J.toast('Replay niedostępny — trwa zadanie albo brak zdarzeń'); };
+      foot.append(b3);
+    }
   }
 };
 const renderHist = () => {
@@ -171,7 +177,8 @@ J.proc = {
   init() {
     $('#lpClose').innerHTML = J.icon('close'); $('#lpPin').innerHTML = J.icon('pin');
     $('#lpClose').onclick = () => setOpen(false);
-    $('#lpPin').onclick = () => { pinned = !pinned; $('#lpPin').classList.toggle('on', pinned); if (pinned) clearTimeout(hideT); else if (!cur) scheduleHide(); };
+    pinned = !!J.state.ui.logPinned; $('#lpPin').classList.toggle('on', pinned);
+    $('#lpPin').onclick = () => { pinned = !pinned; J.state.ui.logPinned = pinned; J.save(); $('#lpPin').classList.toggle('on', pinned); if (pinned) clearTimeout(hideT); else if (!cur) scheduleHide(); };
     $$('.lp-tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
     const panel = $('#logPanel');
     panel.addEventListener('pointerenter', () => { hover = true; }); panel.addEventListener('pointerleave', () => { hover = false; if (!cur) scheduleHide(); });
