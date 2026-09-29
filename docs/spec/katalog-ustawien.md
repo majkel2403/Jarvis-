@@ -33,6 +33,7 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Inne | `fxLevel` | `"standard"` | string | — | — |
 | Inne | `keys` | — | object | — | tak |
 | Inne | `layoutStartup` | `"none"` | string | — | — |
+| Inne | `minimap` | `false` | boolean | — | — |
 | Inne | `notif` | `{}` | object | — | — |
 | Inne | `offlineMode` | `false` | boolean | — | — |
 | Inne | `startMode` | `"work"` | string | — | — |

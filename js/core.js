@@ -87,7 +87,7 @@ const DEFAULTS = () => ({
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
     openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: '',
-    uiScale: 100, fxLevel: 'standard', startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, flags: {}
+    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, flags: {}
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -174,8 +174,12 @@ J.emit = (ev, data) => (bus[ev] || []).forEach(fn => { try { fn(data); } catch (
 J.sfx = (() => {
   let ctx = null;
   const ac = () => { if (!ctx) { const A = window.AudioContext || window.webkitAudioContext; if (A) ctx = new A(); } if (ctx && ctx.state === 'suspended') ctx.resume(); return ctx; };
+  /* głośność 0–100 %, wyciszenie w ciszy nocnej i w trybie prezentacji (alarm minutnika gra zawsze) — docs/spec/09-wyglad-stany.md §8 */
+  let forced = false;
+  const muted = () => !J.state.settings.sound || (!forced && (J.uiMode?.get?.() === 'present' || !!J.signals?.quietNow?.()));
+  const gain = () => J.clamp((J.state.settings.volume ?? 60) / 60, 0, 1.67);
   const tone = (f, dur = .12, type = 'sine', vol = .06, delay = 0, slide = 0) => {
-    if (!J.state.settings.sound) return; const c = ac(); if (!c) return;
+    if (muted()) return; const c = ac(); if (!c) return; vol *= gain(); if (vol <= 0) return;
     const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
@@ -187,7 +191,10 @@ J.sfx = (() => {
     open: () => { tone(520, .12, 'sine', .045, 0, 880); tone(1320, .08, 'triangle', .02, .06); },
     close: () => tone(700, .12, 'sine', .04, 0, 320),
     notify: () => { tone(880, .12, 'sine', .05); tone(1320, .18, 'sine', .05, .1); },
-    alarm: () => { for (let i = 0; i < 6; i++) { tone(1046, .12, 'square', .03, i * .25); tone(1318, .12, 'square', .03, i * .25 + .12); } },
+    alarm: () => { forced = true; try { for (let i = 0; i < 6; i++) { tone(1046, .12, 'square', .03, i * .25); tone(1318, .12, 'square', .03, i * .25 + .12); } } finally { forced = false; } },
+    /* dźwięk powiadomienia wg kanału (Ustawienia → Powiadomienia: „dźwięk”) */
+    forKind: kind => { const ch = J.notifChannel ? J.notifChannel(kind) : { on: true, sound: true }; if (!ch.on || !ch.sound) return false; (kind === 'timer' ? J.sfx.signal : J.sfx.notify)(); return true; },
+    muted,
     error: () => { tone(220, .18, 'sawtooth', .04); tone(160, .25, 'sawtooth', .04, .12); },
     listen: () => { tone(660, .08, 'sine', .05); tone(990, .1, 'sine', .05, .08); },
     boot: () => {
@@ -397,6 +404,19 @@ J.wm = (() => {
     x = J.clamp(x, 0, Math.max(0, d.width - w)); y = J.clamp(y, 0, Math.max(0, d.height - h - 80));
     Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
   };
+  /* przyciąganie do innych okien (docs/spec/04-okna.md §5): próg 10 px, krawędzie zewnętrzne i wyrównanie */
+  const EDGE = 10;
+  const edgeSnap = (id, x, y, w, h) => {
+    let bx = null, by = null, dxBest = EDGE + 1, dyBest = EDGE + 1;
+    Object.entries(open).forEach(([oid, o]) => {
+      if (oid === id || o.minimized || o.el.classList.contains('max')) return;
+      const L = o.el.offsetLeft, T = o.el.offsetTop, R = L + o.el.offsetWidth, B = T + o.el.offsetHeight;
+      const vOverlap = y < B + EDGE && y + h > T - EDGE, hOverlap = x < R + EDGE && x + w > L - EDGE;
+      if (vOverlap) [[R, x], [L - w, x], [L, x], [R - w, x]].forEach(([cand]) => { const dd = Math.abs(cand - x); if (dd < dxBest) { dxBest = dd; bx = cand; } });
+      if (hOverlap) [[B, y], [T - h, y], [T, y], [B - h, y]].forEach(([cand]) => { const dd = Math.abs(cand - y); if (dd < dyBest) { dyBest = dd; by = cand; } });
+    });
+    return { x: bx ?? x, y: by ?? y, hit: bx != null || by != null };
+  };
   const drag = (id, el, handle, mode, edge = 'se') => {
     handle.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('.win-actions')) return;
@@ -413,8 +433,9 @@ J.wm = (() => {
       const move = ev => {
         const dx = ev.clientX - sx, dy = ev.clientY - sy;
         if (mode === 'move') {
-          el.style.left = J.clamp(ox + dx, -ow + 120, d.width - 120) + 'px';
-          el.style.top = J.clamp(oy + dy, 0, d.height - 60) + 'px';
+          let nx = J.clamp(ox + dx, -ow + 120, d.width - 120), ny = J.clamp(oy + dy, 0, d.height - 60);
+          if (!ev.altKey) { const sn = edgeSnap(id, nx, ny, ow, oh); nx = sn.x; ny = sn.y; el.classList.toggle('edge-snap', sn.hit); }   // krawędź do krawędzi innego okna (Alt = bez przyciągania)
+          el.style.left = nx + 'px'; el.style.top = ny + 'px';
           const px = ev.clientX - d.left, py = ev.clientY - d.top, m = 14;
           snapPos = px < m ? (py < m ? 'tl' : py > d.height - 90 ? 'bl' : 'left') : px > d.width - m ? (py < m ? 'tr' : py > d.height - 90 ? 'br' : 'right') : py < m ? 'top' : null;
           showSnap(snapPos, d);
@@ -428,7 +449,7 @@ J.wm = (() => {
         }
       };
       let snapPos = null;
-      const up = () => { dragging = null; handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); showSnap(null); if (snapPos) { api.snap(id, snapPos); snapPos = null; return; } savePos(id, el); J.emit('wm-resize', id); };
+      const up = () => { dragging = null; el.classList.remove('edge-snap'); handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); showSnap(null); if (snapPos) { api.snap(id, snapPos); snapPos = null; return; } savePos(id, el); J.emit('wm-resize', id); };
       dragging = id;
       handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
     });
@@ -571,6 +592,7 @@ J.wm = (() => {
     minSize: minOf,
     isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,
+    edgeSnap: (id, x, y, w, h) => edgeSnap(id, x, y, w, h),
     isFocused: id => !!open[id]?.el.classList.contains('focused'),
     ctx: id => open[id]?.ctx,
     count: () => Object.keys(open).length,

@@ -329,12 +329,20 @@ J.apps.chat = {
         <button class="btn sm ghost" id="chatHide" title="Schowaj panel czatu">${icon('close', 'width="12" height="12"')}</button></div>
       <div class="messages" id="messages"></div>
       <div class="suggest" id="suggest"></div>
+      <div class="chat-att" id="chatAtt"></div>
       <div class="composer">
         <button class="mic" id="chatMic" title="Mów">${icon('mic')}</button>
+        <button class="mic" id="chatClip" title="Dołącz notatkę albo plik tekstowy" aria-label="Dołącz">📎</button><input type="file" id="chatFile" accept=".txt,.md,.markdown,.csv,.json,.log,.ics,text/*" hidden>
         <textarea class="input" id="chatInput" rows="1" placeholder="Powiedz Jarvisowi, co ma zrobić… (Shift Enter — nowa linia)" autocomplete="off"></textarea>
         <button class="send" id="chatSend" title="Wyślij">${icon('send')}</button>
       </div></div>`;
     const box = $('#messages', body), input = $('#chatInput', body);
+    /* załączniki (tylko tekst): chipy nad polem wpisywania, ✕ usuwa */
+    const attBox = $('#chatAtt', body);
+    const drawAtt = () => { if (!attBox) return; attBox.innerHTML = ''; (J.attach?.list || []).forEach(a => { const c = h('span', { class: 'chip' }, '<span></span><button type="button" class="x" aria-label="Usuń załącznik">×</button>'); c.querySelector('span').textContent = (a.kind === 'note' ? '📝 ' : '📄 ') + a.name + (a.cut ? ' (przycięte)' : ''); c.querySelector('.x').onclick = () => J.attach.remove(a.id); attBox.appendChild(c); }); };
+    sub(ctx, 'attach', drawAtt); drawAtt();
+    $('#chatClip', body).onclick = e => { const r = e.currentTarget.getBoundingClientRect(); J.ctxMenu?.(r.left, r.top - 10, [...J.notes.live().slice(0, 8).map(n => ({ ic: 'notes', t: 'Notatka: ' + n.title, run: () => J.uiRun('chat_attach', { note: n.id }, { offer: false }) })), { ic: 'download', t: 'Plik tekstowy z dysku…', run: () => $('#chatFile', body).click() }]); };
+    $('#chatFile', body).onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (f.size > 1024 * 1024) return J.toast('Plik jest za duży (limit 1 MB).'); const r = J.attach.add({ kind: 'file', name: f.name, text: await f.text() }); if (r.err) J.toast(r.err); };
     const pill = () => { const ai = J.aiReady(), st = J.hermes.status, p = $('#modePill', body); p.textContent = !ai ? 'tryb lokalny' : st === 'up' ? 'Hermes · ' + J.state.settings.hermesModel : st === 'down' ? 'Hermes offline · tryb lokalny' : 'Hermes · sprawdzam…'; p.classList.toggle('ai', ai && st === 'up'); p.classList.toggle('bad', ai && st === 'down'); };
     pill(); sub(ctx, 'settings', pill); sub(ctx, 'hermes', pill);
     J.chat.bind(box);
@@ -1081,6 +1089,9 @@ J.apps.settings = {
       <label class="toggle"><div>Jarvis mówi na głos<small>Odpowiedzi odczytywane syntezatorem mowy</small></div><span class="switch"><input type="checkbox" data-k="speech"><i></i></span></label>
       <label class="toggle"><div>Pomiń animację startową<small>Szybsze uruchamianie</small></div><span class="switch"><input type="checkbox" data-k="skipBoot"><i></i></span></label>
       <div class="row" style="font-size:11.5px"><span style="flex:1">Skala interfejsu<small class="dim" id="usV" style="margin-left:6px"></small></span><input type="range" id="uiScale" min="80" max="130" step="5" style="width:170px"></div>
+        <label class="toggle"><div>Minimapa okien<small>mały podgląd pulpitu w rogu; klik = przejście do okna</small></div><span class="switch"><input type="checkbox" data-k="minimap"><i></i></span></label>
+        <div class="row" style="font-size:11.5px"><span style="flex:1">Efekty<small class="dim" id="fxNow" style="display:block;font-size:10px"></small></span><select class="input" id="fxLvl" style="width:150px"><option value="off">bez animacji</option><option value="tool">oszczędne</option><option value="standard">standardowe</option><option value="cinema">kinowe</option></select></div>
+        <div class="row" style="font-size:11.5px"><span style="flex:1">Głośność dźwięków<small class="dim" id="volV" style="margin-left:6px"></small><small class="dim" style="display:block;font-size:10px">wyciszone w ciszy nocnej i w trybie prezentacji (poza alarmem minutnika)</small></span><input type="range" id="sVol" min="0" max="100" step="5" style="width:170px"></div>
       <div class="row" style="font-size:11.5px"><span style="flex:1">Tryb startowy przestrzeni</span><select class="input" id="startMode" style="width:170px"><option value="work">praca (okna)</option><option value="clean">czysty pulpit</option><option value="focus">skupienie</option></select></div>
       <label class="toggle"><div>Tryb bez sieci<small>Żadnych wywołań internetu (Hermes, Jev, pogoda, kursy) — działa parser i dane lokalne</small></div><span class="switch"><input type="checkbox" data-k="offlineMode"><i></i></span></label>
       <div class="label">Głos</div><select class="input" id="vs"></select>
@@ -1180,6 +1191,9 @@ J.apps.settings = {
     /* interfejs, głos */
     const us = $('#uiScale', body), usV = $('#usV', body); if (us) { us.value = s.uiScale || 100; usV.textContent = us.value + '%'; us.oninput = () => { usV.textContent = us.value + '%'; }; us.onchange = () => J.uiRun('ui_scale', { percent: +us.value }, { offer: false }); }
     const sm = $('#startMode', body); if (sm) { sm.value = s.startMode || 'work'; sm.onchange = () => { s.startMode = sm.value; J.save(); J.emit('settings'); }; }
+    const fxSel = $('#fxLvl', body), fxNow = () => { const e = $('#fxNow', body); if (e) e.textContent = 'teraz: ' + ({ off: 'bez animacji', tool: 'oszczędne', standard: 'standardowe', cinema: 'kinowe' }[J.fx?.level?.() || s.fxLevel] || '') + (J.fx && J.fx.level() !== (s.fxLevel || 'standard') ? ' (ograniczone: płynność lub „ogranicz ruch” w systemie)' : ''); };
+    if (fxSel) { fxSel.value = s.fxLevel || 'standard'; fxSel.onchange = () => J.uiRun('fx_level', { level: fxSel.value }); fxNow(); sub(ctx, 'fx', fxNow); }
+    const sv = $('#sVol', body), svV = $('#volV', body); if (sv) { sv.value = s.volume ?? 60; svV.textContent = sv.value + '%'; sv.oninput = () => { svV.textContent = sv.value + '%'; }; sv.onchange = () => { s.volume = +sv.value; J.save(); J.sfx.notify(); }; }
     const sr = $('#spRate', body); if (sr) { sr.value = s.speechRate || 1; sr.onchange = () => { s.speechRate = +sr.value; J.save(); J.voice.speak('Tak brzmi nowe tempo mowy.', { force: true, replace: true }); }; }
     const sl = $('#sttLang', body); if (sl) { sl.value = s.sttLang || 'pl-PL'; sl.onchange = () => { s.sttLang = sl.value; J.save(); }; }
     /* powiadomienia */

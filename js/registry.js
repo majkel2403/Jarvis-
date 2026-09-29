@@ -212,6 +212,7 @@ const api = J.registry = {
       const env = r == null ? ok(null, 'Gotowe.') : typeof r === 'string' ? ok(null, r) : typeof r.ok !== 'boolean' ? ok(r, 'Gotowe.') : r;
       if (env.ok && typeof env.undo === 'function') env.undoEntry = J.undo?.push({ id, label: c.label, text: env.text, undo: env.undo, changed: typeof env.undo.changed === 'function' ? env.undo.changed : undefined, source: ctx.source }) || null;
       if (env.undoEntry) Object.defineProperty(env, 'undoEntry', { enumerable: false });
+      if (env.ok && env.ui?.highlight && ctx.source !== 'ui' && ctx.source !== 'local') J.emit('agent-ui', env.ui.highlight);   // efekt „ducha” okna (fx cinema)
       return env;
     } catch (e) {
       if (e?.name === 'AbortError') return fail('TIMEOUT', 'Przerwano.');

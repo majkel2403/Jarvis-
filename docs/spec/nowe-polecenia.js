@@ -37,8 +37,6 @@ module.exports = [
   /* ================= APLIKACJE (08-aplikacje.md) ================= */
 
   /* ================= WYGLĄD (09-wyglad-stany.md) ================= */
-  { id: 'fx_level', group: 'Interfejs', label: 'Poziom efektów', description: 'Efekty: tool (oszczędnie), standard, cinema (pełne); off = bez animacji.', args: S({ level: str({ enum: ['off', 'tool', 'standard', 'cinema'] }) }, ['level']), level: 'A2', risk: 'safe', undo: 'poprzedni poziom', writes: ['settings'], phase: 'W5', doc: '09-wyglad-stany.md',
-    examples: ['wyłącz animacje', 'tryb kinowy', 'mniej efektów'] },
 
   /* ================= USTAWIENIA (10-ustawienia.md) ================= */
 

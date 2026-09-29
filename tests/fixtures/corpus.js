@@ -236,5 +236,9 @@ C.push(['wyłącz na stałe automatyzację poranną', 'routine_remove', 'para'])
 C.push(['pauza zadania', 'plan_control', 'local']);
 C.push(['poczekaj chwilę z tym planem', 'plan_control', 'para']);
 
+/* ---- przeniesione z planu (fx_level) ---- */
+C.push(['efekty na minimum', 'fx_level', 'local']);
+C.push(['za dużo tych animacji', 'fx_level', 'para']);
+
 /* powtórzenia (np. z generatora) usuwamy — każde zdanie liczy się raz */
 module.exports = C.filter((x, i) => C.findIndex(y => y[0] === x[0]) === i);

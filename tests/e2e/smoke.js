@@ -175,6 +175,17 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.evaluate(() => J.wm.open('settings', { view: 'section', target: 'agent' })); await p.waitForTimeout(400);
   assert(await p.evaluate(() => /test w4/.test(document.querySelector('#rtList').textContent)), 'rutyna w Ustawieniach');
   await p.evaluate(() => { J.widgets.list.filter(x => x.type === 'spec').forEach(w => J.widgets.remove(w.id, { silent: true })); J.state.routines = []; J.wm.closeAll(); });
+  // ===== W5: poziom efektów (computed style), minimapa, załącznik w czacie, porównanie w Process Log =====
+  await p.evaluate(() => J.uiRun('fx_level', { level: 'off' }, { offer: false })); await p.waitForTimeout(200);
+  const fxs = await p.evaluate(() => { J.wm.open('notes'); const el = document.querySelector('.window[data-app="notes"]'); return { attr: document.querySelector('#app').dataset.fx, tr: getComputedStyle(el).transitionDuration, an: getComputedStyle(el).animationName }; });
+  assert(fxs.attr === 'off' && /^0s/.test(fxs.tr) && fxs.an === 'none', 'fx off: ' + JSON.stringify(fxs));
+  await p.evaluate(() => J.uiRun('fx_level', { level: 'standard' }, { offer: false }));
+  await p.evaluate(() => { J.state.settings.minimap = true; J.emit('settings'); J.wm.open('calc'); }); await p.waitForTimeout(300);
+  assert(await p.evaluate(() => document.querySelectorAll('.minimap .mm-w').length >= 2), 'minimapa pokazuje okna');
+  await p.evaluate(() => { J.state.settings.minimap = false; J.emit('settings'); });
+  await p.evaluate(async () => { J.chatPanel.show(); J.notes.add('Załącznik W5', 'treść załącznika'); await J.uiRun('chat_attach', { note: 'Załącznik W5' }, { offer: false }); }); await p.waitForTimeout(200);
+  assert(await p.evaluate(() => /Załącznik W5/.test(document.querySelector('#chatAtt')?.textContent || '')), 'chip załącznika w czacie');
+  await p.evaluate(() => { J.attach.clear(); J.wm.closeAll(); });
   // ===== Jev (atrapa usługi przez przechwycenie żądań): szybka ścieżka, wartość z listy, „Cofnij”, odpowiedzi tak/nie, panel ustawień =====
   const jevCalls = [];
   await p.route('**/api/v1/systemone', async route => {

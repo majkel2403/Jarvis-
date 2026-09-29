@@ -26,10 +26,13 @@
 | bus | `tool.failed` | ai.js |
 | bus | `tool.started` | ai.js |
 | ui | `action` | core.js |
+| ui | `agent-ui` | registry.js |
 | ui | `app-view` | apps.js, commands-ext.js |
+| ui | `attach` | commands-w4.js |
 | ui | `ear` | core.js |
 | ui | `ear-standby` | core.js |
 | ui | `files` | commands.js |
+| ui | `fx` | main.js |
 | ui | `hermes` | ai.js |
 | ui | `history` | ai.js |
 | ui | `judge` | judge.js |
@@ -42,7 +45,7 @@
 | ui | `proc-end` | process.js |
 | ui | `routine-step` | commands-w4.js |
 | ui | `routines` | commands-w4.js |
-| ui | `settings` | apps.js, commands-ext.js, commands.js, core.js, main.js |
+| ui | `settings` | apps.js, commands-ext.js, commands-w4.js, commands.js, core.js, main.js |
 | ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |

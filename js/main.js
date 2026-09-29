@@ -48,6 +48,19 @@ const boot = () => new Promise(resolve => {
 
 /* =================== TŁO: sieć cząsteczek + FPS =================== */
 const RM = matchMedia('(prefers-reduced-motion: reduce)');   // systemowe „ogranicz ruch”
+const FX = ['off', 'tool', 'standard', 'cinema'];
+J.fx = {
+  LEVELS: FX, cap: 3,   // cap = samoczynne ograniczenie po spadku płynności (3 = bez ograniczenia)
+  rank() { return Math.min(Math.max(0, FX.indexOf(S.fxLevel || 'standard')), RM.matches ? 0 : 3, J.fx.cap); },
+  level() { return FX[J.fx.rank()]; },
+  apply() { const lv = J.fx.level(), app = $('#app'); if (!app) return lv; app.dataset.fx = lv; app.classList.toggle('lowfx', J.fx.rank() < 2); document.documentElement.dataset.fx = lv; J.emit('fx', lv); return lv; },
+  lower() { const r = J.fx.rank(); if (r <= 1) return false; J.fx.cap = r - 1; J.fx.apply(); J.log('Efekty', 'Niska płynność (FPS < 30 przez 5 s) — obniżam poziom efektów do „' + J.fx.level() + '”', 'warn'); return true; },
+  orbits: () => J.fx.rank() >= 2,
+  /* „duch” okna: w trybie kinowym zarys okna pojawia się, zanim agent je otworzy */
+  ghost(id) { if (J.fx.rank() < 3) return; const el = J.wm.ctx(id)?.el; if (!el) return; const g = h('div', { class: 'win-ghost' }); Object.assign(g.style, { left: el.style.left, top: el.style.top, width: el.offsetWidth + 'px', height: el.offsetHeight + 'px' }); el.parentElement?.appendChild(g); setTimeout(() => g.remove(), 900); }
+};
+RM.addEventListener?.('change', () => J.fx.apply());
+J.on('settings', () => J.fx.apply());
 const fx = (() => {
   const cv = $('#fx'), c = cv.getContext('2d');
   let W, H, pts = [], mouse = { x: -999, y: -999 }, frames = 0, last = performance.now();
@@ -62,11 +75,13 @@ const fx = (() => {
     mouse.x = e.clientX; mouse.y = e.clientY;
     const wp = $('#wallpaper'); if (wp) wp.style.transform = `translate(${(e.clientX / W - .5) * -18}px,${(e.clientY / H - .5) * -12}px) scale(1.02)`;
   });
+  /* poziom efektów (docs/spec/09-wyglad-stany.md §7): min(ustawienie, systemowe „ogranicz ruch”, samoczynne obniżenie przy FPS < 30 przez 5 s) */
   let lowSince = 0, okSince = 0; J.quality = 'high';
   const adapt = () => {
     const f = J.fps, t = Date.now();
-    if (J.quality === 'high') { if (f && f < 38) { lowSince = lowSince || t; if (t - lowSince > 3000) { J.quality = 'low'; okSince = 0; $('#app').classList.add('lowfx'); J.toast('Obniżyłem jakość efektów, żeby zachować płynność'); } } else lowSince = 0; }
-    else { if (f >= 55) { okSince = okSince || t; if (t - okSince > 6000) { J.quality = 'high'; lowSince = 0; $('#app').classList.remove('lowfx'); } } else okSince = 0; }
+    if (f && f < 30) { okSince = 0; lowSince = lowSince || t; if (t - lowSince > 5000 && J.fx.lower()) lowSince = 0; }
+    else { lowSince = 0; if (J.fx.cap < 3 && f >= 55) { okSince = okSince || t; if (t - okSince > 8000) { J.fx.cap = Math.min(3, J.fx.cap + 1); okSince = 0; J.fx.apply(); J.log('Efekty', 'Płynność wróciła — przywracam poziom ' + J.fx.level()); } } else okSince = 0; }
+    J.quality = J.fx.rank() >= 2 ? 'high' : 'low';
   };
   const loop = now => {
     if (document.hidden) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle nic nie rysujemy
@@ -74,7 +89,7 @@ const fx = (() => {
     if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
     c.clearRect(0, 0, W, H);
     const LOW = J.quality === 'low';
-    if (S.particles && !LOW && !RM.matches && !$('#app').classList.contains('focus')) {
+    if (S.particles && !LOW && J.fx.rank() >= 2 && !$('#app').classList.contains('focus')) {
       const rgb = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim() || '33,217,255';
       for (const p of pts) {
         p.x += p.vx; p.y += p.vy;
@@ -165,7 +180,7 @@ function orbDraw(t) {
     }
     oc.restore();
   };
-  orbs.forEach(o => orbitPath(o, false));
+  if (J.fx.orbits()) orbs.forEach(o => orbitPath(o, false));
 
   // — kula: korpus
   oc.save(); oc.beginPath(); oc.arc(C0, C0, RB, 0, TWO); oc.clip();
@@ -236,7 +251,7 @@ function orbDraw(t) {
   }
 
   // — orbity (przednia połowa)
-  orbs.forEach(o => orbitPath(o, true));
+  if (J.fx.orbits()) orbs.forEach(o => orbitPath(o, true));
 
   // — iskry wokół
   SPARK.forEach(s => {
@@ -404,6 +419,20 @@ J.on('wm', () => { const l = $$('#dock button'); l.forEach((b, i) => b.tabIndex 
 const widgetMenu = (x, y) => ctxMenu(x, y, [...Object.entries(J.widgets.TYPES).filter(([k]) => k !== 'spec').map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
   { ic: 'bolt', t: 'Widget z opisu…', run: async () => { const d = prompt('Opisz widget (np. „top 5 tokenów”, „mini wykres BTC”, „pogoda i zadania na dziś”, „odliczanie do urlopu 15 października”):'); if (!d || !d.trim()) return; const r = await J.uiRun('widget_build', { prompt: d.trim() }, { quiet: true }); if (!r.ok) { if (J.aiReady()) J.brain.handle('Zbuduj widget na pulpicie (widget_build): ' + d.trim()); else J.toast(r.text); } } },
   { ic: 'chart', t: 'Wykres…', run: () => ctxMenu(x, y, [['crypto', 'Kurs BTC'], ['weather_hours', 'Temperatura'], ['tasks_week', 'Zadania w tygodniu'], ['activity', 'Aktywność'], ['cost', 'Koszt Hermesa'], ['jev_confidence', 'Pewność Jeva']].map(([s, t]) => ({ ic: 'chart', t, run: () => J.uiRun('chart_show', { source: s }) }))) }]);
+
+/* =================== MINIMAPA OKIEN (opcjonalna, Ustawienia → Interfejs) =================== */
+J.minimap = (() => {
+  let box = null;
+  const draw = () => {
+    if (!S.minimap) { box?.remove(); box = null; return; }
+    const desk = $('#desktop') || $('.desktop'); if (!desk) return;
+    if (!box) { box = h('div', { class: 'minimap', role: 'navigation', 'aria-label': 'Minimapa okien' }); document.body.appendChild(box); }
+    const d = desk.getBoundingClientRect(), k = 150 / Math.max(1, d.width); box.style.height = Math.round(d.height * k) + 'px'; box.innerHTML = '';
+    J.wm.info().filter(w => !w.min).forEach(w => { const r = h('button', { class: 'mm-w' + (w.focused ? ' on' : ''), title: w.title, 'aria-label': w.title }); Object.assign(r.style, { left: Math.round(w.x * k) + 'px', top: Math.round(w.y * k) + 'px', width: Math.max(6, Math.round(w.w * k)) + 'px', height: Math.max(5, Math.round(w.h * k)) + 'px' }); r.onclick = () => J.wm.open(w.id); box.appendChild(r); });
+  };
+  J.on('wm', draw); J.on('wm-resize', J.debounce(draw, 120)); J.on('settings', draw);
+  return { draw };
+})();
 
 /* =================== PALETA POLECEŃ =================== */
 const palette = (() => {
@@ -960,6 +989,7 @@ J.notice = ({ title, body, kind = 'info', toast = true, system = false, actions 
   const ch = J.notifChannel ? J.notifChannel(kind) : { on: true, sound: true, perHour: 20 };
   const recent = (toastLog[kind] = (toastLog[kind] || []).filter(t => Date.now() - t < 3600e3));
   const show = toast && ch.on && recent.length < (ch.perHour ?? 20);
+  if (show) J.sfx.forKind?.(kind);
   if (show) { recent.push(Date.now()); J.toast(J.uiMode?.get() === 'present' ? 'Nowe powiadomienie' : n.title + (n.body ? ' — ' + n.body : ''), 5000); }
   if (system && ch.on && J.uiMode?.get() !== 'present') J.notify?.(n.title, n.body);
   J.notifs.render(); return n;
@@ -1030,7 +1060,7 @@ try {
   bc.postMessage({ t: 'hello', id: me });
 } catch (e) { /* brak BroadcastChannel — bez ochrony dwóch kart */ }
 boot().then(() => {
-  J.widgets.restore(); setTimeout(() => J.userRoutines?.fire('startup'), 4000);
+  J.widgets.restore(); setTimeout(() => J.userRoutines?.fire('startup'), 4000); J.fx.apply(); J.on('agent-ui', id => J.fx.ghost(id));
   /* tryb przestrzeni i układ startowy */
   { const m = J.state.ui.mode === 'present' ? 'work' : (J.state.ui.mode || S.startMode || 'work'); if (m !== 'work') J.uiMode.set(m); else J.state.ui.mode = 'work'; }
   { const ls = S.layoutStartup || 'none'; if (ls === 'last') { let l = []; try { l = JSON.parse(localStorage.getItem('jarvis-os:openAtExit') || '[]'); } catch (e) { } l.forEach(id => J.apps[id] && J.wm.open(id)); } else if (ls !== 'none') J.layouts.apply(ls); }

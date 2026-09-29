@@ -10,7 +10,6 @@ module.exports = [
   // zadania
   // aplikacje
   // wygląd
-  ['efekty na minimum', 'fx_level', 'local'], ['za dużo tych animacji', 'fx_level', 'para'],
   // ustawienia
   // agent
 ];

@@ -151,10 +151,6 @@ Ukryte: czat, Process Log, centrum powiadomień (liczba zostaje, treści nie), t
 
 ## Planowane polecenia tej części
 
-| polecenie | co robi | poziom | cofanie | fala |
-|---|---|---|---|---|
-| `fx_level` | Poziom efektów | A2 | poprzedni poziom | W5 |
-
-Pełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).
+Wszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).
 
 <!-- polecenia:end -->
