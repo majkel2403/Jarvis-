@@ -12,6 +12,8 @@ Czysty HTML/CSS/JS, bez builda i bez zależności: wystarczy otworzyć `index.ht
 | **Sterowanie głosem** | kliknij orb lub `Ctrl + Spacja` i mów po polsku (Chrome / Edge); Jarvis odpowiada syntezatorem mowy |
 | **Hermes (Nous Research)** | mózgiem Jarvisa jest **Hermes Agent** (lub model Hermes z Nous Portal / Ollama). Rozumie dowolne polecenia i **sam steruje systemem** wywołaniami funkcji w natywnym formacie Hermes `<tool_call>` (otwiera okna, tworzy notatki, zadania, minutniki, skróty, zmienia motyw…); narzędzia serwerowe Hermes Agent (wyszukiwanie, terminal, pamięć) działają równolegle i są widoczne w czacie |
 | **Tryb lokalny** | gdy Hermes jest wyłączony lub nieosiągalny, działa wbudowany silnik poleceń: „otwórz notatnik”, „zanotuj: …”, „przypomnij mi o 18:00 trening”, „minutnik 5 minut”, „pogoda w Krakowie”, „kurs bitcoina”, „oblicz 15% z 2400”, „motyw fiolet”, „otwórz YouTube”… |
+| **Dashboard agenta** | pasek górny z segmentowym wskaźnikiem trybu (Gotowy · Słucham · Analiza · Działanie · Gotowe/Błąd) wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS i zegar; w lewym dolnym rogu **Telemetria** (zwijana): pogoda, zegar, wykres aktywności agenta oraz FPS, pamięć, sieć, bateria, zadania, narzędzia, czas pracy, okna — wszystko z realnych źródeł |
+| **Wygląd** | neonowy HUD: szklane panele z narożnikami, pierścienie wokół Core reagujące na stan, czcionki Orbitron / Rajdhani, siatka i skanlinie w tle, 8 motywów kolorystycznych |
 | **Układ 3 paneli** | po lewej **czat z Jarvisem**, w środku **główny pulpit**, po prawej **Process Log** (wysuwa się, gdy Jarvis pracuje) |
 | **Process Log** | log tylko bieżącego zadania: polecenie, myśli modelu, zapytania do Hermesa, wywołania narzędzi z argumentami, wynikami, błędami i czasem; zakończone zadania trafiają do **historii** (eksport .json, przypięcie wyniku na pulpit) |
 | **Visual Engine** | Core jest żywym monitorem stanu: **Event Bus** (`js/events.js`, zdarzenia z `task_id`: `task.*`, `model.*`, `tool.*`) → maszyna stanów (IDLE · LISTENING · THINKING · EXECUTING · COMPLETED · ERROR) → renderer. W spoczynku: szklana kula z orbitami, wiązką i odbiciem w jeziorze. Gdy trwa zadanie, wokół Core pojawia się **10 kart HUD** (`js/hud.js`: Model AI, Analiza polecenia, Tool Calls, Internet, Dane zewnętrzne, Pliki, Status systemu, Wykonywanie, Logika, Zakończenie) połączonych liniami obwodów. Każda karta i każdy impuls pochodzi z realnego zdarzenia (fala Model AI = faktycznie odebrane znaki ze strumienia); brak zdarzenia = karta przygaszona, linia pusta. Nic nie jest animowane „na niby” |
@@ -87,6 +89,7 @@ css/jarvis.css        wygląd i animacje
 js/core.js            stan, dźwięk, głos, menedżer okien
 js/ai.js              akcje systemowe, silnik lokalny, integracja z Hermesem
 js/apps.js            usługi (pogoda, rynek, zadania) i aplikacje
+js/dash.js            dashboard agenta: tryb, pasek statusu, telemetria
 js/main.js            start, efekty, pulpit, dok, paleta, skróty
 sw.js                 service worker (offline)
 assets/               tapeta i ikona

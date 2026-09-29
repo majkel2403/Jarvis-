@@ -18,7 +18,7 @@ const boot = () => new Promise(resolve => {
     resolve();
   };
   if (S.skipBoot) {
-    $('#bootTitle').textContent = 'JARVIS'; $('#bootBar').style.width = '100%';
+    $('#bootTitle').textContent = 'JARVIS'; $('#bootBar').style.width = '100%'; $('#bootPct').textContent = '100%';
     const e = $('#bootEnter'); e.classList.add('show');
     const go = () => { removeEventListener('keydown', go); el.removeEventListener('click', go); finish(); };
     addEventListener('keydown', go); el.addEventListener('click', go);
@@ -35,7 +35,7 @@ const boot = () => new Promise(resolve => {
   const step = () => {
     if (i < lines.length) {
       log.appendChild(h('div', {}, '&gt; ' + lines[i])); i++;
-      bar.style.width = (i / lines.length * 100) + '%';
+      bar.style.width = (i / lines.length * 100) + '%'; $('#bootPct').textContent = Math.round(i / lines.length * 100) + '%';
       setTimeout(step, 180 + Math.random() * 200);
     } else if (!done) {
       done = true; const e = $('#bootEnter'); e.classList.add('show');

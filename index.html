@@ -4,31 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Jarvis OS</title>
-<meta name="description" content="Jarvis OS — wirtualne środowisko AI w przeglądarce: asystent głosowy, okna, notatki, rynek, pogoda, terminal.">
-<meta name="theme-color" content="#050d1a">
+<meta name="description" content="Jarvis OS — wirtualne środowisko AI w przeglądarce: agent głosowy, pulpit HUD, okna, notatki, rynek, pogoda, terminal.">
+<meta name="theme-color" content="#03060f">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/jarvis.css">
 </head>
 <body>
 
 <!-- ============ BOOT ============ -->
 <div id="boot" role="dialog" aria-label="Uruchamianie Jarvis OS">
+  <div class="boot-grid"></div>
+  <div class="boot-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <div class="boot-inner">
     <div class="reactor">
       <svg viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="r r0" cx="110" cy="110" r="106"/>
         <circle class="r r1" cx="110" cy="110" r="100"/>
         <circle class="r r2" cx="110" cy="110" r="80"/>
         <circle class="r r3" cx="110" cy="110" r="62"/>
+        <circle class="r r4" cx="110" cy="110" r="44"/>
         <circle class="core-dot" cx="110" cy="110" r="26"/>
       </svg>
     </div>
     <div class="boot-title" id="bootTitle"></div>
+    <div class="boot-sub">Virtual AI Environment · v2.1</div>
     <div class="boot-log" id="bootLog"></div>
     <div class="boot-bar"><i id="bootBar"></i></div>
+    <div class="boot-meta"><span>Inicjalizacja systemu</span><span id="bootPct">0%</span></div>
     <button class="boot-enter" id="bootEnter">Kliknij, aby wejść</button>
   </div>
 </div>
@@ -39,13 +45,24 @@
   <canvas id="fx"></canvas>
   <div class="grid-overlay"></div>
   <div class="scan"></div>
+  <div class="noise"></div>
   <div class="vignette"></div>
+  <div class="hud-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
   <header class="topbar">
-    <div class="brand"><span class="brand-orb"></span><span class="name">Jarvis</span></div>
+    <div class="brand"><span class="brand-orb"></span><span class="name">JARVIS</span><span class="ver">OS</span></div>
     <div class="divider"></div>
+    <div class="mode-hud" id="modeHud" data-mode="IDLE" title="Stan agenta" aria-live="polite">
+      <span class="mh-seg on" data-m="IDLE">Gotowy</span><span class="mh-seg" data-m="LISTENING">Słucham</span><span class="mh-seg" data-m="THINKING">Analiza</span><span class="mh-seg" data-m="EXECUTING">Działanie</span><span class="mh-seg" data-m="COMPLETED">Gotowe</span>
+    </div>
     <div class="tagline">Twój asystent AI do pracy i życia</div>
-    <button class="search-pill" id="searchPill" title="Paleta poleceń">
+    <div class="top-status" id="topStatus">
+      <span class="ts" id="tsAi" data-s="local" title="Mózg Jarvisa (Hermes)"><i></i><b>Hermes</b><em>—</em></span>
+      <span class="ts" id="tsTools" title="Wywołania narzędzi"><b>Tools</b><em>0</em></span>
+      <span class="ts" id="tsFps" title="Klatki na sekundę"><b>FPS</b><em>—</em></span>
+      <span class="ts clock" id="tsClock" title="Czas systemowy"><em>--:--:--</em></span>
+    </div>
+    <button class="search-pill" id="searchPill" title="Paleta poleceń (Ctrl+K)">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <span class="txt">Szukaj aplikacji i poleceń…</span><kbd>Ctrl K</kbd>
     </button>
@@ -66,6 +83,7 @@
 
     <section class="center-stage">
       <div class="core-wrap" id="coreWrap" data-state="idle">
+        <div class="core-rings" aria-hidden="true"><i class="cr cr1"></i><i class="cr cr2"></i><i class="cr cr3"></i></div>
         <canvas id="orbCanvas"></canvas>
         <div class="core-glow"></div>
         <button class="core" id="core" aria-label="Jarvis — kliknij, aby mówić" title="Kliknij, aby mówić · Shift+klik: panel węzłów">
@@ -78,11 +96,30 @@
     <div class="hud" id="hud" aria-label="Przepływ zadania"></div>
 
     <div class="result-chip" id="resultChip"></div>
-    <div class="sys">
-      <div class="sysline click" id="sysWeather" title="Pogoda"><span class="weather-ico" id="wxIco">☁</span><div><strong id="wxTemp">--°C</strong><div class="muted" id="wxCity">Wrocław</div></div></div>
-      <span class="sys-sep"></span>
-      <div class="sysline click" id="sysClock" title="Harmonogram"><div><strong id="clockBig">--:--</strong><div class="muted" id="dateLine"></div></div></div>
-    </div>
+
+    <!-- telemetria (dolny lewy róg): pogoda, zegar, realne metryki systemu i agenta -->
+    <section class="deck" id="deck" aria-label="Telemetria">
+      <button class="deck-head" id="deckHead" title="Zwiń / rozwiń telemetrię"><span class="dk-title">Telemetria</span><span class="dk-mode" id="dkMode">GOTOWY</span><span class="dk-chev"></span></button>
+      <div class="sys">
+        <div class="sysline click" id="sysWeather" title="Pogoda"><span class="weather-ico" id="wxIco">☁</span><div><strong id="wxTemp">--°C</strong><div class="muted" id="wxCity">Wrocław</div></div></div>
+        <span class="sys-sep"></span>
+        <div class="sysline click" id="sysClock" title="Harmonogram"><div><strong id="clockBig">--:--</strong><div class="muted" id="dateLine"></div></div></div>
+      </div>
+      <div class="deck-body">
+        <div class="dk-spark"><canvas id="dkSpark"></canvas><span class="dk-cap">Aktywność agenta</span><span class="dk-cap r" id="dkAct">0%</span></div>
+        <div class="deck-grid">
+          <div class="dk"><span>FPS</span><b id="dkFps">—</b></div>
+          <div class="dk"><span>Pamięć</span><b id="dkMem">—</b></div>
+          <div class="dk"><span>Sieć</span><b id="dkNet">—</b></div>
+          <div class="dk"><span>Bateria</span><b id="dkBat">—</b></div>
+          <div class="dk"><span>Zadania</span><b id="dkTasks">0</b></div>
+          <div class="dk"><span>Akcje</span><b id="dkTools">0</b></div>
+          <div class="dk"><span>Czas</span><b id="dkUp">0:00</b></div>
+          <div class="dk"><span>Okna</span><b id="dkWin">0</b></div>
+        </div>
+      </div>
+    </section>
+
     <div class="sysicons">
       <button class="sysbtn" id="btnSound" title="Dźwięki"></button>
       <button class="sysbtn" id="btnNet" title="Połączenie"></button>
@@ -132,6 +169,7 @@
 <script src="js/apps.js"></script>
 <script src="js/widgets.js"></script>
 <script src="js/hud.js"></script>
+<script src="js/dash.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

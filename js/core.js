@@ -78,7 +78,7 @@ J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="cur
 const KEY = 'jarvis-os:v2';
 const DEFAULTS = () => ({
   settings: {
-    accent: '#3d8bff', accent2: '#a25cff', look: 3, wall: 'photo', particles: true, sound: true,
+    accent: '#33d6ff', accent2: '#a25cff', look: 4, wall: 'photo', particles: true, sound: true,
     speech: true, voiceName: '',
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false
@@ -96,7 +96,7 @@ const DEFAULTS = () => ({
   log: [],
   history: [],
   widgets: [],
-  ui: { chatClosed: true, logPinned: false },
+  ui: { chatClosed: true, logPinned: false, deckMin: false },
   winPos: {},
   stats: { actions: 0 }
 });
@@ -106,7 +106,7 @@ J.state = (() => {
   const d = DEFAULTS();
   if (!s) return d;
   s.settings = Object.assign(d.settings, s.settings || {});
-  if (s.settings.look !== 3) { s.settings.look = 3; if (s.settings.accent === '#21d9ff') { s.settings.accent = '#3d8bff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd: domyślny akcent niebiesko-fioletowy
+  if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd (neon HUD): domyślny akcent cyjan-fiolet
   delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
   for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 };
@@ -260,10 +260,10 @@ J.applyTheme = () => {
   r.setProperty('--accent', s.accent); r.setProperty('--accent-rgb', J.rgb(s.accent));
   r.setProperty('--accent2', s.accent2); r.setProperty('--accent2-rgb', J.rgb(s.accent2));
   const app = J.$('#app'); if (app) app.dataset.wall = s.wall;
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#050d1a');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#03060f');
 };
 J.THEMES = {
-  jarvis: ['#3d8bff', '#a25cff'], cyjan: ['#21d9ff', '#9a63ff'], niebieski: ['#3d8bff', '#21d9ff'], fiolet: ['#b07cff', '#ff5ec4'],
+  jarvis: ['#33d6ff', '#a25cff'], cyjan: ['#21d9ff', '#39e59a'], niebieski: ['#3d8bff', '#21d9ff'], fiolet: ['#b07cff', '#ff5ec4'],
   zielony: ['#39e59a', '#21d9ff'], złoty: ['#ffc24d', '#ff6a3d'], czerwony: ['#ff4d6d', '#ffb84d'], różowy: ['#ff5ec4', '#9a63ff']
 };
 
