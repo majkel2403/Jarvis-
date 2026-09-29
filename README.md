@@ -54,7 +54,7 @@ Jarvis rozmawia z Hermesem przez API zgodne z OpenAI (`/v1/chat/completions`, st
 ### Hermes Agent (domyślnie)
 
 1. Zainstaluj [Hermes Agent](https://github.com/NousResearch/hermes-agent) i skonfiguruj dostawcę modelu (np. `hermes setup --portal`).
-2. W `~/.hermes/.env` włącz serwer API i zezwól stronie Jarvisa na połączenie:
+2. W `~/.hermes/.env` (Windows: `%USERPROFILE%\.hermes\.env`) włącz serwer API i zezwól stronie Jarvisa na połączenie:
    ```bash
    API_SERVER_ENABLED=true
    API_SERVER_KEY=twój-tajny-klucz
@@ -81,7 +81,7 @@ Najczęstsze przyczyny „Hermes offline”:
 | „przeglądarka blokuje połączenie (CORS)” | `API_SERVER_CORS_ORIGINS` nie zawiera adresu strony. `http://localhost:4000` i `http://127.0.0.1:4000` to **różne** originy | dopisz dokładny origin, zrestartuj gateway |
 | „nikt nie odpowiada, ale pod 127.0.0.1 działa” | Windows rozwiązuje `localhost` na IPv6 `::1`, a gateway słucha tylko na IPv4 | wpisz w Ustawieniach `http://127.0.0.1:8642/v1` |
 | „odrzucił klucz API (401)” | klucz w Ustawieniach ≠ `API_SERVER_KEY` | ten sam klucz w obu miejscach |
-| nic nie nasłuchuje na 8642 | gateway nie działa albo `API_SERVER_ENABLED` ≠ `true`; Hermes w WSL2 bywa niedostępny z Windows | `hermes gateway`; z Windows sprawdź `curl http://localhost:8642/v1/models` |
+| nic nie nasłuchuje na 8642 | gateway nie działa albo `API_SERVER_ENABLED` ≠ `true` w `%USERPROFILE%\.hermes\.env` | uruchom `hermes gateway`; port sprawdzisz: `netstat -ano \| findstr :8642` |
 
 Testy połączenia bez prawdziwego Hermesa: `node tests/mock-hermes.js --key sekret --cors http://localhost:4000` uruchamia atrapę gateway'a, a `node tests/e2e/hermes.js` (atrapa na porcie 18642, nie koliduje z prawdziwym 8642) sprawdza w Chromium scenariusze brak CORS / zły klucz / OK / gateway wyłączony.
 

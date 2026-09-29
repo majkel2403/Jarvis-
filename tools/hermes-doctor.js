@@ -41,7 +41,7 @@ async function diagnose({ jarvis = 'http://localhost:4000', url = 'http://localh
   const alive = [];
   for (const h of hosts) { const u = new URL(base + '/models'); u.hostname = h; const r = await probe(u, { headers: key ? { Authorization: 'Bearer ' + key } : {} }); if (r.ok) alive.push({ h, r }); if (h === gw.hostname || r.ok) add('Gateway pod ' + h + ':' + (gw.port || 80), r.ok, r.ok ? 'HTTP ' + r.status : r.error + ' — ' + (r.message || '')); }
   if (!alive.length) {
-    add('Hermes gateway działa', false, 'nic nie nasłuchuje na porcie ' + (gw.port || 80), 'Uruchom w tym samym środowisku, w którym zainstalowano Hermesa: hermes gateway   (wymaga API_SERVER_ENABLED=true w .env). Hermes w WSL2? Sprawdź, czy jest dostępny z Windows: curl http://localhost:' + (gw.port || 8642) + '/v1/models');
+    add('Hermes gateway działa', false, 'nic nie nasłuchuje na porcie ' + (gw.port || 80), 'Uruchom w terminalu Windows: hermes gateway   (w ' + envCandidates()[envCandidates().length - 1] + ' musi być API_SERVER_ENABLED=true; do sprawdzenia portu: netstat -ano | findstr :' + (gw.port || 8642) + ')');
     return summarize(checks);
   }
   const main = alive.find(a => a.h === gw.hostname) || alive[0];
