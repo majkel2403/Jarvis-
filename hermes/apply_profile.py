@@ -75,6 +75,10 @@ def main() -> int:
     agent["disabled_toolsets"] = sorted(set(agent.get("disabled_toolsets") or []) | set(DISABLED))
 
     env = read_env(env_path)
+    # Najmniejsze uprawnienia: profil pulpitu nie potrzebuje sekretów kanałów, Notion, dashboardu ani Browserbase (klucze dostawców modeli zostają).
+    drop = re.compile(r"^\s*(TELEGRAM|WHATSAPP|DISCORD|SLACK|MATRIX|MATTERMOST|SIGNAL|EMAIL|NOTION|HERMES_DASHBOARD|BROWSERBASE|OBSIDIAN|TERMINAL_MODAL)_\w*\s*=")
+    scrubbed = sorted({ln.split("=")[0].strip() for ln in env if drop.match(ln)})
+    env = [ln for ln in env if not drop.match(ln)]
     have_key = any(re.match(r"^\s*API_SERVER_KEY\s*=\s*\S", ln) for ln in env)
     key = None if have_key else secrets.token_urlsafe(32)
     for k, v, keep in [("API_SERVER_ENABLED", "true", False), ("API_SERVER_HOST", "127.0.0.1", False), ("API_SERVER_PORT", str(a.port), False),
@@ -90,6 +94,7 @@ def main() -> int:
     print(f"  platform_toolsets.api_server -> {ENABLED}")
     print(f"  agent.disabled_toolsets -> {agent['disabled_toolsets']}")
     print(f"  API: http://127.0.0.1:{a.port}/v1  (model: {a.name})")
+    print(f"  .env: usunięto zbędne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or '—'}")
     if a.dry_run:
         print("(dry-run: nic nie zapisano)")
         return 0
