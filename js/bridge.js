@@ -7,7 +7,7 @@
 (() => {
 const S = () => J.state.settings;
 const base = () => String(S().bridgeUrl || 'http://127.0.0.1:8651').replace(/\/+$/, '');
-let es = null, retry = 0, retryTimer = null, pollTimer = null, sig = '';
+let es = null, retry = 0, retryTimer = null, pollTimer = null, sig = '', myId = '';
 
 J.bridge = { status: 'off', connected: false, tools: [], hermes: {}, checked: 0, connect, disconnect, refresh };
 const set = st => { const ch = J.bridge.status !== st; J.bridge.status = st; J.bridge.connected = st === 'up'; if (ch) J.emit('bridge'); };
@@ -43,6 +43,13 @@ async function handle(cmd) {
   } catch (e) { /* most zniknął — Hermes dostanie timeout */ }
 }
 
+/* zgłaszamy mostowi, czy ta karta jest widoczna — polecenia trafiają do aktywnej karty, nie do „najnowszej” */
+const reportFocus = () => {
+  if (!myId || !S().bridgeToken) return;
+  fetch(base() + '/bridge/focus', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bridge-Token': S().bridgeToken }, body: JSON.stringify({ client: myId, visible: document.visibilityState === 'visible' && document.hasFocus() }) }).catch(() => { });
+};
+document.addEventListener('visibilitychange', reportFocus); addEventListener('focus', reportFocus); addEventListener('blur', reportFocus);
+
 function disconnect(quiet) {
   clearTimeout(retryTimer); clearInterval(pollTimer);
   if (es) { es.close(); es = null; }
@@ -56,7 +63,8 @@ async function connect() {
   set('connecting');
   es = new EventSource(base() + '/bridge/events?token=' + encodeURIComponent(S().bridgeToken));
   es.addEventListener('hello', e => {
-    retry = 0; try { J.bridge.tools = JSON.parse(e.data).tools || []; } catch (er) { }
+    retry = 0; try { const h = JSON.parse(e.data); J.bridge.tools = h.tools || []; myId = h.client || ''; } catch (er) { }
+    reportFocus();
     set('up'); refresh(); clearInterval(pollTimer); pollTimer = setInterval(refresh, 20000);
     J.log('Most Hermes połączony', J.bridge.tools.length + ' narzędzi MCP dostępnych dla Hermesa', 'info');
   });

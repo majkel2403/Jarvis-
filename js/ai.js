@@ -228,7 +228,7 @@ const A = J.actions = {
     if (action === 'save') {
       if (!Array.isArray(steps) || !steps.length) return { ok: false, text: 'Rutyna potrzebuje niepustej listy steps: [{tool, args}]' };
       if (steps.length > 15) return { ok: false, text: 'Maksymalnie 15 kroków' };
-      for (const [i, s] of steps.entries()) { if (!s || !TOOLS.some(t => t.name === s.tool)) return { ok: false, text: 'Krok ' + (i + 1) + ': nieznane narzędzie „' + (s && s.tool) + '”' }; if (s.tool === 'routine') return { ok: false, text: 'Rutyna nie może wywoływać rutyn' }; }
+      for (const [i, s] of steps.entries()) { if (!s || !TOOLS.some(t => t.name === s.tool)) return { ok: false, text: 'Krok ' + (i + 1) + ': nieznane narzędzie „' + (s && s.tool) + '”' }; if (s.tool === 'routine') return { ok: false, text: 'Rutyna nie może wywoływać rutyn' }; const why = checkInput(TOOLS.find(t => t.name === s.tool), s.args || {}); if (why) return { ok: false, text: 'Krok ' + (i + 1) + ' (' + s.tool + '): ' + why }; }
       const rec = { name: String(name).slice(0, 40), about: String(description || '').slice(0, 140), steps: steps.map(s => ({ tool: s.tool, args: s.args || {} })) };
       const old = findUser(); if (old) Object.assign(old, rec); else user().push(rec);
       J.save(); J.emit('routines'); return { ok: true, text: 'Zapisano rutynę „' + rec.name + '” (' + rec.steps.length + ' ' + J.pl(rec.steps.length, 'krok', 'kroki', 'kroków') + '). Uruchomisz ją poleceniem: ' + rec.name };
@@ -295,17 +295,22 @@ const TOOLS = [
   { name: 'search_desktop', description: 'Szuka frazy w notatkach, zadaniach, widgetach i skrótach; zwraca trafienia z id.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'daily_briefing', description: 'Briefing dnia: data, zadania na dziś i jutro, pogoda, minutnik, liczba notatek. widget=true zostawia go jako kartę na pulpicie.', input_schema: { type: 'object', properties: { widget: { type: 'boolean' } } } },
   { name: 'visual_effect', description: 'Efekt wizualny: confetti (świętowanie), matrix (easter egg), pulse (puls rdzenia).', input_schema: { type: 'object', properties: { effect: { type: 'string', enum: ['confetti', 'matrix', 'pulse'] } }, required: ['effect'] } },
-  { name: 'arrange_windows', description: 'Układa otwarte okna na pulpicie: tile (kafelki obok siebie), cascade (kaskada) albo minimize_all (pokaż pulpit).', input_schema: { type: 'object', properties: { layout: { type: 'string', enum: ['tile', 'cascade', 'minimize_all'] } }, required: ['layout'] } }
+  { name: 'arrange_windows', description: 'Układa otwarte okna na pulpicie: tile = kafelki / obok siebie / siatka, cascade = kaskada / jedno na drugim, minimize_all = pokaż pulpit / schowaj wszystko.', input_schema: { type: 'object', properties: { layout: { type: 'string', enum: ['tile', 'cascade', 'minimize_all'] } }, required: ['layout'] } }
 ];
 
 /* wykonanie akcji z walidacją wejścia */
+/* walidacja wejścia narzędzia względem jego schematu (wykonanie i zapis kroków rutyny) — zwraca komunikat błędu albo null */
+const checkInput = (def, input) => {
+  if (!input || typeof input !== 'object') return 'INVALID_JSON: nieprawidłowe wejście narzędzia';
+  for (const r of def.input_schema.required || []) if (input[r] === undefined || input[r] === '') return 'Brak wymaganego pola: ' + r + '. Pola tego narzędzia: ' + Object.keys(def.input_schema.properties).join(', ');
+  for (const [k, p] of Object.entries(def.input_schema.properties)) if (p.enum && input[k] !== undefined && !p.enum.includes(input[k])) return `Nieprawidłowa wartość ${k}: ${input[k]}. Dozwolone: ${p.enum.join(', ')}`;
+  return null;
+};
 const exec = async (name, input) => {
   if (SOFT_NAMES.includes(name)) return { ok: true, text: MANUAL() };
   const def = TOOLS.find(t => t.name === name), fn = A[name];
   if (!def || !fn) return { ok: false, text: 'Nieznane narzędzie: ' + name + '. Dostępne: ' + TOOLS.map(t => t.name).join(', ') };
-  if (!input || typeof input !== 'object') return { ok: false, text: 'INVALID_JSON: nieprawidłowe wejście narzędzia' };
-  for (const r of def.input_schema.required || []) if (input[r] === undefined || input[r] === '') return { ok: false, text: 'Brak wymaganego pola: ' + r };
-  for (const [k, p] of Object.entries(def.input_schema.properties)) if (p.enum && input[k] !== undefined && !p.enum.includes(input[k])) return { ok: false, text: `Nieprawidłowa wartość ${k}: ${input[k]}` };
+  const bad = checkInput(def, input); if (bad) return { ok: false, text: bad };
   try { const r = await fn(input); J.action(name); return r; } catch (e) { return { ok: false, text: 'Błąd: ' + e.message }; }
 };
 

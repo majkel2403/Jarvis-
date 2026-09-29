@@ -73,6 +73,7 @@ def main() -> int:
     pt["api_server"] = list(ENABLED)
     agent = cfg.setdefault("agent", {})
     agent["disabled_toolsets"] = sorted(set(agent.get("disabled_toolsets") or []) | set(DISABLED))
+    agent["reasoning_effort"] = "low"   # proste polecenia pulpitu nie potrzebują długiego rozumowania — odpowiedź kilka razy szybsza
 
     env = read_env(env_path)
     # Najmniejsze uprawnienia: profil pulpitu nie potrzebuje sekretów kanałów, Notion, dashboardu ani Browserbase (klucze dostawców modeli zostają).
@@ -93,6 +94,7 @@ def main() -> int:
     print(f"  mcp_servers -> jarvis_desktop ({a.bridge_url.rstrip('/')}/mcp)")
     print(f"  platform_toolsets.api_server -> {ENABLED}")
     print(f"  agent.disabled_toolsets -> {agent['disabled_toolsets']}")
+    print("  agent.reasoning_effort -> low")
     print(f"  API: http://127.0.0.1:{a.port}/v1  (model: {a.name})")
     print(f"  .env: usunięto zbędne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or '—'}")
     if a.dry_run:

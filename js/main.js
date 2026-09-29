@@ -652,6 +652,7 @@ J.on('hermes', syncStatus); J.on('settings', syncStatus);
 // kontenery z overflow:hidden potrafią się „przewinąć” przy fokusie — trzymamy je w miejscu
 ['#app', '#desktop'].forEach(sel => { const el = $(sel); el.addEventListener('scroll', () => { if (el.scrollTop || el.scrollLeft) el.scrollTop = el.scrollLeft = 0; }); });
 J.proc.init(); J.hud.init(); renderIcons(); renderDock(); syncStatus();
+J.widgets.restore();   // widgety wracają od razu (także gdy ekran startowy czeka na kliknięcie) — Hermes widzi pełny pulpit
 clock(); setInterval(clock, 1000);
 setInterval(() => J.tasks.check(), 15e3);
 loadWeather(); setInterval(loadWeather, 15 * 60e3);
@@ -661,7 +662,6 @@ addEventListener('offline', () => { syncStatus(); J.toast('Utracono połączenie
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
 boot().then(() => {
-  J.widgets.restore();
   J.hermesPing();
   J.tasks.check();
   const hr = new Date().getHours();

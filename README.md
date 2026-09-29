@@ -93,7 +93,7 @@ Jarvis OS (przeglądarka) ──SSE /bridge/events──┐
 
 ### Instalacja (Windows, Hermes natywnie — bez WSL)
 1. **Most:** `bridge\start-bridge.bat` (zostaw uruchomiony). Token jest w `%USERPROFILE%\.jarvis-os\bridge-token`; strona Jarvis OS pobiera go sama (parowanie tylko dla dozwolonego Origin).
-2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, a potem bez `-DryRun` (dodaj `-LoginXai`, by od razu zalogować profil do Groka — osobne logowanie xAI, bo tokeny xAI są jednorazowe i nie wolno ich kopiować między profilami). Klonuje Twój aktywny profil **bez kanałów** (Telegram zostaje w starym profilu), konfiguruje MCP, toolsety, `.env` i `SOUL.md`, robi kopię `config.yaml`. Twój obecny gateway nie jest zmieniany.
+2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, a potem bez `-DryRun` (dodaj `-LoginXai`, by zalogować xAI/Grok: kod urządzenia zatwierdzasz w przeglądarce, wpis trafia do katalogu głównego Hermesa i jest współdzielony przez profile bez własnych wpisów; tokenów xAI nie wolno kopiować między profilami, bo są jednorazowe). Klonuje Twój aktywny profil **bez kanałów** (Telegram zostaje w starym profilu), konfiguruje MCP, toolsety, `.env` i `SOUL.md`, robi kopię `config.yaml`. Twój obecny gateway nie jest zmieniany.
 3. **Gateway:** `hermes\start-desktop-gateway.bat` (profil `jarvis-desktop`, API na `:8643`).
 4. **Jarvis OS:** *Ustawienia → Hermes → „Hermes Desktop (profil jarvis-desktop + most MCP)”*, wpisz `API_SERVER_KEY` wypisany przez instalator. Tryb MCP włącza się sam, gdy profil zgłosi się do mostu (*Ustawienia → Most pulpitu dla Hermesa* pokazuje status).
 
@@ -110,6 +110,9 @@ Narzędzia po stronie pulpitu (32, `js/ai.js`): `open_app`, `close_app`, `window
 - **Pamięć Hermesa:** profil `jarvis-desktop` ma narzędzie `memory` — zapamiętuje Twoje preferencje (motyw, układ okien, nazwy rutyn).
 
 Autostart mostu i gatewaya po zalogowaniu do Windows (opcjonalnie): `powershell -ExecutionPolicy Bypass -File bridge\install-autostart.ps1` (usunięcie: `-Remove`).
+
+### Grok 4.3
+Profil `jarvis-desktop` używa modelu `grok-4.3` (dostawca `xai-oauth`, reasoning `low` dla szybszych odpowiedzi), a `nous` jest zapasowym dostawcą. Zweryfikowane na żywo: polecenie → Grok → narzędzie MCP → widget na pulpicie (log Hermesa: `model=grok-4.3 provider=xai-oauth`). Typowy czas prostego polecenia przez agenta to ok. 20–30 s (2–3 wywołania modelu, ~10 tys. tokenów kontekstu), dlatego proste komendy wykonuje szybka ścieżka lokalna w ~30 ms. Most kieruje polecenia do **widocznej/ostatnio aktywnej** karty Jarvis OS, więc kilka otwartych kart nie miesza poleceń.
 
 > **Bezpieczeństwo mostu:** nasłuchuje tylko na `127.0.0.1`; `/mcp` wymaga tokenu Bearer, kanał przeglądarki tokenu i dozwolonego Origin (CORS + Private Network Access); profil `jarvis-desktop` nie ma terminala ani dostępu do plików.
 

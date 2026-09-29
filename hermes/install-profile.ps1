@@ -5,8 +5,9 @@
 .DESCRIPTION
   1. hermes profile create <Name> --clone-from <Source>   (kanały Telegrama NIE są klonowane)
   2. hermes\apply_profile.py: mcp_servers.jarvis_desktop, platform_toolsets.api_server, disabled_toolsets, .env, SOUL.md
-  3. (opcjonalnie) -LoginXai: osobne logowanie xAI (Grok) dla nowego profilu — kod urządzenia zatwierdzasz w przeglądarce.
-     Nie kopiujemy auth.json: refresh tokeny xAI są jednorazowe (rotujące), więc każdy profil musi mieć własny łańcuch.
+  3. (opcjonalnie) -LoginXai: logowanie xAI (Grok) — kod urządzenia zatwierdzasz w przeglądarce. Zapisuje się w katalogu głównym
+     (hermes -p default), z którego profile bez własnych wpisów xAI korzystają wspólnie (Hermes 0.21: 'hermes -p <profil> auth add xai-oauth'
+     dla profilu bez własnych wierszy po cichu gubi wpis). Nie kopiujemy auth.json: refresh tokeny xAI są jednorazowe.
 
   Twój obecny profil i gateway (np. jarvis2 + Telegram) NIE są zmieniane.
   Hermes ma działać natywnie w Windows (NIE przez WSL).
@@ -57,15 +58,13 @@ if ($DryRun -and -not (Test-Path $pdir)) { Write-Host "[dry-run] apply_profile.p
 if ($LASTEXITCODE -ne 0) { throw "apply_profile.py zakończył się błędem" }
 
 if ($LoginXai -and -not $DryRun) {
-  # Działający gateway trzyma poświadczenia w pamięci i przy zapisie nadpisałby świeże logowanie — zatrzymaj go na czas logowania.
-  Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'gateway run' -and $_.CommandLine -match [regex]::Escape("-p $Name") } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host "Zatrzymano gateway profilu $Name na czas logowania." }
-  Write-Host "`nLogowanie xAI (Grok) dla profilu $Name — otwórz podany adres i zatwierdź kod:"
-  & $hermes -p $Name auth add xai-oauth --type oauth --no-browser --timeout 900
-  Write-Host "Gotowe. Uruchom gateway: hermes\start-desktop-gateway.bat (auth status: $hermes -p $Name auth status xai-oauth)"
+  Write-Host "`nLogowanie xAI (Grok) — otwórz podany adres i zatwierdź kod (zapis w katalogu głównym Hermesa, wspólny dla profili bez własnych wpisów):"
+  & $hermes -p default auth add xai-oauth --type oauth --no-browser --timeout 900
+  Write-Host "Gotowe. Sprawdź: $hermes -p $Name auth status xai-oauth   Uruchom gateway: hermes\start-desktop-gateway.bat"
 } elseif (-not $DryRun) {
-  Write-Host "`nUwaga: profil nie ma własnego logowania do modelu (Grok 4.3 wymaga logowania xAI)."
-  Write-Host "Uruchom:  $hermes -p $Name auth add xai-oauth --type oauth --no-browser   (albo ponów instalację z -LoginXai)"
-  Write-Host "WAŻNE: zatrzymaj gateway tego profilu na czas logowania, inaczej nadpisze świeży wpis."
+  Write-Host "`nUwaga: Grok 4.3 wymaga logowania xAI. Uruchom ponownie z -LoginXai albo ręcznie:"
+  Write-Host "  $hermes -p default auth add xai-oauth --type oauth --no-browser"
+  Write-Host "(NIE używaj -p $Name — ten wariant nie zapisuje wpisu dla profilu bez własnych wierszy xAI.)"
 }
 
 Write-Host @"

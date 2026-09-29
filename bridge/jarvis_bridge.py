@@ -63,6 +63,8 @@ class Browser:
         self.id = uuid.uuid4().hex[:8]
         self.queue: asyncio.Queue = asyncio.Queue()
         self.since = time.time()
+        self.visible = False      # karta zgłasza, czy jest widoczna/aktywna
+        self.focus_ts = 0.0
 
 
 CLIENTS: dict[str, Browser] = {}
@@ -71,7 +73,8 @@ HERMES_SEEN: dict[str, float] = {}   # nazwa profilu Hermesa (nagłówek X-Jarvi
 
 
 def newest() -> Optional[Browser]:
-    return max(CLIENTS.values(), key=lambda c: c.since) if CLIENTS else None
+    """Karta docelowa: widoczna > ostatnio aktywna > najnowsza (kilka kart nie miesza poleceń)."""
+    return max(CLIENTS.values(), key=lambda c: (c.visible, c.focus_ts, c.since)) if CLIENTS else None
 
 
 async def relay(name: str, args: dict) -> str:
@@ -128,7 +131,7 @@ async def window_control(app: str, action: Literal["focus", "minimize", "maximiz
 
 @mcp.tool()
 async def arrange_windows(layout: Literal["tile", "cascade", "minimize_all"]) -> str:
-    """Układa otwarte okna: tile (kafelki), cascade (kaskada), minimize_all (pokaż pulpit)."""
+    """Układa otwarte okna. tile = kafelki / obok siebie / siatka; cascade = kaskada / jedno na drugim; minimize_all = pokaż pulpit / schowaj wszystko. Jeśli nie ma otwartych okien, zwraca błąd — wtedy najpierw otwórz aplikacje lub stwórz widgety."""
     return await relay("arrange_windows", {"layout": layout})
 
 
@@ -306,7 +309,9 @@ async def status(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     now = time.time()
+    target = newest()
     return cors(request, JSONResponse({"ok": True, "clients": len(CLIENTS), "tools": TOOL_NAMES,
+                                       "browsers": [{"id": c.id, "visible": c.visible, "target": c is target} for c in CLIENTS.values()],
                                        "hermes": {k: round(now - v) for k, v in HERMES_SEEN.items()}}))
 
 
@@ -345,6 +350,24 @@ async def events(request: Request) -> Response:
                     fut.set_result({"ok": False, "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})
 
     return cors(request, StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}))
+
+
+@mcp.custom_route("/bridge/focus", methods=["POST", "OPTIONS"])
+async def focus(request: Request) -> Response:
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    try:
+        body = await request.json()
+    except Exception:
+        return cors(request, JSONResponse({"error": "bad json"}, status_code=400))
+    c = CLIENTS.get(str(body.get("client", "")))
+    if c:
+        c.visible = bool(body.get("visible"))
+        if c.visible:
+            c.focus_ts = time.time()
+    return cors(request, JSONResponse({"ok": bool(c)}))
 
 
 @mcp.custom_route("/bridge/result", methods=["POST", "OPTIONS"])
