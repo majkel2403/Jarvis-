@@ -694,7 +694,24 @@ J.ask = (() => {
     pend.quick = J.chat.quick(question, opts, finish);
     if (o.speak !== false) J.voice.speak(question + (opts.length && opts.length <= 4 ? ' ' + opts.map(x => x.label).join(', ') + '?' : ''), { priority: 2 }).then(() => { if (!pend) return; const byVoice = J.ear.standby || J.brain.lastSource === 'voice'; if (!byVoice || !J.ear.supported) return; J.ear.expectAnswer(t => { if (!pend) return; const n = J.norm(t); const hit = opts.find(x => n.includes(J.norm(x.label))) || (/^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) && opts[0]) || (/^(nie|anuluj|odmawiam|stop)/.test(n) && opts.find(x => x.danger || /nie|anuluj|zako/i.test(x.label))); finish(hit ? hit.value : t); }); if (!J.ear.standby) J.ear.start({ answer: true }); });
   });
-  api.answer = t => { if (!pend) return false; const n = J.norm(t); const hit = pend.opts.find(x => J.norm(x.label) === n || n.includes(J.norm(x.label))); const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: t }); p.resolve(hit ? hit.value : t); return true; };
+  /* odpowiedź wpisana lub powiedziana: najpierw dokładne dopasowanie etykiety, potem Jev (D15: „no dobra” = tak), na końcu surowy tekst */
+  api.answer = t => {
+    if (!pend) return false;
+    const p = pend, n = J.norm(t), hit = p.opts.find(x => J.norm(x.label) === n || n.includes(J.norm(x.label)));
+    const done = v => { if (pend !== p) return; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: t }); p.resolve(v); };
+    if (hit) { done(hit.value); return true; }
+    if (J.judge?.available() && J.judge.allowed('answer') && p.opts.length) {
+      J.judge.answer(t, p.opts).then(r => {
+        if (pend !== p) return;
+        const th = J.judge.thresholds().yes;
+        if (r && r.kind === 'option' && r.index != null && p.opts[r.index] && r.confidence >= th) return done(p.opts[r.index].value);
+        if (r && r.kind === 'other' && r.confidence >= th) { api.cancel(); J.brain.handle(t, { source: J.brain.lastSource || 'typed' }); return; }   // to nie odpowiedź, tylko nowe polecenie
+        done(t);
+      });
+      return true;
+    }
+    done(t); return true;
+  };
   api.cancel = () => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: null }); p.resolve(null); };
   Object.defineProperty(api, 'pending', { get: () => !!pend });
   return api;
@@ -702,11 +719,27 @@ J.ask = (() => {
 /* potwierdzenie ryzykownego narzędzia: 'yes' | 'no' | 'always' | 'timeout' */
 J.confirm = async req => {
   J.sfx.confirm();
-  const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, { label: 'Zawsze', value: 'always' }], { timeout: 60000 });
+  const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, ...(req.forced ? [] : [{ label: 'Zawsze', value: 'always' }])], { timeout: 60000 });
   if (v === null) return 'timeout';
   if (v === 'yes' || v === 'no' || v === 'always') return v;
-  const n = J.norm(String(v)); return /^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) ? 'yes' : /zawsze/.test(n) ? 'always' : 'no';
+  const n = J.norm(String(v)); return /^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) ? 'yes' : (/zawsze/.test(n) && !req.forced) ? 'always' : 'no';
 };
+
+/* przycisk „Cofnij” po czynności wykonanej przez Jeva bez pytania (A2), znika po kilku sekundach */
+{
+  const chip = $('#undoChip'); let t = null, cur = null;
+  const hide = () => { clearTimeout(t); cur = null; chip.classList.remove('show'); };
+  J.on('undo-offer', ({ entry, ms }) => {
+    clearTimeout(t); cur = entry;
+    chip.innerHTML = '<span></span><button class="btn sm primary">Cofnij</button><i></i>';
+    $('span', chip).textContent = entry.text || entry.label || 'Wykonano';
+    const bar = $('i', chip); bar.style.transition = 'none'; bar.style.width = '100%';
+    $('button', chip).onclick = async () => { if (cur !== entry) return; hide(); const u = await J.undo.run(60000); J.chat.add('jarvis', u.text); J.sfx[u.ok ? 'notify' : 'error'](); };
+    chip.classList.add('show'); requestAnimationFrame(() => { bar.style.transition = 'width ' + ms + 'ms linear'; bar.style.width = '0%'; });
+    t = setTimeout(hide, ms);
+  });
+  J.on('undo-done', hide);
+}
 
 /* =================== WSKAZYWANIE ELEMENTÓW (Jarvis „pokazuje palcem”) =================== */
 J.ui = {
@@ -734,8 +767,9 @@ J.notifs = (() => {
   const rel = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'teraz' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); };
   const render = () => {
     const l = J.state.notifs; list.innerHTML = l.length ? '' : '<div class="lp-empty">Brak powiadomień.</div>';
-    l.slice(0, 60).forEach(n => {
-      const el = h('button', { class: 'nt' + (n.read ? '' : ' unread'), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
+    const hi = n => (n.imp ?? 0) >= .66 && Date.now() - n.ts < 864e5;   // D14: ważne (wg Jeva) z ostatniej doby idą na górę
+    [...l.filter(hi), ...l.filter(n => !hi(n))].slice(0, 60).forEach(n => {
+      const el = h('button', { class: 'nt' + (n.read ? '' : ' unread') + (hi(n) ? ' imp' : ''), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
       $('b', el).textContent = n.title; $('span', el).textContent = n.body || ''; $('small', el).textContent = rel(n.ts);
       el.onclick = () => { n.read = true; J.save(); render(); const app = KIND_APP[n.kind]; if (app === 'chat') J.chatPanel.show(); else if (app) J.wm.open(app); };
       list.appendChild(el);
@@ -745,7 +779,10 @@ J.notifs = (() => {
   const api = {
     get isOpen() { return panel.classList.contains('open'); },
     unread: () => J.state.notifs.filter(n => !n.read).length,
-    open() { panel.classList.add('open'); render(); J.state.notifs.forEach(n => n.read = true); J.save(); setTimeout(render, 600); },
+    open() {
+      panel.classList.add('open'); const fresh = J.state.notifs.filter(n => !n.read); render(); J.state.notifs.forEach(n => n.read = true); J.save(); setTimeout(render, 600);
+      if (fresh.length >= 2 && J.judge?.available() && J.judge.allowed('rank')) J.judge.rank(fresh).then(r => { if (!r) return; r.forEach((v, i) => { if (v != null && fresh[i]) fresh[i].imp = v; }); J.save(); render(); });
+    },
     close() { panel.classList.remove('open'); render(); },
     toggle() { api.isOpen ? api.close() : api.open(); },
     clear() { J.state.notifs = []; J.save(); render(); },

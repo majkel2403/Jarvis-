@@ -101,7 +101,8 @@ const stateFor = (extra = {}, forceTier) => {
     open_windows: p.desktop.windows.map(w => w.app + (w.min ? ' (minimized)' : '')),
     tasks_today: p.tasks.today.map(x => (x.time || '--:--') + ' ' + x.text + (x.done ? ' ✓' : '')),
     timer: p.desktop.timer, focus_mode: p.desktop.focus_mode,
-    recent_events: (p.events || []).filter(e => !/^judge\./.test(e.type)).map(e => ({ type: e.type, tool: e.tool })),   // własne zdarzenia sędziego nie należą do stanu (psułyby cache) pending_signals: p.signals.map(s => s.text),
+    recent_events: (p.events || []).filter(e => !/^judge\./.test(e.type)).map(e => ({ type: e.type, tool: e.tool })),   // własne zdarzenia sędziego nie należą do stanu (psułyby cache)
+    pending_signals: p.signals.map(s => s.text),
     ...extra
   };
   if (t === 'P2') { st.widgets = p.desktop.widgets.map(w => w.title + ' [' + w.type + ']'); st.notes = p.notes.recent.map(n => n.title); st.user_profile = p.user.profile; }
