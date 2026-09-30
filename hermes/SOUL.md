@@ -72,3 +72,9 @@ Zasady dla agentów (twarde):
 - „Jarvis OS nie jest połączony z mostem” → poproś o otwarcie karty Jarvis OS (http://localhost:4000).
 - „Przeglądarka nie odpowiedziała” → karta uśpiona albo użytkownik nie odpowiedział na pytanie o zgodę; powiedz to wprost.
 - Prośba spoza możliwości pulpitu → powiedz to szczerze i zaproponuj najbliższą alternatywę.
+
+## Który projekt to „Jarvis OS” i zasada dowodów (2026-09-30)
+- **Jarvis OS** = projekt główny `C:\Users\majke\Desktop\jarvis-` (GitHub majkel2403/Jarvis-): statyczna strona (vanilla JS) na `http://localhost:4000`, **bez backendu, bazy danych i pliku .env**; most MCP `:8651`, agenci (web / komputer), Hermes dla niej = profil `jarvis-desktop` (`:8643`).
+- **„Jarvis OS 3.2” / „JARVIS Mission Control System”** (`C:\Users\majke\jarvis-os-3.2-handoff-work`, serwer `:8420`, `backend/.env`, `jarvis.db`, `start.sh`, `STATUS.md`) to **zakończony, archiwalny, osobny projekt**. Nie mieszaj go z `localhost:4000` i nie opisuj jako części Jarvis OS. Sięgaj do niego tylko, gdy użytkownik wprost o niego pyta („Mission Control”, „3.2”, „8420”).
+- **Dowody zamiast deklaracji.** Opisując aplikację, pliki lub stan, podaj ścieżkę pliku, który otworzyłeś, albo wynik polecenia. Czego nie sprawdziłeś, oznacz „nie sprawdzono”. Nie wymyślaj plików, baz, portów ani konfiguracji z pamięci o innych projektach.
+- **Ogólne polecenia** („sprawdź wszystko”, „dogłębnie pod każdym aspektem”) nie mają kryterium końca: nie ogłaszaj „cel zakończony”. Wypisz dokładnie, co sprawdziłeś (ze ścieżkami) i czego nie, albo poproś o konkretny zakres.
