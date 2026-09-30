@@ -433,8 +433,8 @@ R.add({ id: 'files_list', group: 'Pliki', label: 'Pliki w folderze', description
 R.add({ id: 'files_read', group: 'Pliki', label: 'Przeczytaj plik', description: 'Zwraca treść pliku tekstowego z folderu roboczego.', idempotent: true, reads: ['files'],
   args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, examples: ['przeczytaj plik {name}', 'co jest w pliku {name}'],
   async run({ name }) { const t = await FS.read(name); return ok({ name, text: t }, name + ': ' + cut(t.replace(/\s+/g, ' '), 300)); } });
-R.add({ id: 'files_write', group: 'Pliki', label: 'Zapisz plik', description: 'Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia.', writes: ['files'], risk: 'confirm', confirmText: a => (a.append ? 'Dopisać do pliku ' : 'Zapisać plik ') + a.name + '?',
-  args: { type: 'object', properties: { name: { type: 'string' }, text: { type: 'string' }, append: { type: 'boolean' } }, required: ['name', 'text'] }, examples: ['zapisz plik {name}: {text}', 'zapisz do pliku {name} {text}'],
+R.add({ id: 'files_write', group: 'Pliki', label: 'Zapisz plik', description: 'Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym.', writes: ['files'], risk: 'safe',
+  args: { type: 'object', properties: { name: { type: 'string' }, text: { type: 'string', maxLength: 500000 }, append: { type: 'boolean' } }, required: ['name', 'text'] }, examples: ['zapisz plik {name}: {text}', 'zapisz do pliku {name} {text}'],
   async run({ name, text, append }) { await FS.write(name, text, append); return ok({ name, bytes: text.length }, (append ? 'Dopisałem do ' : 'Zapisałem ') + name + '.'); } });
 R.add({ id: 'files_export_note', group: 'Pliki', label: 'Eksportuj notatkę do pliku', description: 'Zapisuje notatkę jako plik .md w folderze roboczym.', writes: ['files'],
   args: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] }, examples: ['eksportuj notatke {note} [do pliku]', 'zapisz notatke {note} jako plik'],

@@ -6,19 +6,38 @@
   -Service site     strona Jarvis OS: python -m http.server 4000 (katalog repozytorium)
   -Service bridge   most MCP + agenci: bridge\jarvis_bridge.py (port 8651)
   -Service gateway  Hermes, profil jarvis-desktop (port 8643); czeka, aż most wystartuje
+  -Service tab      jednorazowe: czeka na most, i TYLKO gdy żadna karta nie jest połączona (clients==0),
+                     otwiera http://localhost:4000 w domyślnej przeglądarce — żeby polecenia z Telegrama/API
+                     dotyczące pulpitu (okna, notatki, agent WWW) miały gdzie się wykonać. Nie duplikuje karty.
   Gdy port już nasłuchuje, nic nie robi (bez drugiej kopii). Logi: %USERPROFILE%\.jarvis-os\logs\<usługa>.*.log
 .EXAMPLE
   powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File bridge\run-service.ps1 -Service bridge
 #>
-param([Parameter(Mandatory)][ValidateSet('site', 'bridge', 'gateway')][string]$Service)
+param([Parameter(Mandatory)][ValidateSet('site', 'bridge', 'gateway', 'tab')][string]$Service)
 $ErrorActionPreference = 'Stop'
 $repo   = Split-Path -Parent $PSScriptRoot
 $py     = Join-Path $env:USERPROFILE '.hermes\hermes-agent\venv\Scripts\python.exe'
 $hermes = Join-Path $env:USERPROFILE '.hermes\bin\hermes.exe'
-$logs   = Join-Path $env:USERPROFILE '.jarvis-os\logs'
+$root   = Join-Path $env:USERPROFILE '.jarvis-os'
+$logs   = Join-Path $root 'logs'
 New-Item -ItemType Directory -Force $logs | Out-Null
-$port = @{ site = 4000; bridge = 8651; gateway = 8643 }[$Service]
 function Listening($p) { [bool](Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) }
+
+if ($Service -eq 'tab') {
+  for ($i = 0; $i -lt 60 -and -not (Listening 8651); $i++) { Start-Sleep 2 }   # czekaj na most
+  if (-not (Listening 8651)) { "$(Get-Date -Format s) most nie wystartował — pomijam otwarcie karty" | Out-File (Join-Path $logs 'tab.out.log') -Append; exit 0 }
+  Start-Sleep 3   # daj karcie, ktora moze wlasnie startowac z przegladarka, szanse sie sparowac
+  $token = if (Test-Path (Join-Path $root 'bridge-token')) { (Get-Content (Join-Path $root 'bridge-token') -Raw).Trim() } else { '' }
+  try {
+    $s = Invoke-RestMethod 'http://127.0.0.1:8651/bridge/status' -Headers @{ 'X-Bridge-Token' = $token } -TimeoutSec 5
+    if ($s.clients -gt 0) { "$(Get-Date -Format s) karta już połączona (clients=$($s.clients)) — nie otwieram drugiej" | Out-File (Join-Path $logs 'tab.out.log') -Append; exit 0 }
+  } catch { "$(Get-Date -Format s) /bridge/status niedostępny: $($_.Exception.Message) — mimo to otwieram kartę" | Out-File (Join-Path $logs 'tab.out.log') -Append }
+  Start-Process 'http://localhost:4000'
+  "$(Get-Date -Format s) otwarto http://localhost:4000 (brak połączonej karty)" | Out-File (Join-Path $logs 'tab.out.log') -Append
+  exit 0
+}
+
+$port = @{ site = 4000; bridge = 8651; gateway = 8643 }[$Service]
 if (Listening $port) { exit 0 }
 
 switch ($Service) {

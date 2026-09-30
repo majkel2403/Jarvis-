@@ -3,11 +3,13 @@
   Autostart Jarvis OS przy logowaniu do Windows: strona :4000, most MCP i Hermes jarvis-desktop.
 
 .DESCRIPTION
-  Tworzy trzy zadania w Harmonogramie zadań bieżącego użytkownika (bez uprawnień administratora), każde przez
+  Tworzy cztery zadania w Harmonogramie zadań bieżącego użytkownika (bez uprawnień administratora), każde przez
   bridge\run-service.ps1 w ukrytym oknie, z logami w %USERPROFILE%\.jarvis-os\logs:
     JarvisOS-Site            - strona Jarvis OS (python -m http.server 4000)
     JarvisOS-Bridge          - most MCP + agenci (bridge\jarvis_bridge.py, :8651)
     JarvisOS-DesktopGateway  - Hermes, profil jarvis-desktop (:8643), po starcie mostu
+    JarvisOS-OpenTab         - jednorazowo otwiera kartę :4000, TYLKO gdy żadna nie jest połączona z mostem
+                               (żeby polecenia pulpitu z Telegrama/API miały gdzie się wykonać)
   Usługa, która już działa, nie jest uruchamiana drugi raz. Hermes działa natywnie w Windows (bez WSL). Usunięcie: -Remove.
 
 .EXAMPLE
@@ -16,7 +18,7 @@
 #>
 param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
-$names = [ordered]@{ 'JarvisOS-Site' = 'site'; 'JarvisOS-Bridge' = 'bridge'; 'JarvisOS-DesktopGateway' = 'gateway' }
+$names = [ordered]@{ 'JarvisOS-Site' = 'site'; 'JarvisOS-Bridge' = 'bridge'; 'JarvisOS-DesktopGateway' = 'gateway'; 'JarvisOS-OpenTab' = 'tab' }
 if ($Remove) { foreach ($n in $names.Keys) { Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue; Write-Host "Usunięto: $n" }; return }
 
 $runner = Join-Path $PSScriptRoot 'run-service.ps1'

@@ -90,6 +90,41 @@ if (Test-Path $hcfg) {
   if ($fb.Count) { Ok "modele zapasowe: $($fb -join ', ')" } else { Warn 'brak modelu zapasowego — gdy główny nie odpowiada, Hermes zwraca błąd' }
 } else { Warn "brak $hcfg" }
 
+# Sprawdzenie limitu kredytów OpenRouter (fallback free models)
+$orEnv = Join-Path $env:USERPROFILE '.hermes\profiles\jarvis-desktop\.env'
+$orKey = ''
+if (Test-Path $orEnv) {
+  foreach ($l in (Get-Content $orEnv -Encoding UTF8)) {
+    $l = $l.Trim()
+    if ($l -match '^OPENROUTER_API_KEY=(.+)') { $orKey = $Matches[1]; break }
+  }
+}
+if ($orKey) {
+  try {
+    $r = Invoke-RestMethod 'https://openrouter.ai/api/v1/auth/key' `
+      -Headers @{ Authorization = "Bearer $orKey" } -TimeoutSec 8
+    $limit  = $r.data.limit        # null = bez limitu
+    $usage  = $r.data.usage        # wydane USD
+    $isFree = ($r.data.is_free_tier -eq $true) -or ($null -eq $limit)
+    if ($isFree) {
+      Ok "OpenRouter (fallback): klucz aktywny, plan bez limitu kredytów (darmowe modele free)"
+    } else {
+      $remaining = $limit - $usage
+      $pct = [math]::Round(($remaining / $limit) * 100, 0)
+      if ($pct -lt 20) {
+        No "OpenRouter kredyty niskie: pozostało ${pct}% ($([math]::Round($remaining,2)) / $limit USD)" `
+           'doładuj konto na openrouter.ai lub zmień fallback na modele free'
+      } else {
+        Ok "OpenRouter (fallback): ${pct}% kredytów ($([math]::Round($remaining,2)) / $limit USD)"
+      }
+    }
+  } catch {
+    $code = try { $_.Exception.Response.StatusCode.value__ } catch { 0 }
+    if ($code -in 401, 403) { No 'OpenRouter klucz nieprawidłowy' 'zaktualizuj OPENROUTER_API_KEY w jarvis-desktop/.env' }
+    else { Warn "OpenRouter: nie można sprawdzić kredytów (HTTP $code) — $($_.Exception.Message)" }
+  }
+} else { Warn 'OpenRouter: brak OPENROUTER_API_KEY w jarvis-desktop/.env — fallback może nie działać' }
+
 Head 'Autostart (po zalogowaniu do Windows)'
 $tasks = @(Get-ScheduledTask -TaskName 'JarvisOS-*' -ErrorAction SilentlyContinue)
 if ($tasks.Count -ge 3) { Ok "zadania: $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')" } elseif ($tasks.Count) { Warn "tylko część zadań: $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')" } else { Warn 'wyłączony — bridge\install-autostart.ps1' }
