@@ -82,7 +82,19 @@ export async function createAgent(opts = {}) {
 
   const pageInfo = () => ({ url: controller.snapshot?.url || browser.currentUrl?.() || '', title: controller.snapshot?.title || '' });
   /* Controller odświeża migawkę dopiero PO zdarzeniu „action”; bez tego wynik miałby adres sprzed akcji, a kolejne polecenie — nieaktualną listę elementów */
-  const settle = async () => { await controller.refreshSnapshot().catch(() => { }); return pageInfo(); };
+  /* Wykonawca autora kończy „czekanie na stronę” od razu po Enter (waitForLoadState zwraca natychmiast dla wciąż załadowanej strony), więc po
+     wysłaniu formularza wynik i następne polecenie widziałyby starą stronę. Gdy akcja mogła wywołać nawigację, czekamy na zmianę adresu (do 0,8 s). */
+  const NAV_ACTIONS = new Set(['type_into_field', 'press_enter']);
+  const settle = async (nav) => {
+    const page = browser.page;
+    if (nav && page) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < 800 && page.url() === nav.before) await new Promise(r => setTimeout(r, 40));
+      if (page.url() !== nav.before) await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => { });
+    }
+    await controller.refreshSnapshot().catch(() => { });
+    return pageInfo();
+  };
   const brief = a => a ? { type: a.type, label: a.label, url: a.url, text: a.text } : null;
 
   /* jedno polecenie naraz; kolejne czekają */
@@ -93,13 +105,13 @@ export async function createAgent(opts = {}) {
 
   /* zdanie → decyzja Jeva → akcja; kończy się na pierwszym rozstrzygnięciu */
   const runCommand = (text, timeoutMs = 25000) => serial(() => new Promise(resolve => {
-    const t0 = Date.now(), off = []; let done = false, decisionInfo = null;
+    const t0 = Date.now(), off = [], urlBefore = browser.currentUrl?.() || ''; let done = false, decisionInfo = null;
     const on = (ev, fn) => { controller.on(ev, fn); off.push(() => controller.off(ev, fn)); };
     const finish = payload => {
       if (done) return; done = true; clearTimeout(timer); off.forEach(f => f());
       if (payload.status !== 'done' && payload.status !== 'failed') stopRetries();
       const ms = Date.now() - t0;
-      settle().then(page => resolve({ ...payload, ms, decision: decisionInfo, page }));
+      settle(NAV_ACTIONS.has(payload.action?.type) ? { before: urlBefore } : null).then(page => resolve({ ...payload, ms, decision: decisionInfo, page }));
     };
     on('decision', d => {
       decisionInfo = { jevMs: d.latencyMs, costUsd: d.costUsd, model: d.model, policy: d.policy.decision, summary: d.policy.summary };

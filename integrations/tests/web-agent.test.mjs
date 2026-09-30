@@ -84,6 +84,7 @@ test('polecenie: wróć, przewiń, wyszukaj na stronie (pole wyszukiwania)', ski
   const r = await cmd('search for zielone jabłka');
   assert.equal(r.status, 'done', JSON.stringify(r));
   assert.equal(searched.at(-1), 'zielone jabłka', 'tekst zapytania skopiowany dosłownie, także z polskimi znakami; wynik: ' + JSON.stringify(r));
+  assert.match(decodeURIComponent(r.page.url.replace(/\+/g, ' ')), /\/search\?q=zielone jabłka/, 'wynik pokazuje stronę PO wysłaniu formularza, nie starą: ' + r.page.url);
   await call('POST', '/agent/goto', { url: base + '/' });
   assert.equal((await cmd('scroll down')).status, 'done');
 });
