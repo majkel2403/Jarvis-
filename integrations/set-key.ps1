@@ -7,13 +7,14 @@
   plik czytają most, agent WWW i sterowanie komputerem. Opcjonalnie dopisuje ten sam klucz do config.local.js
   (ignorowany przez git), żeby działał też sędzia Jev w samym Jarvis OS.
 
-  ZASADA: przez OpenRouter idzie WYŁĄCZNIE Jev (typesafe/jev-1.13). Modele pomocnicze do wpisywania tekstu (writer) NIGDY nie idą
-  przez OpenRouter — podajesz je osobno (klucz Anthropic bezpośrednio) albo zostawiasz bez nich: wtedy komputer tylko klika.
+  Model pomocniczy do wpisywania tekstu (writer): domyślnie most (bridge) sam kieruje go przez pośrednika bridge\writer_proxy.py —
+  łańcuch szybkich DARMOWYCH modeli z OpenRouter (tym samym kluczem), a gdy żaden nie odpowie w 9 s, awaryjnie Twój Hermes.
+  Dzięki temu wpisywanie nie zależy od limitów Groka. Wpisy CLICKER_WRITER_* poniżej to tylko tryb bez mostu.
 
   -Provider openrouter  (domyślnie) klucz z openrouter.ai/keys — Jev (agent WWW, sterowanie komputerem, sędzia w Jarvisie)
   -Provider typesafe    klucz z console.typesafe.ai/keys — Jev bezpośrednio
 
-  -Writer hermes        (domyślnie) model pomocniczy = Twój Hermes (profil jarvis-desktop, Grok z subskrypcji xAI, gateway :8643).
+  -Writer hermes        (domyślnie, dotyczy uruchomień bez mostu) model pomocniczy = Twój Hermes (profil jarvis-desktop, Grok z subskrypcji xAI, gateway :8643).
                         Sprawdzone: poprawny JSON i polskie teksty, ale 4–11 s na wywołanie — używany tylko do wpisywania tekstu
                         i odpowiedzi końcowej, nie w każdym kroku. Zrzuty ekranu NIE są do niego wysyłane (tylko tekst ekranu).
   -Writer anthropic     klucz Anthropic wpisany w ukrytym polu (bezpośrednio, nie OpenRouter)
