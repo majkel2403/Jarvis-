@@ -63,3 +63,20 @@ test('polecenie z mostu idzie przez rejestr i zwraca kopertę', async () => {
   const bad = await J.brain.run('open_app', { app: 'nie-ma-takiej' }, { source: 'hermes' });
   assert.equal(bad.ok, false); assert.equal(bad.code, 'INVALID_ARGS');
 });
+
+test('Hermes: karta z ustawieniem domyślnym (:8642, bez klucza) sama łączy się z jarvis-desktop przez most; własnego wyboru nie rusza', async () => {
+  const calls = [];
+  const fetch = async (url, o = {}) => { calls.push({ url, token: o.headers?.['X-Bridge-Token'] }); return { ok: true, status: 200, json: async () => ({ url: 'http://localhost:8643/v1', key: 'hk', model: 'jarvis-desktop', preset: 'desktop' }) }; };
+  const mk = settings => { const J = load({ files: FILES, fetch, state: { settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b', ...settings } } }); J.hermesPing = async () => 'up'; J.toast = () => { }; return J; };
+  const J = mk({ hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', hermesOn: true });
+  assert.equal(await J.bridge.ensureHermes('test'), true);
+  const s = J.state.settings;
+  assert.deepEqual([s.hermesProvider, s.hermesUrl, s.hermesKey, s.hermesModel, s.hermesOn], ['desktop', 'http://localhost:8643/v1', 'hk', 'jarvis-desktop', true]);
+  assert.equal(calls.at(-1).url, 'http://b/bridge/hermes'); assert.equal(calls.at(-1).token, 't', 'z tokenem mostu');
+  assert.equal(await J.bridge.ensureHermes('test'), false, 'drugi raz w ciągu minuty nic nie robi');
+  const own = mk({ hermesProvider: 'openrouter', hermesUrl: 'https://openrouter.ai/api/v1', hermesKey: 'sk-or-x', hermesOn: true });
+  assert.equal(await own.bridge.ensureHermes('test'), false, 'chmura wybrana przez użytkownika zostaje');
+  assert.equal(own.state.settings.hermesUrl, 'https://openrouter.ai/api/v1');
+  const ok = mk({ hermesProvider: 'desktop', hermesUrl: 'http://localhost:8643/v1', hermesKey: 'moj', hermesModel: 'jarvis-desktop', hermesOn: true });
+  assert.equal(await ok.bridge.ensureHermes('test'), false, 'działające ustawienie zostaje');
+});

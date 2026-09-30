@@ -212,6 +212,53 @@ async def pair(request: Request) -> Response:
     return cors(request, JSONResponse({"token": TOKEN}))
 
 
+@mcp.custom_route("/bridge/hermes", methods=["GET", "OPTIONS"])
+async def hermes_pair(request: Request) -> Response:
+    """Połączenie karty z Hermesem jarvis-desktop bez ręcznej konfiguracji: adres, model i klucz gatewaya dostaje tylko
+    strona z dozwolonego Origin, która ma już token mostu. Bez tego karta z domyślnymi ustawieniami (:8642, bez klucza)
+    po cichu nie rozmawiała z Hermesem i złożone zadania trafiały do prostego silnika lokalnego."""
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if request.headers.get("origin", "") not in ORIGINS or not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    t = writer_proxy.hermes_target()
+    if not t:
+        return cors(request, JSONResponse({"error": "nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)"}, status_code=404))
+    url, key, model = t
+    base = url.removesuffix("/chat/completions").replace("127.0.0.1", "localhost")   # CORS gatewaya dopuszcza http://localhost:4000
+    return cors(request, JSONResponse({"url": base, "key": key, "model": model, "preset": "desktop"}))
+
+
+def tasklog_path() -> Path:
+    return Path(os.environ.get("JARVIS_TASKLOG") or agents_mod.home() / "logs" / "tasks.jsonl")
+
+
+@mcp.custom_route("/bridge/tasklog", methods=["POST", "OPTIONS"])
+async def tasklog(request: Request) -> Response:
+    """Dziennik zadań z karty (js/ai.js → J.tasklog) na dysk: %USERPROFILE%\\.jarvis-os\\logs\\tasks.jsonl — do raportu porażek i doctor.ps1."""
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    try:
+        e = await read_json(request)
+    except agents_mod.AgentError as er:
+        return cors(request, JSONResponse({"error": str(er)}, status_code=er.status))
+    keep = ("ts", "text", "route", "status", "ms", "tools", "partial", "hermes", "reply", "source", "fail")
+    rec = {k: e.get(k) for k in keep if k in e}
+    p = tasklog_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if p.exists() and p.stat().st_size > 2_000_000:   # rotacja: zostaje ostatnia połowa
+            lines = p.read_text(encoding="utf-8").splitlines()
+            p.write_text("\n".join(lines[len(lines) // 2:]) + "\n", encoding="utf-8")
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError as er:
+        return cors(request, JSONResponse({"error": str(er)}, status_code=500))
+    return cors(request, JSONResponse({"ok": True}))
+
+
 @mcp.custom_route("/bridge/events", methods=["GET", "OPTIONS"])
 async def events(request: Request) -> Response:
     if request.method == "OPTIONS":
@@ -374,6 +421,33 @@ async def agents_computer(request: Request) -> Response:
             return cors(request, JSONResponse(comp.snapshot(int(tail) if tail.isdigit() else 25)))
         if action == "stop" and request.method == "POST":
             return cors(request, JSONResponse(await comp.stop()))
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+    return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+
+
+@mcp.custom_route("/agents/webtask/{action}", methods=["GET", "POST", "OPTIONS"])
+async def agents_webtask(request: Request) -> Response:
+    """Zadanie w internecie na cel (bridge/web_task.py): run / status / stop / confirm."""
+    if (g := await agents_guard(request)) is not None:
+        return g
+    action, wt = request.path_params["action"], get_agents().webtask
+    try:
+        if action == "run" and request.method == "POST":
+            b = await read_json(request)
+            try:
+                return cors(request, JSONResponse(await wt.start(b.get("goal"), b.get("steps", 12), b.get("seconds", 150))))
+            except ValueError as e:
+                raise agents_mod.AgentError(str(e), 400)
+            except RuntimeError as e:
+                raise agents_mod.AgentError(str(e), 409)
+        if action == "status" and request.method == "GET":
+            return cors(request, JSONResponse(wt.snapshot()))
+        if action == "stop" and request.method == "POST":
+            return cors(request, JSONResponse(await wt.stop()))
+        if action == "confirm" and request.method == "POST":
+            b = await read_json(request)
+            return cors(request, JSONResponse(wt.decide(b.get("accept") is True)))
     except Exception as e:  # noqa: BLE001
         return agent_error(request, e)
     return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))

@@ -2631,6 +2631,45 @@
   }
  },
  {
+  "name": "web_task",
+  "description": "Wykonuje CAŁE zadanie w przeglądarce agenta, krok po kroku, aż cel będzie osiągnięty: wyszukanie i porównanie informacji, przejście przez kilka stron, wypełnienie wyszukiwarki, odczytanie wyniku. Planista wybiera kroki, Jev z jev-voice-browser klika i wpisuje. Zwraca odpowiedź po polsku (znalezione fakty, ceny, linki). Używaj dla celów wymagających kilku kroków w sieci („znajdź najtańszy…”, „sprawdź godziny otwarcia…”, „porównaj…”); pojedynczy krok = web_command, muzyka = media_play. Działania nieodwracalne (kup, wyślij, usuń) wymagają zgody użytkownika. Trwa zwykle 20–90 s. Np.: „w internecie goal”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "goal": {
+     "type": "string",
+     "maxLength": 500,
+     "description": "cel po polsku lub angielsku, konkretnie"
+    },
+    "steps": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 30,
+     "description": "maks. kroków (domyślnie 12)"
+    }
+   },
+   "required": [
+    "goal"
+   ]
+  }
+ },
+ {
+  "name": "web_task_status",
+  "description": "Stan zadania w internecie (web_task): trwa / zakończone, kroki, odpowiedź. Np.: „status zadania w internecie”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "web_task_stop",
+  "description": "Zatrzymuje trwające zadanie w internecie (web_task). Np.: „zatrzymaj zadanie w internecie”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
   "name": "computer_use",
   "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko (po polsku lub angielsku), np. \"open Notepad and type hello\". Potrafi: uruchomić program z listy (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia), kliknąć WIDOCZNY element, wpisać tekst w pole, przewinąć. Nie potrafi: skrótów klawiszowych, menu Start ani paska zadań, elementów niewidocznych na ekranie; nie nadpisze cudzego tekstu w edytorze. Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund (pisanie tekstu ~8 s); przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika. Np.: „na komputerze goal”.",
   "parameters": {
@@ -2681,6 +2720,21 @@
   "parameters": {
    "type": "object",
    "properties": {}
+  }
+ },
+ {
+  "name": "task_report",
+  "description": "Zestawienie zadań z czatu, które się nie udały (błąd, nierozpoznane, pół zadania, Hermes niedostępny, narzędzie zawiodło) z ostatnich dni, z przyczynami i drogą wykonania. Np.: „co sie nie udalo”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "days": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 30,
+     "description": "ile dni wstecz (domyślnie 7)"
+    }
+   }
   }
  }
 ]

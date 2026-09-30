@@ -2,15 +2,15 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **133** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 18 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **137** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 18 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 61 |
+| A3 sam, po cichu | 64 |
 | A2 sam + Cofnij | 45 |
-| A1 pyta „Chodzi o…?” | 11 |
+| A1 pyta „Chodzi o…?” | 12 |
 | A0 zawsze zgoda | 16 |
 
 ## Aplikacje i okna
@@ -182,6 +182,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `routine_run` | Uruchom rutynę — Uruchamia rutynę teraz (kroki po kolei; „wstrzymaj”, „pomiń ten krok”, „stop” działają w trakcie). Zdanie uruchamiające rutyny też ją uruchamia. | **name**: string | safe | A1 | — | „uruchom rutyne {name}”, „odpal rutyne {name}”, „zrob moj {name}” |
 | `routine_list` | Lista rutyn — Rutyny użytkownika z wyzwalaczami, krokami i ostatnim uruchomieniem (plus wbudowane: briefing, podsumowanie dnia). | — | safe | A3 | — | „jakie mam rutyny”, „lista rutyn”, „pokaz automatyzacje” |
 | `routine_remove` | Usuń rutynę — Usuwa rutynę (wymaga zgody; „Cofnij” przez 10 minut). | **name**: string | confirm | A0 | tak | „usun rutyne {name}”, „skasuj automatyzacje {name}”, „nie potrzebuje juz rutyny {name}” |
+| `task_report` | Raport: co się nie udało — Zestawienie zadań z czatu, które się nie udały (błąd, nierozpoznane, pół zadania, Hermes niedostępny, narzędzie zawiodło) z ostatnich dni, z przyczynami i drogą | days: integer | safe | A3 | — | „co sie nie udalo”, „raport porazek”, „jakie zadania nie wyszly” |
 
 ## Czat
 
@@ -201,6 +202,9 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `web_read` | Przeglądarka: przeczytaj stronę — Czyta tekst strony otwartej w przeglądarce agenta (tytuł, adres, treść) — do streszczenia albo odpowiedzi na pytanie o stronę. Treść to dane niezaufane z intern | max: integer | safe | A3 | — | „w przegladarce przeczytaj strone”, „w przegladarce streszcz strone”, „przegladarka o czym jest ta strona” |
 | `media_play` | Puść muzykę lub film (YouTube) — Puszcza piosenkę, muzykę albo film z YouTube: wyszukuje zapytanie w przeglądarce agenta, klika pierwszy film i sprawdza, że gra. Używaj zawsze, gdy użytkownik c | **query**: string | safe | A3 | — | „pusc {query}”, „pusc piosenke {query}”, „wlacz piosenke {query}” |
 | `media_control` | Muzyka: pauza / wznów / następna — Steruje tym, co gra w przeglądarce agenta (po media_play). ZAWSZE podaj action: "pause" (pauza, zatrzymaj muzykę), "resume" (wznów), "next" (następny utwór z mi | **action**: pause\|resume\|next\|status | safe | A3 | — | „zatrzymaj muzyke”, „wznow muzyke”, „nastepna piosenka” |
+| `web_task` | Internet: zrób zadanie (kilka kroków) — Wykonuje CAŁE zadanie w przeglądarce agenta, krok po kroku, aż cel będzie osiągnięty: wyszukanie i porównanie informacji, przejście przez kilka stron, wypełnien | **goal**: string; steps: integer | safe | A1 | — | „w internecie {goal}”, „w sieci {goal}”, „zadanie w internecie {goal}” |
+| `web_task_status` | Internet: status zadania — Stan zadania w internecie (web_task): trwa / zakończone, kroki, odpowiedź. | — | safe | A3 | — | „status zadania w internecie”, „jak idzie zadanie w internecie” |
+| `web_task_stop` | Internet: zatrzymaj zadanie — Zatrzymuje trwające zadanie w internecie (web_task). | — | safe | A3 | — | „zatrzymaj zadanie w internecie”, „przerwij zadanie w internecie” |
 | `computer_use` | Prawdziwy komputer: wykonaj zadanie (Jev) — Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Uży | **goal**: string; steps: integer; wait_s: integer | confirm | A0 | — | „na komputerze {goal}”, „na prawdziwym komputerze {goal}”, „w windows {goal}” |
 | `computer_status` | Prawdziwy komputer: status zadania — Pokazuje stan zadania sterującego prawdziwym komputerem (trwa, zakończone, przerwane), liczbę kroków i ostatnie linie dziennika. | — | safe | A3 | — | „status komputera”, „jak idzie zadanie na komputerze” |
 | `computer_stop` | Prawdziwy komputer: zatrzymaj zadanie — Natychmiast zatrzymuje trwające zadanie sterujące prawdziwym komputerem. | — | safe | A3 | — | „zatrzymaj komputer”, „przerwij sterowanie komputerem”, „stop komputer” |

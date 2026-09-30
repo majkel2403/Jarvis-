@@ -329,6 +329,39 @@ export async function createAgent(opts = {}) {
     return { status: 'done', summary: 'media ' + action, playing: !!st.playing, ad: !!st.ad, title: st.title, position: st.t != null ? Math.round(st.t) : null, duration: st.d ? Math.round(st.d) : null, page: await settle() };
   });
 
+  /* zwięzły widok strony dla planisty zadania (bridge/web_task.py): elementy najpierw z widocznej części, fragment tekstu */
+  /* banery cookies (dowolna strona): przycisk o dokładnym napisie „Odrzuć…/Akceptuj…”, ale tylko wewnątrz bloku, którego tekst mówi
+     o cookies/prywatności — żeby nie kliknąć przypadkiem innego „OK”. Najpierw odrzucenie. */
+  const dismissCookies = page => page.evaluate(() => {
+    const REJ = /^\s*(odrzuć wszystk\w*|odrzuć|odmów|odmowa|nie zgadzam się|tylko niezbędne|reject all|reject|decline|only necessary)\s*$/i;
+    const ACC = /^\s*(zaakceptuj wszystk\w*|akceptuj wszystk\w*|akceptuję|zgadzam się|zaakceptuj|akceptuj|accept all|accept|agree|i agree|ok, rozumiem|rozumiem)\s*$/i;
+    const about = el => { for (let p = el, i = 0; p && i < 7; p = p.parentElement, i++) if (/cookie|ciasteczk|prywatno|zgod[ay]|consent|rodo|gdpr/i.test(p.innerText || '')) return true; return false; };
+    const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+    const btns = [...document.querySelectorAll('button, [role="button"], a[role="button"], input[type="button"], input[type="submit"]')].filter(vis);
+    const pick = re => btns.find(b => re.test((b.innerText || b.value || '').trim()) && about(b));
+    const b = pick(REJ) || pick(ACC);
+    if (!b) return null;
+    b.click(); return (b.innerText || b.value || '').trim();
+  }).catch(() => null);
+
+  const view = (maxEls = 60) => serial(async () => {
+    const pg = await browser.ensurePage();
+    if (await dismissCookies(pg)) await new Promise(r => setTimeout(r, 600));
+    await controller.refreshSnapshot().catch(() => { });
+    const s = controller.snapshot || {}, els = (s.elements || []).slice();
+    els.sort((a, b) => (b.inViewport - a.inViewport) || (a.top - b.top));
+    const page = await browser.ensurePage();
+    const text = await page.evaluate(() => (document.body?.innerText || '').replace(/\n{3,}/g, '\n\n').trim()).catch(() => '');
+    return {
+      page: pageInfo(),
+      elements: els.slice(0, Math.min(Math.max(+maxEls || 60, 10), 150)).map(e => ({ id: e.id, role: e.role, text: String(e.text || '').slice(0, 80), ...(e.placeholder ? { placeholder: String(e.placeholder).slice(0, 60) } : {}), ...(e.inViewport ? {} : { below: true }) })),
+      total: els.length,
+      text: text.slice(0, 2500),
+      pending: controller.pending ? policy.describe(controller.pending) : null,
+      candidates: controller.candidates?.list?.map((c, i) => ({ n: i + 1, label: c.label })) || null
+    };
+  });
+
   const read = async (maxChars = 4000) => {
     const page = await browser.ensurePage();
     const text = await page.evaluate(() => (document.body?.innerText || '').replace(/\n{3,}/g, '\n\n').trim()).catch(() => '');
@@ -353,6 +386,7 @@ export async function createAgent(opts = {}) {
       if (route === 'GET /agent/health') return json(res, 200, { ok: true, ...state() });
       if (route === 'GET /agent/state') return json(res, 200, state());
       if (route === 'GET /agent/read') return json(res, 200, await read(url.searchParams.get('max')));
+      if (route === 'GET /agent/view') return json(res, 200, await view(url.searchParams.get('max')));
       if (req.method === 'POST') {
         const b = await readBody(req);
         if (url.pathname === '/agent/command') { const text = String(b.text || '').trim().slice(0, 400); if (!text) return json(res, 400, { error: 'brak text' }); return json(res, 200, await runCommand(text, b.timeoutMs)); }

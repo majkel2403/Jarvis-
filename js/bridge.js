@@ -58,6 +58,32 @@ async function publishTools() {
   } catch (e) { /* most starszej wersji albo chwilowo niedostępny */ }
 }
 
+/* Hermes jarvis-desktop bez ręcznej konfiguracji. Karta z ustawieniem domyślnym (:8642 bez klucza — to inny profil) albo z
+   niedziałającym Hermesem sama bierze adres, model i klucz od mostu. Własnego wyboru (chmura, własny serwer) nie ruszamy. */
+let hermesTried = 0;
+async function ensureHermes(why) {
+  const s = S();
+  if (s.offlineMode || !S().bridgeToken || Date.now() - hermesTried < 60000) return false;
+  if (!['agent', 'desktop', '', undefined].includes(s.hermesProvider)) return false;
+  const unset = !s.hermesKey || /:8642\b/.test(s.hermesUrl || '') || !s.hermesUrl;
+  if (!unset && J.hermes.status !== 'down') return false;
+  hermesTried = Date.now();
+  try {
+    const r = await fetch(base() + '/bridge/hermes', { headers: auth(), signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return false;
+    const j = await r.json(); if (!j.url || !j.key) return false;
+    if (s.hermesUrl === j.url && s.hermesKey === j.key && s.hermesModel === j.model && s.hermesOn) return false;
+    Object.assign(s, { hermesProvider: j.preset || 'desktop', hermesUrl: j.url, hermesModel: j.model, hermesKey: j.key, hermesOn: true });
+    J.save(); J.emit('settings'); J.brain?.reset?.();
+    J.log('Hermes połączony automatycznie', 'Profil ' + j.model + ' (' + j.url + ') — ustawienie wzięte z mostu (' + why + ')', 'info');
+    J.toast?.('Połączono z Hermesem (' + j.model + ')', 4000);
+    J.hermesPing?.();
+    return true;
+  } catch (e) { return false; }
+}
+J.bridge.ensureHermes = ensureHermes;
+J.on('hermes', () => { if (J.hermes.status === 'down' && J.bridge.connected) ensureHermes('Hermes nie odpowiadał'); });
+
 const busyNow = () => !!document.querySelector('.orb.thinking, #orb.thinking') || J.orb?.state === 'thinking';
 
 const safe = v => { try { return JSON.parse(JSON.stringify(v ?? null)); } catch (e) { return null; } };
@@ -92,7 +118,7 @@ async function connect() {
   es = new EventSource(base() + '/bridge/events?token=' + encodeURIComponent(S().bridgeToken));
   es.addEventListener('hello', e => {
     retry = 0; try { const h = JSON.parse(e.data); J.bridge.tools = h.tools || []; myId = h.client || ''; } catch (er) { }
-    reportFocus(); publishTools();
+    reportFocus(); publishTools(); ensureHermes('start');
     set('up'); refresh(); clearInterval(pollTimer); pollTimer = setInterval(refresh, 20000);
     J.log('Most Hermes połączony', J.bridge.tools.length + ' narzędzi MCP dostępnych dla Hermesa', 'info');
   });

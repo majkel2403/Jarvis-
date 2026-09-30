@@ -80,5 +80,35 @@ if ($Live -and $key) {
   } catch { $sw.Stop(); $code = try { $_.Exception.Response.StatusCode.value__ } catch { 0 }; No "zapytanie do Jeva nie powiodło się (HTTP $code): $($_.Exception.Message)" $(if ($code -in 401, 403) { 'klucz odrzucony — wygeneruj nowy i uruchom set-key.ps1' } elseif ($code -eq 404) { 'zły adres/model — sprawdź TYPESAFE_BASE_URL i JEV_MODEL w jev.env' } else { 'sprawdź połączenie z internetem' }) }
 } elseif ($Live) { Head 'Prawdziwe zapytanie do Jeva'; No 'nie można — brak klucza' 'integrations\set-key.ps1' }
 
+Head 'Hermes jarvis-desktop: model i zapas'
+$hcfg = Join-Path $env:USERPROFILE '.hermes\profiles\jarvis-desktop\config.yaml'
+if (Test-Path $hcfg) {
+  $y = Get-Content $hcfg -Encoding UTF8 -TotalCount 40
+  $main = ($y | Where-Object { $_ -match '^\s+default:' } | Select-Object -First 1) -replace '^\s+default:\s*', ''
+  $fb = @($y | Where-Object { $_ -match '^\s*(- )?\s*model:\s*\S' } | ForEach-Object { ($_ -replace '^\s*(- )?\s*model:\s*', '').Trim() })
+  Ok "model główny: $main"
+  if ($fb.Count) { Ok "modele zapasowe: $($fb -join ', ')" } else { Warn 'brak modelu zapasowego — gdy główny nie odpowiada, Hermes zwraca błąd' }
+} else { Warn "brak $hcfg" }
+
+Head 'Autostart (po zalogowaniu do Windows)'
+$tasks = @(Get-ScheduledTask -TaskName 'JarvisOS-*' -ErrorAction SilentlyContinue)
+if ($tasks.Count -ge 3) { Ok "zadania: $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')" } elseif ($tasks.Count) { Warn "tylko część zadań: $(($tasks | ForEach-Object { $_.TaskName }) -join ', ')" } else { Warn 'wyłączony — bridge\install-autostart.ps1' }
+
+Head 'Zadania z ostatniej doby (dziennik %USERPROFILE%\.jarvis-os\logs\tasks.jsonl)'
+$tl = Join-Path $root 'logs\tasks.jsonl'
+if (Test-Path $tl) {
+  $since = [DateTimeOffset]::UtcNow.AddDays(-1).ToUnixTimeMilliseconds()
+  $recs = @(Get-Content $tl -Encoding UTF8 -Tail 500 | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } } | Where-Object { $_.ts -ge $since })
+  $fails = @($recs | Where-Object { $_.fail })
+  if (-not $recs.Count) { Ok 'brak zadań w ostatniej dobie' }
+  elseif (-not $fails.Count) { Ok "$($recs.Count) zadań, wszystkie udane" }
+  else {
+    Warn "$($fails.Count) z $($recs.Count) zadań się nie udało:"
+    $fails | Select-Object -Last 6 | ForEach-Object { $t = [string]$_.text; Write-Host ('      · ''{0}'' — {1} ({2})' -f $t.Substring(0, [Math]::Min(60, $t.Length)), $_.fail, $_.route) -ForegroundColor DarkYellow }
+    $offline = @($fails | Where-Object { $_.route -eq 'local-offline' -or $_.hermes -in 'off', 'down' }).Count
+    if ($offline) { Warn "$offline z nich bez Hermesa — sprawdź w karcie Ustawienia → Hermes (powinien być profil jarvis-desktop, :8643)" }
+  }
+} else { Warn 'dziennik jeszcze pusty (powstaje po pierwszym zadaniu z odświeżonej karty)' }
+
 Write-Host ''
 if ($bad) { Write-Host "Znaleziono problemów: $bad" -ForegroundColor Red; exit 1 } else { Write-Host 'Wszystko gotowe.' -ForegroundColor Green; exit 0 }

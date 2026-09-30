@@ -47,7 +47,7 @@
 | ui | `proc-end` | process.js |
 | ui | `routine-step` | commands-w4.js |
 | ui | `routines` | commands-w4.js |
-| ui | `settings` | apps.js, commands-ext.js, commands-w4.js, commands.js, core.js, main.js |
+| ui | `settings` | apps.js, bridge.js, commands-ext.js, commands-w4.js, commands.js, core.js, main.js |
 | ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |

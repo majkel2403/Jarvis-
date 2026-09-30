@@ -181,6 +181,16 @@ test('nie-polecenie kończy się od razu (bez pętli zapytań do modelu)', skip,
   assert.equal(agent.controller.stats.calls - before, 1, 'dokładnie jedno wywołanie modelu, bez ponawiania w tle');
 });
 
+test('view: zwięzły widok strony dla planisty zadania (elementy, tekst)', skip, async () => {
+  await call('POST', '/agent/goto', { url: base + '/' });
+  const v = (await call('GET', '/agent/view?max=20')).body;
+  assert.match(v.page.url, /127\.0\.0\.1:\d+\/$/);
+  assert.ok(v.elements.length > 3 && v.elements.length <= 20, String(v.elements.length));
+  assert.ok(v.elements.some(e => e.role === 'link' && /Second result/.test(e.text)), JSON.stringify(v.elements.slice(0, 5)));
+  assert.ok(v.elements.every(e => typeof e.id === 'string' && e.id), 'każdy element ma id dla Jeva');
+  assert.match(v.text, /Sklep testowy/); assert.equal(v.pending, null);
+});
+
 test('play: wyszukanie → ekran zgody na cookies → pierwszy film (nie reklama) → gra', skip, async () => {
   const r = (await call('POST', '/agent/play', { query: 'Małomiasteczkowy' })).body;
   assert.equal(r.status, 'done', JSON.stringify(r));

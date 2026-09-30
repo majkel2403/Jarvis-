@@ -80,7 +80,10 @@ async def main():
     tools_copy = Path(tempfile.mkdtemp()) / "tools.json"
     tools_copy.write_text((HERE / "tools.json").read_text(encoding="utf-8"), encoding="utf-8")
     expected = json.loads(tools_copy.read_text(encoding="utf-8"))
-    env = dict(os.environ, JARVIS_BRIDGE_TOKEN=TOKEN, JARVIS_BRIDGE_PORT=str(PORT), JARVIS_BRIDGE_CALL_TIMEOUT="3", JARVIS_BRIDGE_TOOLS_FILE=str(tools_copy))
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "hermes.env").write_text("API_SERVER_KEY=hermes-test-key\n", encoding="utf-8")
+    env = dict(os.environ, JARVIS_BRIDGE_TOKEN=TOKEN, JARVIS_BRIDGE_PORT=str(PORT), JARVIS_BRIDGE_CALL_TIMEOUT="3", JARVIS_BRIDGE_TOOLS_FILE=str(tools_copy),
+               JARVIS_HERMES_ENV=str(tmp / "hermes.env"), JARVIS_TASKLOG=str(tmp / "tasks.jsonl"))
     proc = subprocess.Popen([sys.executable, str(HERE / "jarvis_bridge.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         async with httpx2.AsyncClient() as hc:
@@ -93,6 +96,20 @@ async def main():
             else:
                 proc.kill(); raise RuntimeError("most nie wystartował: " + proc.stderr.read().decode()[:400])
 
+            print("Hermes dla karty i dziennik zadań")
+            H = {"Origin": "http://localhost:4000", "X-Bridge-Token": TOKEN}
+            check("/bridge/hermes bez tokenu = 401", (await hc.get(f"{BASE}/bridge/hermes", headers={"Origin": "http://localhost:4000"})).status_code == 401)
+            check("/bridge/hermes z obcej strony = 401", (await hc.get(f"{BASE}/bridge/hermes", headers={"Origin": "https://zla.example", "X-Bridge-Token": TOKEN})).status_code == 401)
+            hj = (await hc.get(f"{BASE}/bridge/hermes", headers=H)).json()
+            check("/bridge/hermes: adres, model i klucz jarvis-desktop", hj.get("key") == "hermes-test-key" and hj.get("model") == "jarvis-desktop" and hj.get("url", "").endswith("/v1"), str(hj))
+            check("/bridge/tasklog bez tokenu = 401", (await hc.post(f"{BASE}/bridge/tasklog", json={"text": "x"})).status_code == 401)
+            await hc.post(f"{BASE}/bridge/tasklog", json={"ts": 1, "text": "otwórz youtube i puść", "route": "local", "fail": "pół zadania (odmowa)", "evil": "x"}, headers={"X-Bridge-Token": TOKEN})
+            rec = json.loads((tmp / "tasks.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+            check("dziennik zapisany na dysk (tylko znane pola, polskie znaki)", rec.get("text") == "otwórz youtube i puść" and rec.get("fail") and "evil" not in rec, str(rec))
+            wt = await hc.get(f"{BASE}/agents/webtask/status", headers={"X-Bridge-Token": TOKEN})
+            check("/agents/webtask/status: bezczynne", wt.status_code == 200 and wt.json().get("state") == "idle", wt.text[:200])
+            check("/agents/webtask/run bez celu = 400", (await hc.post(f"{BASE}/agents/webtask/run", json={}, headers={"X-Bridge-Token": TOKEN})).status_code == 400)
+            check("/agents/webtask/confirm bez zadania = nic", (await hc.post(f"{BASE}/agents/webtask/confirm", json={"accept": True}, headers={"X-Bridge-Token": TOKEN})).json().get("ok") is False)
             print("Autoryzacja i CORS")
             check("status bez tokenu = 401", (await hc.get(f"{BASE}/bridge/status")).status_code == 401)
             check("status z tokenem = 200", (await hc.get(f"{BASE}/bridge/status", headers={"X-Bridge-Token": TOKEN})).status_code == 200)

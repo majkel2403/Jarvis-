@@ -11,6 +11,7 @@
 const DIA = { ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z' };
 const norm = s => String(s || '').toLowerCase().replace(/[ąćęłńóśźż]/g, c => DIA[c]).replace(/[„”"']/g, '').replace(/\s+/g, ' ').trim();
 J.norm = norm;
+const IMPERATIVE = /^(?:otworz|zamknij|wyslij|zamow|kup|napisz|znajdz|wyszukaj|pusc|wlacz|wylacz|ustaw|dodaj|zadzwon|sprawdz|pokaz|przeczytaj|usun|zapisz|zrob|idz|wejdz|uruchom|odpal|zagraj|policz|oblicz|zanotuj|przypomnij|skopiuj|wklej|posprzataj|przenies|zmien|zarezerwuj|zaplac|przelej|odpowiedz|przeslij|udostepnij|pobierz|zainstaluj)\b/;
 
 /* ---------- koperta wyniku ---------- */
 /* undo (opcjonalne): funkcja cofająca skutek; nie jest polem wyliczalnym, więc nie trafia do JSON-a dla modelu ani do logów */
@@ -246,6 +247,19 @@ const api = J.registry = {
     for (const o of out) { const prev = byId.get(o.id); if (!prev) { byId.set(o.id, o); continue; } if (prev.tpl && !o.tpl) { o.score = Math.max(o.score, prev.score); byId.set(o.id, o); } else prev.score = Math.max(prev.score, o.score); }
     const uniq = [...byId.values()].sort((a, b) => b.score - a.score);
     return opts.all ? uniq : uniq.slice(0, 5);
+  },
+  /* czy dopasowanie obejmuje CAŁE zdanie? Zdanie z „i / potem / oraz / przecinkiem”, którego dalsze części nie siedzą w argumentach
+     polecenia (np. „otwórz youtube i puść X” → open_url bez „puść X”), jest częściowe: wykonanie go zrobiłoby pół zadania.
+     „zanotuj mleko i chleb” jest pełne — „chleb” jest w treści notatki. Polecenia spansConj obejmują zdanie z definicji. */
+  uncovered(text, m) {
+    if (!m || m.cmd?.spansConj) return [];
+    const parts = String(text).split(/\s+(?:i potem|a potem|a nastepnie|a następnie|nastepnie|następnie|potem|oraz|i|a)\s+|\s*[;,]\s*/i).map(s => norm(s).replace(/[?!.]+$/, '').trim()).filter(Boolean);
+    if (parts.length < 2) return [];
+    const inArgs = norm(Object.values(m.args || {}).filter(v => typeof v === 'string' || typeof v === 'number').join(' '));
+    const words = p => p.split(/\s+/).filter(w => w.length > 2);
+    /* część zaczynająca się od czasownika w trybie rozkazującym to OSOBNA czynność, nawet gdy trafiła do tekstu notatki czy etykiety
+       („zanotuj coś i wyślij to szefowi” — „wyślij” to drugie polecenie, nie treść notatki) */
+    return parts.slice(1).filter(p => { const w = words(p); return IMPERATIVE.test(p) || (w.length && w.some(x => !inArgs.includes(x))); });
   },
   /* łańcuch: „otwórz notatnik i ustaw minutnik 5 minut” → [dopasowania] albo null */
   chain(text) {

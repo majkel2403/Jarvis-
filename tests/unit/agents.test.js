@@ -323,6 +323,25 @@ test('media_control: pełne zwroty zawsze; gołe „pauza / następna” tylko g
   assert.equal(top('wstrzymaj zadanie'), 'plan_control', 'plan wstrzymuje się pełnym zwrotem');
 });
 
+test('web_task: start, postęp, zgoda na działanie nieodwracalne, odpowiedź; odmowa i porażka są czytelne', async () => {
+  let n = 0, decided = null;
+  const { J, calls, prompts } = setup({
+    'POST /agents/webtask/run': { state: 'running', steps: [] },
+    'GET /agents/webtask/status': () => (++n === 1 ? { state: 'running', steps: [{ action: 'goto', value: 'google.com' }] } : n === 2 ? { state: 'waiting_confirm', pending: 'click Buy now', steps: [] } : { state: 'done', answer: 'Najtańszy lot: 199 zł (LOT).', steps: [{ action: 'goto' }, { action: 'command' }, { action: 'done' }], seconds: 31, models: ['m:free'] }),
+    'POST /agents/webtask/confirm': b => { decided = b.accept; return { ok: true }; }
+  }, { confirm: 'yes' });
+  const r = await J.registry.run('web_task', { goal: 'znajdź najtańszy lot do Rzymu' }, { source: 'hermes' });
+  assert.equal(r.ok, true, r.text); assert.match(r.text, /199 zł/); assert.match(r.text, /3 kroków/);
+  assert.deepEqual(calls[0].body, { goal: 'znajdź najtańszy lot do Rzymu' });
+  assert.equal(decided, true, 'zgoda przekazana do mostu');
+  assert.ok(prompts.some(p => p.kind === 'confirm' && p.forced && /Buy now/.test(p.question)), 'pytanie o zgodę z opisem działania');
+  const bad = setup({ 'POST /agents/webtask/run': { state: 'running' }, 'GET /agents/webtask/status': { state: 'failed', reason: 'Wykorzystano limit 12 kroków bez osiągnięcia celu.', steps: [{ action: 'command', value: 'scroll down', status: 'done' }] } });
+  const f = await bad.J.registry.run('web_task', { goal: 'x' }, { source: 'hermes' });
+  assert.equal(f.ok, false); assert.match(f.text, /limit 12 kroków/);
+  assert.equal(J.registry.match('w internecie znajdź najtańszy lot do Rzymu i porównaj ceny')[0].id, 'web_task', 'cel z „i” to jedno zadanie');
+  assert.ok(J.registry.tools().map(t => t.function.name).includes('web_task'), 'Hermes widzi web_task');
+});
+
 test('ustawienia: token mostu nie trafia do kopii zapasowej', async () => {
   const { J } = setup();
   J.state.settings.bridgeToken = 'sekretny-token';

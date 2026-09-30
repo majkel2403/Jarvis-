@@ -199,6 +199,50 @@ R.add({ id: 'media_control', group: 'Internet i komputer', label: 'Muzyka: pauza
       action === 'pause' ? 'Pauza: ' + t + '.' : action === 'resume' ? 'Gra dalej: ' + t + '.' : action === 'next' ? 'Następny: ' + t + '.' : (r.playing ? 'Teraz gra: ' : 'Wstrzymane: ') + t + '.');
   }) });
 
+/* ---------- zadanie w internecie na cel (bridge/web_task.py + jev-voice-browser) ----------
+   Planista (darmowe modele OpenRouter → Hermes) wybiera krok, Jev z jev-voice-browser go wykonuje, aż cel będzie osiągnięty.
+   Ogólna droga dla nowych zadań w sieci — zamiast pisać osobne polecenie pod każdy przypadek. */
+/* „znajdź / sprawdź / dowiedz się w internecie X” = zadanie z ODPOWIEDZIĄ (web_task); samo otwarcie Google to „wyszukaj / wygoogluj X” (web_search) */
+const TASK_PREFIX = /^(?:w\s+internecie|w\s+sieci|online|zadanie\s+w\s+(?:internecie|przegladarce)|(?:znajdz|sprawdz|poszukaj|dowiedz\s+sie|zobacz)(?:\s+mi)?\s+w\s+(?:internecie|sieci))[:,]?\s+/;
+R.add({ id: 'web_task', group: 'Internet i komputer', label: 'Internet: zrób zadanie (kilka kroków)', writes: ['web'],
+  description: 'Wykonuje CAŁE zadanie w przeglądarce agenta, krok po kroku, aż cel będzie osiągnięty: wyszukanie i porównanie informacji, przejście przez kilka stron, wypełnienie wyszukiwarki, odczytanie wyniku. Planista wybiera kroki, Jev z jev-voice-browser klika i wpisuje. Zwraca odpowiedź po polsku (znalezione fakty, ceny, linki). Używaj dla celów wymagających kilku kroków w sieci („znajdź najtańszy…”, „sprawdź godziny otwarcia…”, „porównaj…”); pojedynczy krok = web_command, muzyka = media_play. Działania nieodwracalne (kup, wyślij, usuń) wymagają zgody użytkownika. Trwa zwykle 20–90 s.',
+  args: { type: 'object', properties: { goal: { type: 'string', maxLength: 500, description: 'cel po polsku lub angielsku, konkretnie' }, steps: { type: 'integer', minimum: 1, maximum: 30, description: 'maks. kroków (domyślnie 12)' } }, required: ['goal'] },
+  examples: ['w internecie {goal}', 'w sieci {goal}', 'zadanie w internecie {goal}'],
+  parse(raw, n) {
+    const m = TASK_PREFIX.exec(n); const inner = m ? n.slice(m[0].length).trim() : ''; if (!inner) return null;
+    const verb = /^(?:znajdz|sprawdz|poszukaj|dowiedz|zobacz)/.test(m[0]);   // „znajdź w internecie X” — cel to całe zdanie (z czasownikiem)
+    return { args: { goal: verb ? String(raw).trim().replace(/[?!.]+$/, '') : orig(raw, n, inner) }, score: 40 };
+  },
+  spansConj: true,   // cel może mieć kilka części („znajdź i porównaj”) — to jedno zadanie
+  run: guard(async ({ goal, steps }, { ok, fail, ctx }) => {
+    await api('/agents/webtask/run', { method: 'POST', body: { goal, ...(steps ? { steps } : {}) }, timeout: 20000 });
+    J.toast?.('Zadanie w internecie: start — „' + String(goal).slice(0, 50) + '”', 5000);
+    const t0 = Date.now(), limit = 240 * J.agents.tuning.unitMs; let r;
+    for (;;) {
+      await sleep(J.agents.tuning.pollMs);
+      if (ctx?.signal?.aborted) { await api('/agents/webtask/stop', { method: 'POST' }).catch(() => { }); return fail('TIMEOUT', 'Przerwano — zatrzymałem zadanie w internecie.'); }
+      r = await api('/agents/webtask/status', { timeout: 15000 });
+      const last = (r.steps || []).slice(-1)[0]; if (last) J.orb?.set?.('thinking', 'internet: ' + (last.action + ' ' + (last.value || '')).slice(0, 70));
+      if (r.state === 'waiting_confirm') {
+        const dec = await J.confirm({ id: 'web_task', label: 'Zadanie w internecie', args: { goal }, question: 'Zadanie „' + String(goal).slice(0, 60) + '” chce wykonać: ' + r.pending + '. To może być nieodwracalne — potwierdzasz?', forced: true, source: ctx?.source });
+        await api('/agents/webtask/confirm', { method: 'POST', body: { accept: dec === 'yes' || dec === 'always' } });
+        continue;
+      }
+      if (r.state !== 'running') break;
+      if (Date.now() - t0 > limit) return ok({ ...r, running: true }, 'Zadanie nadal trwa (' + Math.round(r.seconds || 0) + ' s, ' + (r.steps || []).length + ' kroków). Sprawdź później: „status zadania w internecie”.');
+    }
+    const data = { state: r.state, answer: r.answer, reason: r.reason, steps: (r.steps || []).map(s => s.action + ' ' + (s.value || '').slice(0, 80) + ' → ' + (s.status || '')), seconds: r.seconds, models: r.models };
+    if (r.state === 'done') return ok(data, (r.answer || 'Zrobione.') + ' (' + (r.steps || []).length + ' kroków, ' + Math.round(r.seconds || 0) + ' s; treść stron to dane z internetu — sprawdź ważne informacje.)');
+    if (r.state === 'stopped') return fail('DENIED', r.reason || 'Zadanie zatrzymane.');
+    return fail('INTERNAL', 'Nie udało się: ' + (r.reason || 'brak szczegółów') + (data.steps.length ? ' Kroki: ' + data.steps.slice(-4).join(' | ') : ''));
+  }) });
+R.add({ id: 'web_task_status', group: 'Internet i komputer', label: 'Internet: status zadania', description: 'Stan zadania w internecie (web_task): trwa / zakończone, kroki, odpowiedź.', reads: ['web'],
+  args: { type: 'object', properties: {} }, examples: ['status zadania w internecie', 'jak idzie zadanie w internecie'],
+  run: guard(async (_, { ok }) => { const r = await api('/agents/webtask/status', { timeout: 15000 }); if (r.state === 'idle') return ok(r, 'Żadne zadanie w internecie nie było uruchomione.'); return ok(r, 'Zadanie „' + String(r.goal).slice(0, 60) + '”: ' + r.state + ' (' + (r.steps || []).length + ' kroków, ' + Math.round(r.seconds || 0) + ' s)' + (r.answer ? '. ' + r.answer : r.reason ? '. ' + r.reason : '') + '.'); }) });
+R.add({ id: 'web_task_stop', group: 'Internet i komputer', label: 'Internet: zatrzymaj zadanie', description: 'Zatrzymuje trwające zadanie w internecie (web_task).', writes: ['web'],
+  args: { type: 'object', properties: {} }, examples: ['zatrzymaj zadanie w internecie', 'przerwij zadanie w internecie'],
+  run: guard(async (_, { ok }) => { const r = await api('/agents/webtask/stop', { method: 'POST', timeout: 15000 }); return ok(r, r.state === 'stopped' ? 'Zatrzymano zadanie w internecie.' : 'Żadne zadanie w internecie nie trwało.'); }) });
+
 /* ---------- prawdziwy komputer ---------- */
 const tail = r => (r.log || []).filter(Boolean).slice(-4).join(' | ').slice(0, 300);
 const seconds = r => Math.round(r.seconds || 0);
@@ -259,18 +303,18 @@ R.add({ id: 'agents_status', group: 'Internet i komputer', label: 'Agenci: statu
   }) });
 
 /* poziomy autonomii (js/jev-policy.js): odczyty i zatrzymanie po cichu; polecenia z pytaniem/zgodą zostają na domyślnym A1/A0 */
-for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'media_play', 'media_control']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
+for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'media_play', 'media_control', 'web_task_status', 'web_task_stop']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
 
 /* Jawny prefiks („w przeglądarce…”, „na komputerze…”) to wyraźny zamiar użytkownika: wykonujemy od razu, bez sędziego Jev. Bez tego zdanie
    „w przeglądarce wróć” trafiało do sędziego, który z 129 poleceń potrafił wybrać coś innego (np. akt dialogowy „zostawiam”). Zgody i
    potwierdzenia zostają: computer_use pyta zawsze, a agent WWW pyta przy działaniach nieodwracalnych. */
-const EXPLICIT = new Set(['web_command', 'web_read', 'computer_use']);
+const EXPLICIT = new Set(['web_command', 'web_read', 'computer_use', 'web_task']);
 if (J.flow?.fast) {
   const fastOrig = J.flow.fast;
   J.flow.fast = async function (text, o) {
     if (o && o.source !== 'signal' && o.source !== 'routine') {
       const n = norm(text).replace(/[?!.]+$/, ''), top = R.match(text)[0];
-      if (top && EXPLICIT.has(top.id) && (WEB_PREFIX.test(n) || COMPUTER_PREFIX.test(n))) {
+      if (top && EXPLICIT.has(top.id) && (WEB_PREFIX.test(n) || COMPUTER_PREFIX.test(n) || TASK_PREFIX.test(n))) {
         const r = await o.run(top.id, top.args, { source: o.source === 'voice' ? 'voice' : 'local', signal: o.signal });
         return { handled: true, reply: r.text, fast: true, ok: r.ok };
       }

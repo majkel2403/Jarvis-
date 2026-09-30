@@ -371,12 +371,33 @@ class ComputerAgent:
         return self.snapshot()
 
 
+PLANNER_MODELS = ["thinkingmachines/inkling:free", "nvidia/nemotron-3-super-120b-a12b:free", "dots-studio/dots-3-note-preview:free", "qwen/qwen3.8-27b:free"]
+
+
+def planner_models() -> list[str]:
+    env = os.environ.get("JARVIS_PLANNER_MODELS", "")
+    return [m.strip() for m in env.split(",") if m.strip()] or list(PLANNER_MODELS)
+
+
+async def plan_step(messages: list[dict]) -> tuple[str, str]:
+    """Model planujący zadania w internecie: darmowe modele OpenRouter (mocniejsze najpierw — planowanie jest trudniejsze niż
+    wpisywanie tekstu), na końcu Hermes. Lista: JARVIS_PLANNER_MODELS."""
+    import writer_proxy  # noqa: PLC0415 — moduł z katalogu bridge/
+    reply, used = await writer_proxy.complete({"model": "planner", "messages": messages, "max_tokens": 600}, openrouter_key(),
+                                              log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr), models=planner_models(), timeout=20)
+    return str(((reply.get("choices") or [{}])[0].get("message") or {}).get("content") or ""), used
+
+
 class Agents:
     def __init__(self, token: str):
+        from web_task import WebTask  # noqa: PLC0415
         self.web = WebAgent(token)
         self.computer = ComputerAgent(token)
+        self.webtask = WebTask(lambda m, p, b, t: self.web.call(m, p, b, t), plan_step, log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr))
 
     def shutdown(self) -> None:
+        if self.webtask._task and not self.webtask._task.done():
+            self.webtask._task.cancel()
         self.web.stop()
         if self.computer._proc and self.computer._proc.returncode is None:
             kill_tree(self.computer._proc.pid)
@@ -384,4 +405,5 @@ class Agents:
     async def status(self) -> dict:
         web = self.web.status()
         web["up"] = await self.web.up()
-        return {"key": has_key(), "web": web, "computer": {"installed": self.computer.installed(), "running": self.computer.running(), "writer": has_writer()}}
+        return {"key": has_key(), "web": web, "computer": {"installed": self.computer.installed(), "running": self.computer.running(), "writer": has_writer()},
+                "webtask": {"running": self.webtask.running(), "planner": has_writer()}}

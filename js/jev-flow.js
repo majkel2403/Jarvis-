@@ -198,6 +198,8 @@ const flow = J.flow = {
       }
 
       if (route.action === 'exec') {
+        /* Jev wybrał jedno polecenie, ale zdanie ma dalsze części, których ono nie obejmuje — to zadanie dla Hermesa, nie pół zadania */
+        if (!confirmed && R.uncovered(text, { cmd, args }).length) { log(v.logId, { outcome: 'hermes', route: 'partial' }); return { handled: false, verdict: { ...verdict, intent: { ...verdict.intent, id: 'multi_step' } } }; }
         const { r, args: used } = await execute(cmd, args, route.trust, o, verdict);
         if (!r.ok && !agrees && !confirmed && ['NOT_FOUND', 'INVALID_ARGS', 'AMBIGUOUS', 'UNSUPPORTED'].includes(r.code)) { log(v.logId, { outcome: 'hermes' }); return { handled: false, verdict }; }   // decyzja samego Jeva zawiodła — niech spróbuje Hermes
         log(v.logId, { outcome: r.ok ? (asked || confirmed ? 'asked_yes' : 'executed') : 'error' });

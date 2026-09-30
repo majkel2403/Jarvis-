@@ -174,6 +174,17 @@ Badanie na prawdziwej Wikipedii (ten sam scenariusz: otwórz → szukaj → klik
 | Chrome ma pamięć podręczną „wstecz/dalej”, na którą `goBack` czekał 15 s | `--disable-features=BackForwardCache` (Playwright robi tak w swoim Chromium) | „wstecz” 18 s → 1 s |
 | Wynik i następne polecenie widziały stronę sprzed wysłania formularza | czekanie na nawigację po Enter | poprawny adres i treść |
 
+### Niezawodność: żeby nowe zadania nie kończyły się „średnio”
+| Mechanizm | Co robi |
+|---|---|
+| **Karta łączy się z Hermesem sama** (`/bridge/hermes`, `ensureHermes` w `js/bridge.js`) | domyślne ustawienie (:8642, bez klucza) i niedziałający Hermes są podmieniane na profil `jarvis-desktop`; własnego wyboru (chmura, własny serwer) nie rusza |
+| **Nigdy pół zadania** (`registry.uncovered`, `localPlan` w `js/ai.js`) | gdy silnik lokalny rozpoznaje tylko część zdania, nic nie wykonuje i mówi, czego brakuje; gdy Jev wybrał jedno polecenie, a zdanie ma dalsze części — zadanie idzie do Hermesa; łańcuch znanych bezpiecznych poleceń wykonuje się lokalnie od razu |
+| **`web_task` — zadanie w internecie na cel** (`bridge/web_task.py`) | planista (darmowe modele OpenRouter → Hermes) wybiera krok, Jev z jev-voice-browser go wykonuje, aż cel osiągnięty; limity kroków i czasu, blokada pętli, zgoda przy działaniach nieodwracalnych, banery cookies zamykane automatycznie. „w internecie …”, „znajdź / sprawdź w internecie …” |
+| **Korpus zdań** (`tests/unit/routing.test.js`) | ok. 60 typowych poleceń z oczekiwaną drogą; zdanie, które zadziałało źle, dopisz tam z poprawnym wynikiem |
+| **Dziennik i raport porażek** (`J.tasklog`, `%USERPROFILE%\.jarvis-os\logs\tasks.jsonl`) | każde zadanie z czatu: droga, narzędzia, wynik; polecenie „co się nie udało”, sekcja w `doctor.ps1` |
+| **Modele zapasowe Hermesa** | inkling → nemotron-3-super → qwen3.8 (wszystkie `:free`); `tool_search` wyłączony w profilu (narzędzia MCP zawsze widoczne) |
+| **Autostart** (`bridge\install-autostart.ps1`) | strona :4000, most i Hermes po zalogowaniu, ukryte okna, logi w `%USERPROFILE%\.jarvis-os\logs` |
+
 ### Muzyka i filmy: „puść …” (`media_play`, `media_control`)
 „Otwórz youtube i puść piosenkę X” działało słabo: Jev uznawał zdanie za wieloetapowe, a bez Hermesa silnik lokalny ciął je na „i” i otwierał tylko stronę główną YouTube. Teraz jedno polecenie obejmuje całe zdanie („puść X”, „włącz piosenkę X na youtube”, „otwórz youtube i puść X”) i wykonuje się od razu, bez Jeva i Hermesa. Agent WWW sam wyszukuje, klika pierwszy film i sprawdza, że **czas filmu naprawdę płynie**. Dalej: „pauza”, „wznów”, „następna piosenka”, „co teraz gra”, „zatrzymaj muzykę”. Gołe „pauza/następna” znaczą muzykę tylko wtedy, gdy coś gra, a „stop” zawsze zatrzymuje plan Jarvisa. Hermes ma te same narzędzia i wskazówkę w `SOUL.md`.
 

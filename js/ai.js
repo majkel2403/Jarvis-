@@ -216,14 +216,66 @@ const run = async (name, input, ctx = {}) => {
   if (r.ok) st.done([['Wynik', r.text], ['Dane', r.data]], String(r.text).slice(0, 80)); else if (r.code === 'DENIED' || r.code === 'NEEDS_CONFIRMATION') st.done([['Wynik', r.text]], r.code); else st.fail(r.code + ': ' + r.text);
   J.ev.emit(r.ok || r.code === 'DENIED' ? 'tool.completed' : 'tool.failed', { tool: name, text: String(r.text).slice(0, 200), code: r.code });
   if (r.ui?.highlight) J.ui?.highlight(r.ui.highlight);
+  if (busy) taskTools.push({ name, ok: !!r.ok, code: r.code || null });   // do dziennika zadań (także narzędzia wołane przez Hermesa przez most)
   return r;
 };
+
+/* =================== DZIENNIK ZADAŃ I RAPORT PORAŻEK ===================
+   Każde zadanie z czatu: tekst, droga (fast / jev / hermes / local / local-offline / undo), wynik, narzędzia. Porażki — błąd,
+   odmowa „pół zadania”, nierozpoznane polecenie, narzędzie z ok=false, awaria Hermesa — widać w poleceniu „co się nie udało”
+   i w pliku %USERPROFILE%\.jarvis-os\logs\tasks.jsonl (most; czyta go też integrations\doctor.ps1). */
+let taskTools = [];
+const TL_KEY = 'jarvis-os:tasklog', TL_MAX = 300;
+const FAIL_RE = /^⚠|Nie rozpoznałem|Nie robię połowy|Nie udało się|nie jest połączony|offline|Nie mogę|nie odpowiedział/i;
+J.tasklog = {
+  list() { try { return JSON.parse(localStorage.getItem(TL_KEY) || '[]'); } catch (e) { return []; } },
+  classify(e) {
+    if (e.status === 'err') return 'błąd';
+    if (e.status === 'abort') return null;
+    if (e.partial) return 'pół zadania (odmowa)';
+    if (e.route === 'local-offline') return 'Hermes niedostępny';
+    if (e.tools.some(t => !t.ok && t.code !== 'DENIED')) return 'narzędzie zawiodło';
+    if (FAIL_RE.test(e.reply || '')) return /Nie rozpoznałem/.test(e.reply) ? 'nierozpoznane' : 'odpowiedź z błędem';
+    return null;
+  },
+  add(e) {
+    e.fail = J.tasklog.classify(e);
+    try { const l = J.tasklog.list(); l.push(e); localStorage.setItem(TL_KEY, JSON.stringify(l.slice(-TL_MAX))); } catch (er) { /* pełny localStorage — dziennik jest pomocniczy */ }
+    if (J.bridge?.connected && J.state.settings.bridgeToken) fetch(String(J.state.settings.bridgeUrl || 'http://127.0.0.1:8651').replace(/\/+$/, '') + '/bridge/tasklog', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bridge-Token': J.state.settings.bridgeToken }, body: JSON.stringify(e) }).catch(() => { });
+    return e;
+  },
+  failures(sinceMs = 7 * 864e5) { const t = Date.now() - sinceMs; return J.tasklog.list().filter(e => e.ts >= t && e.fail); }
+};
+R.add({ id: 'task_report', group: 'Agent', label: 'Raport: co się nie udało', idempotent: true, reads: ['tasklog'],
+  description: 'Zestawienie zadań z czatu, które się nie udały (błąd, nierozpoznane, pół zadania, Hermes niedostępny, narzędzie zawiodło) z ostatnich dni, z przyczynami i drogą wykonania.',
+  args: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 30, description: 'ile dni wstecz (domyślnie 7)' } } },
+  examples: ['co sie nie udalo', 'raport porazek', 'jakie zadania nie wyszly', 'pokaz bledy zadan'],
+  run({ days }) {
+    const all = J.tasklog.list(), since = Date.now() - (days || 7) * 864e5, recent = all.filter(e => e.ts >= since), bad = recent.filter(e => e.fail);
+    if (!recent.length) return R.ok({ total: 0 }, 'Brak zadań w dzienniku z ostatnich ' + (days || 7) + ' dni.');
+    const by = {}; bad.forEach(e => { by[e.fail] = (by[e.fail] || 0) + 1; });
+    const lines = bad.slice(-8).reverse().map(e => '• ' + new Date(e.ts).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' „' + e.text.slice(0, 60) + '” — ' + e.fail + ' (' + e.route + (e.tools.length ? ', ' + e.tools.map(t => t.name + (t.ok ? '' : '✗')).join(' ') : '') + ')');
+    return R.ok({ total: recent.length, failed: bad.length, byReason: by, last: bad.slice(-20) }, 'Z ostatnich ' + (days || 7) + ' dni: ' + bad.length + ' z ' + recent.length + ' zadań się nie udało' + (bad.length ? ' — ' + Object.entries(by).map(([k, v]) => k + ': ' + v).join(', ') + '.\n' + lines.join('\n') : '.'));
+  } });
+J.policy?.A3?.add('task_report');
 
 /* Polecenie wpisane ręcznie jest zaufane ('local'). Polecenie głosowe — nie: mowę łatwo źle usłyszeć,
    więc ryzykowne działania (usuwanie, zamykanie) dostają pytanie Tak/Nie także wtedy, gdy wykonuje je silnik lokalny. */
 const trustSource = () => (J.brain && J.brain.lastSource === 'voice') ? 'voice' : 'local';
 
 /* =================== SILNIK LOKALNY (offline, z rejestru) =================== */
+/* decyzja bez wykonania (testowana w tests/unit/routing.test.js): exec — jedno polecenie obejmuje całe zdanie; chain — każda część
+   zdania rozpoznana (ma pierwszeństwo, inaczej „ustaw minutnik 5 min i otwórz notatki” = minutnik z etykietą „i otwórz notatki”);
+   partial — rozpoznana tylko część → odmowa zamiast pół zadania; none — nic (rozmowa albo Hermes) */
+const localPlan = raw => {
+  const o = String(raw).trim(), m = R.match(o)[0];
+  const rest = m ? R.uncovered(o, m) : [];
+  const chain = m?.cmd.spansConj ? null : R.chain(o);
+  if (m && !rest.length && !chain) return { kind: 'exec', m };
+  if (chain) return { kind: 'chain', chain, m };
+  if (m) return { kind: 'partial', m, rest };
+  return { kind: 'none' };
+};
 const local = async (raw, ctx = {}) => {
   const o = raw.trim(), n = norm(o).replace(/[?!.]+$/, '');
   if (/^(hej|czesc|witaj|siema|dzien dobry|dobry wieczor|dobry|elo|hello|hi|yo)\b/.test(n)) { const hr = new Date().getHours(); return (hr < 5 ? 'Późna pora' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj ponownie' : 'Dobry wieczór') + '. Wszystkie systemy działają. W czym mogę pomóc?'; }
@@ -232,10 +284,15 @@ const local = async (raw, ctx = {}) => {
   if (/(zart|dowcip|rozsmiesz)/.test(n)) return JOKES[Math.floor(Math.random() * JOKES.length)];
   if (/^matrix$/.test(n)) { J.matrix?.(); return 'Wchodzimy do Matrixa. Kliknij, aby wrócić.'; }
   const exec = async m => { const r = await run(m.id, m.args, { source: trustSource(), signal: ctx.signal }); return r.text; };
-  const m = R.match(o)[0];
-  if (m) return exec(m);
-  const chain = R.chain(o);
+  const plan = localPlan(o), m = plan.m, rest = plan.rest || [], chain = plan.chain;
+  if (plan.kind === 'exec') return exec(m);
   if (chain) { const out = []; J.proc.plan?.(chain.map(c => c.cmd.label)); for (let i = 0; i < chain.length; i++) { out.push(await exec(chain[i])); J.proc.planStep?.(i); } return out.join(' '); }
+  /* nigdy pół zadania: rozpoznana tylko część zdania → nic nie wykonujemy i mówimy wprost, czego brakuje */
+  if (m) {
+    J.proc.step('system', 'Nie wykonano części zadania', [['Rozpoznane', m.cmd.label], ['Nierozpoznane', rest.join(' · ')]], { status: 'err' });
+    J.brain.lastPartial = { text: o, cmd: m.id, rest };
+    return 'Rozpoznaję tylko część: „' + m.cmd.label + '”, a nie wiem, jak zrobić: „' + rest.join('”, „') + '”. Nie robię połowy zadania. ' + (J.aiReady() ? 'Hermes jest teraz niedostępny — spróbuj za chwilę albo sprawdź Ustawienia → Hermes.' : 'Takie zadania wykonuje Hermes — włącz go w Ustawieniach (profil jarvis-desktop).');
+  }
   return null;
 };
 
@@ -424,24 +481,45 @@ J.brain = {
     J.orb.set('thinking', 'analizuję: „' + shown.slice(0, 60) + '”');
     J.proc.start(shown);
     J.ev.emit('task.created', { title: shown, source: opts.source || 'user' });
-    let reply, status = 'ok';
+    let reply, status = 'ok', route = 'local';
+    const taskT0 = Date.now(); taskTools = []; J.brain.lastPartial = null;
     J.brain.currentText = text;
     try {
       const skipNet = J.aiReady() && J.hermes.status === 'down' && Date.now() - J.hermes.checked < 45000;
       /* „cofnij” działa bez sieci i bez Jeva */
       let verdict = null, flowRes = null;
       const source = fromSignal ? opts.source : (opts.voice || opts.source === 'voice') ? 'voice' : 'typed';
-      if (!fromSignal && /^(cofnij|cofnij to|anuluj to|wycofaj)( ostatni\w*)?$/.test(J.norm(text).replace(/[?!.]+$/, '')) ) { const u = await J.undo.run(); reply = u.text; }
+      if (!fromSignal && /^(cofnij|cofnij to|anuluj to|wycofaj)( ostatni\w*)?$/.test(J.norm(text).replace(/[?!.]+$/, '')) ) { const u = await J.undo.run(); reply = u.text; route = 'undo'; }
+      /* łańcuch bezpiecznych, znanych poleceń (każda część rozpoznana, tylko odczyty/nawigacja/odwracalne zapisy) → od razu, bez Jeva:
+         Jev widzi w nim jedno polecenie albo „multi_step” i pytał „Chodzi o…?”, zamiast po prostu zrobić obie rzeczy */
+      else if (!fromSignal && (lp0 => lp0.kind === 'chain' && lp0.chain.every(c => ['A3', 'A2'].includes(J.policy.level(c.cmd, c.args))))(localPlan(text))) {
+        route = 'chain'; reply = await local(text, { signal: taskAbort.signal });
+      }
       /* Szybka ścieżka (J.flow): parser pewny → od razu; inaczej Jev decyduje: wykonaj / zapytaj / Hermes (patrz docs/JEV-PLAN.md, sekcja 7) */
       else if (!fromSignal && J.judge) {
         flowRes = await J.flow.fast(text, { source, signal: taskAbort.signal, run, prevText: J.brain.lastText, prevAt: J.brain.lastAt });
-        if (flowRes.handled) { reply = flowRes.reply; if (!J.aiReady() || skipNet) { /* historia lokalna poniżej */ } else history.push({ role: 'user', content: text }, { role: 'assistant', content: reply }); }
+        if (flowRes.handled) { reply = flowRes.reply; route = flowRes.fast ? 'fast' : 'jev'; if (!J.aiReady() || skipNet) { /* historia lokalna poniżej */ } else history.push({ role: 'user', content: text }, { role: 'assistant', content: reply }); }
         else verdict = flowRes.verdict || null;
       }
-      if (reply != null) { /* załatwione bez Hermesa: cofnięcie albo szybka ścieżka */ }
+      /* łańcuch ZNANYCH poleceń („otwórz notatnik i zanotuj…”, „ustaw minutnik i otwórz notatki”): każda część rozpoznana, żadna
+         nieodwracalna → wykonujemy lokalnie, deterministycznie i od razu, zamiast prosić model o składanie wywołań (darmowe modele
+         potrafią zbudować błędne wywołanie narzędzia) */
+      if (reply == null && !fromSignal && (!verdict || verdict.intent?.id === 'multi_step')) {
+        const lp = localPlan(text);
+        if (lp.kind === 'chain' && lp.chain.every(c => J.policy.level(c.cmd, c.args) !== 'A0')) { route = 'chain'; reply = await local(text, { signal: taskAbort.signal }); }
+      }
+      if (reply != null) { /* załatwione bez Hermesa: cofnięcie, szybka ścieżka albo łańcuch znanych poleceń */ }
       else if (J.aiReady() && !skipNet) {
         try {
-          reply = await hermes(text, bubble, { signal: taskAbort.signal, fullContext: fromSignal, judge: verdict, origin: opts.source }); setStatus('up');
+          route = 'hermes';
+          const ask = () => hermes(text, bubble, { signal: taskAbort.signal, fullContext: fromSignal, judge: verdict, origin: opts.source });
+          /* błędne wywołanie narzędzia przez model (zdarza się darmowym) — jedna ponowna próba, zanim pokażemy błąd */
+          reply = await ask().catch(e => {
+            if (e.net || e.name === 'AbortError' || !/invalid tool call|malformed tool|tool call.*(invalid|parse)/i.test(e.message)) throw e;
+            J.proc.step('system', 'Hermes: model zbudował błędne wywołanie narzędzia — ponawiam raz', [['Błąd', e.message]], { status: 'err' });
+            return ask();
+          });
+          setStatus('up');
           if (J.judge?.available() && J.judge.allowed('verify') && (lastResults.length || J.state.settings.hermesPreset === 'max') && lastResults.length && reply) {
             J.ev.emit('task.verifying', { results: lastResults.length });
             let p = await J.judge.verify(reply, lastResults);
@@ -459,11 +537,12 @@ J.brain = {
           if (!e.net) throw e;
           J.proc.step('error', 'Hermes nieosiągalny — przełączam na silnik lokalny', [['Błąd', e.message]], { status: 'err', preview: 'fallback' });
           J.ev.emit('task.recovering', { error: e.message });
-          setStatus('down');
+          setStatus('down'); route = 'local-offline';
           const loc = fromSignal ? null : await local(text, { signal: taskAbort.signal });
           reply = (loc ?? 'Nie rozpoznałem tego polecenia lokalnie.') + '\n\n⚠ Hermes jest offline — użyłem silnika lokalnego (szczegóły w Process Log).';
         }
       } else {
+        route = skipNet ? 'local-offline' : 'local';
         J.proc.step('system', 'Silnik lokalny (bez modelu)', [['Tryb', skipNet ? 'Hermes offline (sprawdzono ' + Math.round((Date.now() - J.hermes.checked) / 1000) + ' s temu) — pominięto zapytanie do sieci' : 'Hermes wyłączony — dopasowanie poleceń z rejestru'], ['Dopasowania', R.match(text).slice(0, 3).map(m => m.id + ' (' + m.score + ')')]]);
         await new Promise(r => setTimeout(r, 200 + Math.random() * 200));
         /* Jev uznał zdanie za rozmowę — nie wykonujemy go „na siłę” jako polecenia (np. „przypomnij mi jak się nazywa stolica Francji”) */
@@ -489,6 +568,7 @@ J.brain = {
       setTimeout(() => J.orb.state === 'alert' && J.orb.set('idle'), 3000);
     } finally {
       busy = false; taskAbort = null;
+      if (!fromSignal) J.tasklog.add({ ts: taskT0, text: String(text).slice(0, 300), route, status, ms: Date.now() - taskT0, tools: taskTools.slice(0, 20), partial: !!J.brain.lastPartial, hermes: J.aiReady() ? J.hermes.status : 'off', reply: String(reply || '').slice(0, 240), source: opts.source || (opts.voice ? 'voice' : 'user') });
       J.ev.emit(status === 'ok' ? 'task.completed' : status === 'abort' ? 'task.cancelled' : 'task.failed', { title: shown, result: String(reply || '').split('\n\n⚠')[0] });
       J.proc.end(status, reply);
       if (!fromSignal) { J.brain.lastText = text; J.brain.lastAt = Date.now(); }
@@ -498,7 +578,7 @@ J.brain = {
     }
   }
 };
-J.brain.run = run; Object.defineProperty(J.brain, 'mcp', { get: mcpMode });
+J.brain.run = run; J.brain.localPlan = localPlan; Object.defineProperty(J.brain, 'mcp', { get: mcpMode });
 J.brain.local = local; J.brain.parseCalls = parseCalls; J.brain.parsePlan = parsePlan; J.brain.visible = visible;
 J.brain.trimHistory = trimHistory; J.brain.systemPrompt = SYSTEM;
 loadHistory();

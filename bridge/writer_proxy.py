@@ -79,17 +79,18 @@ def hermes_target() -> tuple[str, str, str] | None:
     return os.environ.get("JARVIS_HERMES_URL", "http://127.0.0.1:8643/v1") + "/chat/completions", m.group(1), "jarvis-desktop"
 
 
-async def complete(body: dict, openrouter_key: str, *, log=lambda *a: None) -> tuple[dict, str]:
-    """Pierwsza poprawna odpowiedź z łańcucha. Zwraca (odpowiedź, użyty model); rzuca RuntimeError, gdy wszystko zawiodło."""
+async def complete(body: dict, openrouter_key: str, *, log=lambda *a: None, models: list[str] | None = None, timeout: float | None = None) -> tuple[dict, str]:
+    """Pierwsza poprawna odpowiedź z łańcucha (domyślnie chain(); planista zadań w internecie podaje własny, mocniejszy).
+    Zwraca (odpowiedź, użyty model); rzuca RuntimeError, gdy wszystko zawiodło."""
     errors: list[str] = []
     async with aiohttp.ClientSession() as s:
         now = time.monotonic()
         if openrouter_key:
-            for model in chain():
+            for model in (models or chain()):
                 if _failed.get(model, 0) > now:
                     continue
                 try:
-                    status, reply = await ask(s, OPENROUTER_URL, openrouter_key, prepare(body, model), PER_MODEL_TIMEOUT)
+                    status, reply = await ask(s, OPENROUTER_URL, openrouter_key, prepare(body, model), timeout or PER_MODEL_TIMEOUT)
                 except Exception as e:  # noqa: BLE001 — limit czasu, brak sieci
                     status, reply = 0, {"error": type(e).__name__}
                 if status == 200 and valid_json_reply(reply):
