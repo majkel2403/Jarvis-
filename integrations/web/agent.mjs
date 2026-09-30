@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HOME = path.join(os.homedir(), '.jarvis-os');
@@ -57,6 +58,37 @@ export function normalizeUrl(input) {
   return u.toString();
 }
 
+/* Ścieżka do zainstalowanego Google Chrome (nie do Chromium z Playwrighta) albo null */
+export function findChrome() {
+  const env = process.env;
+  return [env.JARVIS_CHROME_PATH, path.join(env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(env.ProgramFiles || '', 'Google', 'Chrome', 'Application', 'chrome.exe'), path.join(env['ProgramFiles(x86)'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe')]
+    .find(p => p && fs.existsSync(p)) || null;
+}
+
+/* Uruchamia (albo wznawia) Chrome'a z debugowaniem tylko na 127.0.0.1 i OSOBNYM profilem. Chrome 136+ odmawia debugowania domyślnego
+   profilu, a poza tym nie chcemy dotykać Twoich okien z zalogowanymi kontami. Zwraca null, gdy tryb to chromium albo Chrome nie jest zainstalowany. */
+export async function startChrome({ log = () => { }, profileDir, port, mode } = {}) {
+  const m = mode || process.env.JARVIS_WEB_BROWSER || 'auto';
+  if (m === 'chromium') return null;
+  const exe = findChrome();
+  if (!exe) { if (m === 'chrome') throw new Error('JARVIS_WEB_BROWSER=chrome, ale nie znaleziono Google Chrome (JARVIS_CHROME_PATH)'); return null; }
+  const p = port || +process.env.JARVIS_CDP_PORT || 9223, endpoint = `http://127.0.0.1:${p}`;
+  const probe = async () => { try { const r = await fetch(endpoint + '/json/version', { signal: AbortSignal.timeout(1000) }); return r.ok ? await r.json() : null; } catch { return null; } };
+  let info = await probe(), child = null, reused = !!info;
+  if (!info) {
+    const dir = profileDir || process.env.JARVIS_CHROME_PROFILE || path.join(HOME, 'chrome-profile');
+    fs.mkdirSync(dir, { recursive: true });
+    child = spawn(exe, [`--remote-debugging-port=${p}`, '--remote-debugging-address=127.0.0.1', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
+      '--disable-features=BackForwardCache',   // jak w Chromium z Playwrighta: przy bfcache goBack(domcontentloaded) czeka do limitu 15 s
+      '--window-size=1280,900', '--window-position=40,40', 'about:blank'], { stdio: 'ignore', detached: false });
+    child.on('error', e => log('Chrome nie wystartował: ' + e.message));
+    for (let i = 0; i < 100 && !info; i++) { await new Promise(r => setTimeout(r, 150)); info = await probe(); if (child.exitCode !== null) break; }
+    if (!info) { child.kill(); if (m === 'chrome') throw new Error('Chrome nie otworzył portu debugowania na ' + endpoint); return null; }
+  }
+  return { endpoint, version: (info.Browser || '').replace(/^Chrome\//, ''), reused, stop() { if (child && child.exitCode === null) { try { child.kill(); } catch { /* już zamknięty */ } } } };
+}
+
 export async function createAgent(opts = {}) {
   const vendor = opts.vendor || process.env.JARVIS_JEV_BROWSER || path.join(HOME, 'vendor', 'jev-voice-browser');
   if (!fs.existsSync(path.join(vendor, 'src', 'controller.js'))) throw new Error('Brak jev-voice-browser w ' + vendor + ' — uruchom integrations\\setup.ps1');
@@ -72,8 +104,39 @@ export async function createAgent(opts = {}) {
   }
 
   const browser = new BrowserManager();
-  await browser.launch({ headless: !!opts.headless, profileDir: opts.profileDir || path.join(HOME, 'web-profile'), startUrl: opts.startUrl || 'about:blank' });
+  /* Przeglądarka: prawdziwy Google Chrome (osobna instancja z własnym profilem, podpięta przez CDP) albo Chromium z Playwrighta.
+     JARVIS_WEB_BROWSER=chrome|chromium|auto (domyślnie auto: Chrome, gdy jest zainstalowany). Twoje zwykłe okna Chrome nie są ruszane. */
+  const chrome = opts.headless || opts.chromium ? null : await startChrome({ log, profileDir: opts.chromeProfile, port: opts.cdpPort, mode: opts.browserMode });
+  await browser.launch(chrome
+    ? { cdp: chrome.endpoint, startUrl: opts.startUrl || 'about:blank' }
+    : { headless: !!opts.headless, profileDir: opts.profileDir || path.join(HOME, 'web-profile'), startUrl: opts.startUrl || 'about:blank' });
+  browser.context.setDefaultTimeout(+process.env.JARVIS_WEB_ACTION_TIMEOUT || 6000);   // Playwright czeka domyślnie 30 s na element; polecenie ma się wykonać albo szybko zawieść
+  log(chrome ? `przeglądarka: Google Chrome ${chrome.version} (CDP ${chrome.endpoint}${chrome.reused ? ', istniejąca instancja' : ''})` : 'przeglądarka: Chromium (Playwright)');
   const controller = new Controller({ browser, decideFn });
+  /* Samoleczenie: elementy są znakowane atrybutem data-vb-id w chwili zrzutu, a nowoczesne strony (Wikipedia/Vue, React) odtwarzają węzły
+     przed akcją — atrybut znika i Playwright czekał na nieistniejący element (6–30 s). Przed akcją sprawdzamy, czy element jeszcze jest;
+     jeśli nie, odświeżamy zrzut i szukamy tego samego elementu (rola + tekst + placeholder) pod nowym id. */
+  const execOriginal = controller._execute;
+  controller._execute = async (action, br) => {
+    if (action.targetId) {
+      const page = await br.ensurePage();
+      const present = await page.locator(`[data-vb-id="${action.targetId}"]`).count().catch(() => 0);
+      if (!present) {
+        const old = controller.snapshot?.elements?.find(x => x.id === action.targetId);
+        await controller.refreshSnapshot().catch(() => { });
+        const same = e => old && e.role === old.role && e.text === old.text && (e.placeholder || '') === (old.placeholder || '');
+        const fresh = controller.snapshot?.elements?.find(same);
+        if (!fresh && action.type === 'type_into_field' && action.submit && action.text) {   // pole wyszukiwania zniknęło: tak jak autor, gdy pola brak — wyszukiwarka
+          log(`pole „${old?.text || action.targetId}” zniknęło — wyszukuję przez DuckDuckGo`);
+          return execOriginal({ type: 'navigate_url', url: 'https://duckduckgo.com/?q=' + encodeURIComponent(action.text), label: `search: ${action.text}`, query: action.text }, br);
+        }
+        if (!fresh) throw new Error(`element "${old?.text || action.targetId}" zniknął ze strony (strona odtworzyła DOM)`);
+        log(`element ${action.targetId} zniknął — przemapowany na ${fresh.id}`);
+        return execOriginal({ ...action, targetId: fresh.id }, br);
+      }
+    }
+    return execOriginal(action, br);
+  };
   controller.on('error', () => { });   // Controller emituje 'error' bez nasłuchu = wyjątek nieobsłużony i zabicie procesu; błędy Jeva zgłaszamy w wyniku polecenia
   await controller.start();
 
@@ -203,7 +266,7 @@ export async function createAgent(opts = {}) {
 
   return {
     server, controller, browser, port: boundPort,
-    async close() { await new Promise(r => server.close(r)); await controller.close(); await browser.close(); }
+    async close() { await new Promise(r => server.close(r)); await controller.close(); await browser.close().catch(() => { }); chrome?.stop(); }
   };
 }
 

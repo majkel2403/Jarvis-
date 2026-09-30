@@ -48,6 +48,22 @@ const call = (method, p, body, headers = {}) => new Promise((resolve, reject) =>
 const cmd = async text => (await call('POST', '/agent/command', { text })).body;
 const skip = { skip: !HAVE && 'jev-voice-browser nie jest zainstalowany' };
 
+test('wybór przeglądarki: Chrome tylko gdy jest, tryb chromium go pomija, wymuszony chrome bez instalacji zgłasza błąd', async () => {
+  const { findChrome, startChrome } = await import('../web/agent.mjs');
+  const exe = findChrome();
+  assert.ok(exe === null || /chrome\.exe$/i.test(exe), String(exe));
+  assert.equal(await startChrome({ mode: 'chromium' }), null, 'tryb chromium nie uruchamia Chrome');
+  const saved = process.env.JARVIS_CHROME_PATH, sl = process.env.LOCALAPPDATA, pf = process.env.ProgramFiles, pf86 = process.env['ProgramFiles(x86)'];
+  try {
+    process.env.LOCALAPPDATA = process.env.ProgramFiles = process.env['ProgramFiles(x86)'] = os.tmpdir(); delete process.env.JARVIS_CHROME_PATH;
+    assert.equal(findChrome(), null, 'brak Chrome');
+    assert.equal(await startChrome({ mode: 'auto' }), null, 'auto bez Chrome = Chromium');
+    await assert.rejects(startChrome({ mode: 'chrome' }), /nie znaleziono Google Chrome/);
+  } finally {
+    Object.assign(process.env, { LOCALAPPDATA: sl, ProgramFiles: pf, 'ProgramFiles(x86)': pf86 }); if (saved) process.env.JARVIS_CHROME_PATH = saved;
+  }
+});
+
 test('normalizeUrl: tylko http(s), domena dostaje https', () => {
   assert.equal(normalizeUrl('youtube.com'), 'https://youtube.com/');
   assert.equal(normalizeUrl('http://localhost:4000/x'), 'http://localhost:4000/x');
@@ -87,6 +103,28 @@ test('polecenie: wróć, przewiń, wyszukaj na stronie (pole wyszukiwania)', ski
   assert.match(decodeURIComponent(r.page.url.replace(/\+/g, ' ')), /\/search\?q=zielone jabłka/, 'wynik pokazuje stronę PO wysłaniu formularza, nie starą: ' + r.page.url);
   await call('POST', '/agent/goto', { url: base + '/' });
   assert.equal((await cmd('scroll down')).status, 'done');
+});
+
+test('samoleczenie: strona odtwarza DOM (znika data-vb-id) → element odnaleziony pod nowym id, bez czekania 6–30 s', skip, async () => {
+  await call('POST', '/agent/goto', { url: base + '/' });
+  const page = await agent.browser.ensurePage();
+  await agent.controller.refreshSnapshot();
+  await page.evaluate(() => document.querySelectorAll('[data-vb-id]').forEach(e => e.removeAttribute('data-vb-id')));   // jak Vue/React po odtworzeniu węzłów
+  const t0 = Date.now();
+  const r = await cmd('click second result');
+  assert.equal(r.status, 'done', JSON.stringify(r)); assert.match(r.page.url, /\/b$/);
+  assert.ok(Date.now() - t0 < 4000, 'nie czekał na limit czasu: ' + (Date.now() - t0) + ' ms');
+});
+
+test('element naprawdę zniknął ze strony → szybki, czytelny błąd zamiast wiszenia', skip, async () => {
+  await call('POST', '/agent/goto', { url: base + '/' });
+  const page = await agent.browser.ensurePage();
+  await agent.controller.refreshSnapshot();
+  await page.evaluate(() => document.querySelectorAll('a').forEach(a => a.remove()));   // linków już nie ma
+  const t0 = Date.now();
+  const r = await cmd('click second result');
+  assert.ok(['failed', 'unrecognized'].includes(r.status), JSON.stringify(r));
+  assert.ok(Date.now() - t0 < 4000, 'szybka porażka: ' + (Date.now() - t0) + ' ms');
 });
 
 test('niejednoznaczność: dwa takie same linki → kandydaci, nie zgadywanie', skip, async () => {

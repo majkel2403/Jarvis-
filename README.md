@@ -136,7 +136,7 @@ Jarvis potrafi, przez model decyzyjny **Jev** (TypeSafe „System One”, decyzj
 
 | | Repozytorium | Co robi | Jak mówisz |
 |---|---|---|---|
-| **Internet** | [moritzkremb/jev-voice-browser](https://github.com/moritzkremb/jev-voice-browser) | prawdziwy Chromium (Playwright, osobny profil — bez Twoich logowań): zdanie → Jev wybiera intencję i element strony → klik / wpisanie / przewinięcie / nawigacja | „**w przeglądarce** wejdź na wikipedię”, „w przeglądarce wyszukaj zielone jabłka”, „w przeglądarce kliknij pierwszy wynik”, „w przeglądarce przeczytaj stronę” |
+| **Internet** | [moritzkremb/jev-voice-browser](https://github.com/moritzkremb/jev-voice-browser) | prawdziwy **Google Chrome** (osobna instancja z własnym profilem `%USERPROFILE%\.jarvis-os\chrome-profile`, podpięta przez CDP — Twoje zwykłe okna i logowania nietknięte; bez Chrome'a Chromium z Playwrighta; `JARVIS_WEB_BROWSER=chrome\|chromium\|auto`): zdanie → Jev wybiera intencję i element strony → klik / wpisanie / przewinięcie / nawigacja | „**w przeglądarce** wejdź na wikipedię”, „w przeglądarce wyszukaj zielone jabłka”, „w przeglądarce kliknij pierwszy wynik”, „w przeglądarce przeczytaj stronę” |
 | **Prawdziwy komputer** | [awlevin/typesafe-computer-use](https://github.com/awlevin/typesafe-computer-use) | czyta ekran Windows (UI Automation + OCR), Jev wybiera akcję, program klika i pisze na PRAWDZIWYM pulpicie, aż cel zostanie osiągnięty | „**na komputerze** otwórz notatnik”, „w Windows uruchom kalkulator”; stop: „zatrzymaj komputer” |
 | **Wewnątrz** (okna, notatki, widgety Jarvis OS) | — | jak dotąd, zwykłe polecenia rejestru (sędzia Jev routuje je bez czekania na Hermesa) | „otwórz notatnik”, „ułóż okna” |
 
@@ -162,6 +162,17 @@ Jarvis potrafi, przez model decyzyjny **Jev** (TypeSafe „System One”, decyzj
 - Agent WWW nasłuchuje tylko na `127.0.0.1`, wymaga tokenu mostu i **odrzuca żądania pochodzące ze stron** (nagłówki `Origin`/`Host`). Celowo nie uruchamiamy panelu z mikrofonem ani gniazda WebSocket z repozytorium autora — gniazdo na `127.0.0.1` jest dostępne z dowolnej strony otwartej w Twojej przeglądarce.
 - Zrzuty ekranu z zadań (`%USERPROFILE%\.jarvis-os\runs`) mogą zawierać prywatne dane — most zostawia tylko 5 ostatnich uruchomień.
 - Znane ograniczenia: autor określa wsparcie Windows jako eksperymentalne; OCR czyta jeden język (u Ciebie polski, ustawiany w `jev.env`); tylko główny monitor; program widzi tylko okno na pierwszym planie (bez paska zadań i menu Start) i ma tylko akcje: klik, wpisanie, przewinięcie, Esc, Enter, wstecz, czekaj, oraz nasze „uruchom program z listy” — bez skrótów klawiszowych; Comet/Chrome nie publikują drzewa UI Automation, więc w przeglądarce działa OCR.
+
+### Poprawki agenta przeglądarki (`integrations/web/agent.mjs`)
+Badanie na prawdziwej Wikipedii (ten sam scenariusz: otwórz → szukaj → kliknij → przewiń → wstecz, z prawdziwym Jevem):
+
+| Problem | Poprawka | Efekt |
+|---|---|---|
+| Elementy są znakowane atrybutem w chwili zrzutu, a nowoczesne strony (Vue/React) odtwarzają węzły — Playwright czekał 6–30 s na nieistniejący element | samoleczenie: sprawdzenie przed akcją, odświeżenie zrzutu, znalezienie tego samego elementu pod nowym id; gdy pola wyszukiwania brak — wyszukiwarka, jak u autora | scenariusz **40 s → 7 s**, bez wiszących poleceń |
+| Domyślny limit czasu Playwrighta 30 s | limit akcji 6 s (`JARVIS_WEB_ACTION_TIMEOUT`) | szybka, czytelna porażka |
+| Wolniejszy start Chromium z Playwrighta | prawdziwy Google Chrome przez CDP, własny profil | start 3,9 s → 1,1 s |
+| Chrome ma pamięć podręczną „wstecz/dalej”, na którą `goBack` czekał 15 s | `--disable-features=BackForwardCache` (Playwright robi tak w swoim Chromium) | „wstecz” 18 s → 1 s |
+| Wynik i następne polecenie widziały stronę sprzed wysłania formularza | czekanie na nawigację po Enter | poprawny adres i treść |
 
 ### Rozszerzenia dla Windows (`integrations/computer/jarvis_clicker.py`)
 Wynik badań programu autora na Windows 11 (polski system, 125% skalowania). Dodatek nakłada poprawki w locie, bez zmian w kodzie autora (43 testy: `uv run --project %USERPROFILE%\.jarvis-os\vendor\typesafe-computer-use python -m pytest integrations/computer`):

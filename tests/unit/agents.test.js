@@ -251,6 +251,26 @@ test('computer_status / computer_stop / agents_status', async () => {
   assert.match((await idle.J.registry.run('computer_status', {}, { source: 'hermes' })).text, /nie było jeszcze/);
 });
 
+test('jawny prefiks omija sędziego Jev: „w przeglądarce wróć” i „na komputerze …” idą prosto do polecenia', async () => {
+  const { J } = setup();
+  const runs = [], viaJudge = [];
+  const orig = J.flow.fast;
+  assert.ok(orig, 'ścieżka szybka istnieje');
+  const o = { source: 'typed', run: async (id, args, ctx) => { runs.push([id, args, ctx.source]); return { ok: true, text: 'zrobione ' + id }; } };
+  J.judge.decide = async () => { viaJudge.push(1); return null; };
+  let r = await J.flow.fast('w przeglądarce wróć', o);
+  const js = x => JSON.stringify(x);   // obiekty z innego kontekstu vm: porównujemy przez JSON
+  assert.equal(js(runs.at(-1)), js(['web_command', { command: 'wróć' }, 'local'])); assert.ok(r.handled && r.reply === 'zrobione web_command');
+  r = await J.flow.fast('W przeglądarce: przeczytaj stronę', o); assert.equal(runs.at(-1)[0], 'web_read');
+  r = await J.flow.fast('na komputerze otwórz notatnik', o); assert.equal(js(runs.at(-1)), js(['computer_use', { goal: 'otwórz notatnik' }, 'local']));
+  r = await J.flow.fast('na komputerze otwórz notatnik', { ...o, source: 'voice' }); assert.equal(runs.at(-1)[2], 'voice', 'głos nie jest zaufany — rejestr zapyta o zgodę');
+  assert.equal(viaJudge.length, 0, 'sędzia Jev nie został zapytany');
+  const before = runs.length;
+  await J.flow.fast('wejdź na wikipedię', o);   // bez prefiksu: zwykła ścieżka (parser/Jev/open_url)
+  await J.flow.fast('otwórz notatnik', o);
+  assert.equal(runs.length, before + 0, 'bez prefiksu nic nie trafia do agentów');
+});
+
 test('ustawienia: token mostu nie trafia do kopii zapasowej', async () => {
   const { J } = setup();
   J.state.settings.bridgeToken = 'sekretny-token';

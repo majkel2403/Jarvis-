@@ -22,6 +22,7 @@ let fails = 0; const check = (name, cond, extra = '') => { console.log((cond ? '
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 const app = http.createServer((req, res) => {
   const u = decodeURIComponent(new URL(req.url, 'http://x').pathname), f = path.join(REPO, u === '/' ? 'index.html' : u);
+  if (u === '/config.local.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* e2e: bez lokalnej konfiguracji (klucz Jeva nie może wyciec do testu) */'); }
   if (!f.startsWith(REPO) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('nie ma'); }
   res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
 });
@@ -73,6 +74,7 @@ try {
   check('„kliknij drugi wynik” → Jev wybiera element → klik', (await agentUrl()).endsWith('/b'), await agentUrl());
   console.log(`       (${Date.now() - t0} ms; decyzja atrapy Jeva ~4 ms)`);
   await say('w przeglądarce wróć'); await idle();
+  if (process.env.E2E_DEBUG) console.log('  [debug] historia:', JSON.stringify(await page.evaluate(() => J.brain.history.slice(-2).map(m => String(m.content).slice(0, 200)))), '| stan agenta:', JSON.stringify((await B('GET', '/agents/web/state')).body.page));
   check('„wróć” → go back', (await agentUrl()) === `http://127.0.0.1:${P.shop}/`, await agentUrl());
   const read = await page.evaluate(() => J.registry.run('web_read', {}, { source: 'hermes' }));
   check('web_read zwraca treść jako dane niezaufane', read.ok && /ZIELONE-JABŁKA/.test(read.text) && /niezaufane/.test(read.text), read.text?.slice(0, 120));

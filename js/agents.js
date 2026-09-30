@@ -186,4 +186,22 @@ R.add({ id: 'agents_status', group: 'Internet i komputer', label: 'Agenci: statu
 
 /* poziomy autonomii (js/jev-policy.js): odczyty i zatrzymanie po cichu; polecenia z pytaniem/zgodą zostają na domyślnym A1/A0 */
 for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status']) J.policy?.A3?.add(id);
+
+/* Jawny prefiks („w przeglądarce…”, „na komputerze…”) to wyraźny zamiar użytkownika: wykonujemy od razu, bez sędziego Jev. Bez tego zdanie
+   „w przeglądarce wróć” trafiało do sędziego, który z 129 poleceń potrafił wybrać coś innego (np. akt dialogowy „zostawiam”). Zgody i
+   potwierdzenia zostają: computer_use pyta zawsze, a agent WWW pyta przy działaniach nieodwracalnych. */
+const EXPLICIT = new Set(['web_command', 'web_read', 'computer_use']);
+if (J.flow?.fast) {
+  const fastOrig = J.flow.fast;
+  J.flow.fast = async function (text, o) {
+    if (o && o.source !== 'signal' && o.source !== 'routine') {
+      const n = norm(text).replace(/[?!.]+$/, ''), top = R.match(text)[0];
+      if (top && EXPLICIT.has(top.id) && (WEB_PREFIX.test(n) || COMPUTER_PREFIX.test(n))) {
+        const r = await o.run(top.id, top.args, { source: o.source === 'voice' ? 'voice' : 'local', signal: o.signal });
+        return { handled: true, reply: r.text, fast: true, ok: r.ok };
+      }
+    }
+    return fastOrig.call(this, text, o);
+  };
+}
 })();
