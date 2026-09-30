@@ -25,6 +25,10 @@ if ($key) { Ok ("jev.env: klucz " + $key.Substring(0, [Math]::Min(7, $key.Length
 else { No 'brak klucza w %USERPROFILE%\.jarvis-os\jev.env' 'powershell -ExecutionPolicy Bypass -File integrations\set-key.ps1' }
 if ($e['CLICKER_WRITER_BASE_URL'] -or $e['ANTHROPIC_API_KEY']) { Ok 'model pomocniczy (writer) skonfigurowany' } else { Warn 'brak modelu pomocniczego (writer, nie przez OpenRouter) — sterowanie komputerem klika, ale nie wpisze tekstu' }
 if ($e['CLICKER_WRITER_BASE_URL'] -match 'openrouter') { No 'writer przez OpenRouter — wbrew zasadzie „OpenRouter tylko dla Jeva”' 'usuń CLICKER_WRITER_* z jev.env' }
+if ($e['CLICKER_WRITER_BASE_URL'] -match '127\.0\.0\.1|localhost') {
+  try { $m = Invoke-RestMethod ($e['CLICKER_WRITER_BASE_URL'].TrimEnd('/') + '/models') -Headers @{ Authorization = "Bearer $($e['CLICKER_WRITER_API_KEY'])" } -TimeoutSec 5; Ok "writer (Hermes) odpowiada: modele $((@($m.data.id) -join ', '))" }
+  catch { No 'writer (Hermes) nie odpowiada na /v1/models' 'uruchom hermes\start-desktop-gateway.bat albo ponów set-key.ps1 (klucz mógł się zmienić)' }
+}
 
 Head 'Wdrożone repozytoria'
 foreach ($n in 'jev-voice-browser', 'typesafe-computer-use') {

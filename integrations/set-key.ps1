@@ -12,10 +12,16 @@
 
   -Provider openrouter  (domyślnie) klucz z openrouter.ai/keys — Jev (agent WWW, sterowanie komputerem, sędzia w Jarvisie)
   -Provider typesafe    klucz z console.typesafe.ai/keys — Jev bezpośrednio
+
+  -Writer hermes        (domyślnie) model pomocniczy = Twój Hermes (profil jarvis-desktop, Grok z subskrypcji xAI, gateway :8643).
+                        Sprawdzone: poprawny JSON i polskie teksty, ale 4–11 s na wywołanie — używany tylko do wpisywania tekstu
+                        i odpowiedzi końcowej, nie w każdym kroku. Zrzuty ekranu NIE są do niego wysyłane (tylko tekst ekranu).
+  -Writer anthropic     klucz Anthropic wpisany w ukrytym polu (bezpośrednio, nie OpenRouter)
+  -Writer none          bez modelu pomocniczego: komputer klika, ale nie wpisuje tekstu
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File integrations\set-key.ps1
 #>
-param([ValidateSet('openrouter', 'typesafe')][string]$Provider = 'openrouter', [switch]$NoJarvis)
+param([ValidateSet('openrouter', 'typesafe')][string]$Provider = 'openrouter', [ValidateSet('hermes', 'anthropic', 'none')][string]$Writer = 'hermes', [switch]$NoJarvis, [securestring]$ApiKey)   # -ApiKey: tylko do automatyzacji i testów (normalnie klucz wpisujesz w ukrytym polu)
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:USERPROFILE '.jarvis-os'
 $file = Join-Path $root 'jev.env'
@@ -24,7 +30,7 @@ function Ask-Secret($prompt) { $s = Read-Host $prompt -AsSecureString; $b = [Run
 
 $url = if ($Provider -eq 'openrouter') { 'https://openrouter.ai/keys' } else { 'https://console.typesafe.ai/keys' }
 Write-Host "Klucz wygenerujesz na $url — wklej go poniżej (znaki nie są pokazywane)."
-$key = Ask-Secret 'Klucz Jeva'
+$key = if ($ApiKey) { $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ApiKey); try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b).Trim() } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) } } else { Ask-Secret 'Klucz Jeva' }
 if (-not $key) { throw 'Nie podano klucza.' }
 if ($Provider -eq 'openrouter' -and $key -notmatch '^sk-or-') { Write-Warning 'Klucz OpenRouter zwykle zaczyna się od "sk-or-". Zapisuję mimo to.' }
 
@@ -35,8 +41,17 @@ if ($Provider -eq 'openrouter') {
 } else {
   $lines += @("TYPESAFE_API_KEY=$key")
 }
-$w = Ask-Secret 'Opcjonalnie: klucz Anthropic (bezpośrednio, NIE OpenRouter) do wpisywania tekstu przez sterowanie komputerem (Enter = pomiń; bez niego komputer tylko klika)'
-if ($w) { $lines += "ANTHROPIC_API_KEY=$w" } else { $lines += '# brak modelu pomocniczego (writer): sterowanie komputerem klika, ale nie wpisuje tekstu ani nie składa odpowiedzi końcowej' }
+switch ($Writer) {
+  'hermes' {
+    $penv = Join-Path $env:USERPROFILE '.hermes\profiles\jarvis-desktop\.env'
+    $hk = if (Test-Path $penv) { (Get-Content $penv -Encoding UTF8 | Where-Object { $_ -match '^\s*API_SERVER_KEY\s*=\s*\S' } | Select-Object -First 1) -replace '^\s*API_SERVER_KEY\s*=\s*', '' } else { '' }
+    if ($hk) { $lines += @('# model pomocniczy (wpisywanie tekstu, odpowiedź końcowa): Twój Hermes, profil jarvis-desktop (Grok z subskrypcji xAI) — NIE OpenRouter',
+        'CLICKER_WRITER_API=openai', 'CLICKER_WRITER_BASE_URL=http://127.0.0.1:8643/v1', "CLICKER_WRITER_API_KEY=$($hk.Trim())", 'CLICKER_WRITER_MODEL=jarvis-desktop', 'CLICKER_ANSWER_MODEL=jarvis-desktop', 'CLICKER_WRITER_VISION=false') }
+    else { Write-Warning "Nie znalazłem API_SERVER_KEY w $penv — model pomocniczy pominięty (uruchom ponownie po zainstalowaniu profilu jarvis-desktop)."; $lines += '# brak modelu pomocniczego (nie znaleziono profilu jarvis-desktop)' }
+  }
+  'anthropic' { $w = Ask-Secret 'Klucz Anthropic (bezpośrednio, NIE OpenRouter)'; if ($w) { $lines += "ANTHROPIC_API_KEY=$w" } }
+  default { $lines += '# brak modelu pomocniczego (writer): sterowanie komputerem klika, ale nie wpisuje tekstu ani nie składa odpowiedzi końcowej' }
+}
 $lines += @('# Windows OCR: pakiet języka systemu (angielski bywa niezainstalowany)', 'CLICKER_OCR_LANGUAGE=pl')
 
 New-Item -ItemType Directory -Force $root | Out-Null
