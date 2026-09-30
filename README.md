@@ -161,7 +161,21 @@ Jarvis potrafi, przez model decyzyjny **Jev** (TypeSafe „System One”, decyzj
 - **Treść stron to dane niezaufane:** `web_read` oznacza ją tak dla Hermesa, a jego instrukcje (`hermes/SOUL.md`) zabraniają wykonywania poleceń zaszytych w stronach.
 - Agent WWW nasłuchuje tylko na `127.0.0.1`, wymaga tokenu mostu i **odrzuca żądania pochodzące ze stron** (nagłówki `Origin`/`Host`). Celowo nie uruchamiamy panelu z mikrofonem ani gniazda WebSocket z repozytorium autora — gniazdo na `127.0.0.1` jest dostępne z dowolnej strony otwartej w Twojej przeglądarce.
 - Zrzuty ekranu z zadań (`%USERPROFILE%\.jarvis-os\runs`) mogą zawierać prywatne dane — most zostawia tylko 5 ostatnich uruchomień.
-- Znane ograniczenia: autor określa wsparcie Windows jako eksperymentalne; OCR czyta jeden język (u Ciebie polski, ustawiany w `jev.env`); tylko główny monitor; Comet/Chrome nie publikują drzewa UI Automation, więc w przeglądarce działa OCR; program zakłada angielskie cele („open Notepad”).
+- Znane ograniczenia: autor określa wsparcie Windows jako eksperymentalne; OCR czyta jeden język (u Ciebie polski, ustawiany w `jev.env`); tylko główny monitor; program widzi tylko okno na pierwszym planie (bez paska zadań i menu Start) i ma tylko akcje: klik, wpisanie, przewinięcie, Esc, Enter, wstecz, czekaj, oraz nasze „uruchom program z listy” — bez skrótów klawiszowych; Comet/Chrome nie publikują drzewa UI Automation, więc w przeglądarce działa OCR.
+
+### Rozszerzenia dla Windows (`integrations/computer/jarvis_clicker.py`)
+Wynik badań programu autora na Windows 11 (polski system, 125% skalowania). Dodatek nakłada poprawki w locie, bez zmian w kodzie autora (43 testy: `uv run --project %USERPROFILE%\.jarvis-os\vendor\typesafe-computer-use python -m pytest integrations/computer`):
+
+| Problem znaleziony w programie | Poprawka | Efekt (zmierzony) |
+|---|---|---|
+| Brak akcji „uruchom program”; widoczne jest tylko okno na pierwszym planie, więc z przeglądarki Jarvisa nie dało się otworzyć niczego | akcja `open_app` z **katalogiem** (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia; bez terminali i skryptów), wybór przez Jeva, pewne wysunięcie okna na pierwszy plan | „otwórz Notatnik” po polsku: Jev 0,84, krok 2,9 s (wcześniej: nie do wykonania) |
+| Odczyt adresu przeglądarki przeszukiwał drzewo UI w Pythonie na **każdym kroku, także przy Notatniku** (2,9–3,2 s) i szukał tylko angielskiego „address” — na polskim Chrome/Comet nigdy nic nie zwracał | natywne wyszukiwanie UI Automation + pamięć podręczna 5 s, nazwa paska także po polsku | odczyt 0,04 s zamiast 2,9 s; krok 4,4 s → 1–3 s |
+| Edytory (Notatnik i inne „Document”) miały pustą rolę, więc `type_text` odmawiał mimo kursora w polu | edytowalny Document/Custom z zapisywalną wartością = pole tekstowe | pisanie w polu działa (Jev 0,99) |
+| `type_text` **zastępuje całą zawartość pola** — w Notatniku z odtworzoną sesją skasowałby Twój niezapisany dokument | odmowa dla niepustych pól wieloliniowych (po roli, znaku nowej linii, długości, wysokości); nowa pusta karta po uruchomieniu Notatnika z tekstem; `JARVIS_CLICKER_OVERWRITE=1` znosi ochronę | sprawdzone na żywo: edytor z tekstem nietknięty |
+| Wpisywanie po jednym zdarzeniu z przerwą 40 ms (80 ms na znak, 200 znaków = 16 s) | porcje po 32 znaki jednym `SendInput`, przerwanie (mysz w rogu) sprawdzane między porcjami | kilkadziesiąt razy szybciej |
+| Końcowa weryfikacja modelem pomocniczym (u nas ~9 s przez Hermesa) także dla prostych zadań | „szybkie done”: gdy Jev ≥ 90% pewny, a cel jest do WYKONANIA (nie „ile/znajdź/sprawdź”), pomijamy weryfikację (`JARVIS_CLICKER_QUICK_DONE=0` włącza ją zawsze) | „otwórz Notatnik” 19 s → ~10 s |
+| Uruchomienie programu „na próbę” przy niskiej pewności (zaobserwowane po odmowie pisania) | `open_app` wymaga pewności ≥ 0,7 (`JARVIS_CLICKER_OPEN_APP_MIN`) | brak niechcianych programów |
+| Przeglądarka zakładana na sztywno jako „Google Chrome”, a zwykły `chrome.exe` może być Twoim prywatnym oknem | most wykrywa domyślną przeglądarkę z rejestru (u Ciebie Comet) | — |
 
 ## Skróty klawiszowe
 

@@ -2594,7 +2594,7 @@
  },
  {
   "name": "computer_use",
-  "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko, najlepiej po angielsku, np. \"open Notepad and type hello\". Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund; przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika. Np.: „na komputerze goal”.",
+  "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko (po polsku lub angielsku), np. \"open Notepad and type hello\". Potrafi: uruchomić program z listy (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia), kliknąć WIDOCZNY element, wpisać tekst w pole, przewinąć. Nie potrafi: skrótów klawiszowych, menu Start ani paska zadań, elementów niewidocznych na ekranie; nie nadpisze cudzego tekstu w edytorze. Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund (pisanie tekstu ~8 s); przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika. Np.: „na komputerze goal”.",
   "parameters": {
    "type": "object",
    "properties": {

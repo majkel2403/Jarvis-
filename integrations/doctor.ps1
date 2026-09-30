@@ -49,6 +49,9 @@ if ((Test-Path $uv) -and (Test-Path (Join-Path $vendor 'typesafe-computer-use\.v
   $ocr = & $uv run --project (Join-Path $vendor 'typesafe-computer-use') python -c "from winrt.windows.media.ocr import OcrEngine; print(','.join(l.language_tag for l in OcrEngine.available_recognizer_languages))" 2>$null
   $want = if ($e['CLICKER_OCR_LANGUAGE']) { $e['CLICKER_OCR_LANGUAGE'] } else { 'en' }
   if ($ocr -match "(^|,)$want") { Ok "OCR: dostępne [$ocr], używany '$want'" } else { No "OCR: dostępne [$ocr], a używany '$want'" "ustaw CLICKER_OCR_LANGUAGE w jev.env na jeden z dostępnych albo zainstaluj język (admin): Add-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0'" }
+  $ext = Join-Path (Split-Path -Parent $PSCommandPath) 'computer'
+  $st = & $uv run --project (Join-Path $vendor 'typesafe-computer-use') python -c "import sys; sys.path.insert(0, sys.argv[1]); import jarvis_clicker as j; r = j.apply(); print(all(r.values()), ','.join(sorted(j.CATALOG)))" $ext 2>$null
+  if ($st -match '^True') { Ok "rozszerzenia sterowania komputerem nałożone; programy do uruchomienia: $(($st -split ' ')[1])" } else { No "rozszerzenia sterowania komputerem (jarvis_clicker.py) się nie nakładają: $st" 'zaktualizuj: integrations\setup.ps1; testy: uv run --project ...\typesafe-computer-use python -m pytest integrations/computer' }
 }
 
 Head 'Uruchomione usługi'

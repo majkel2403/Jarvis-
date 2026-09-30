@@ -64,6 +64,26 @@ def has_writer() -> bool:
     return bool(e.get("CLICKER_WRITER_BASE_URL") or e.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
 
+def default_browser() -> str | None:
+    """Nazwa domyślnej przeglądarki z rejestru Windows w formie, jaką rozumie clicker: „Google Chrome”, „Microsoft Edge”…
+    albo nazwa pliku bez .exe (np. „comet”). None poza Windows lub gdy nie da się ustalić."""
+    if os.name != "nt":
+        return None
+    try:
+        import re
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice") as k:
+            prog_id = winreg.QueryValueEx(k, "ProgId")[0]
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, prog_id + r"\shell\open\command") as k:
+            command = winreg.QueryValueEx(k, "")[0]
+        m = re.search(r'([^\\/"]+)\.exe', command, re.I)
+        exe = m.group(1).lower() if m else ""
+        return {"chrome": "Google Chrome", "msedge": "Microsoft Edge", "firefox": "Firefox", "brave": "Brave Browser"}.get(exe, exe or None)
+    except OSError:
+        return None
+
+
 def kill_tree(pid: int) -> None:
     """Windows: zabij proces z potomkami (uv → python), inaczej zostaje sierota sterująca myszą."""
     if os.name == "nt":
@@ -232,7 +252,9 @@ class ComputerAgent:
         if override:
             return [c.format(goal=goal, steps=steps, delay=delay, out=out) for c in json.loads(override)]
         uv = shutil.which("uv") or str(Path.home() / ".hermes" / "bin" / "uv.exe")
-        return [uv, "run", "--project", str(self.project()), "python", "-m", "typesafe_computer_use", goal, "--act",
+        # nasze rozszerzenia (uruchamianie programów, szybki adres przeglądarki) nakładane w locie; JARVIS_COMPUTER_STOCK=1 = czysty program autora
+        entry = ["-m", "typesafe_computer_use"] if os.environ.get("JARVIS_COMPUTER_STOCK") == "1" else [str(REPO / "integrations" / "computer" / "jarvis_clicker.py")]
+        return [uv, "run", "--project", str(self.project()), "python", *entry, goal, "--act",
                 "--steps", str(steps), "--delay", str(delay), "--out", str(out)]
 
     def running(self) -> bool:
@@ -264,6 +286,9 @@ class ComputerAgent:
         env = dict(os.environ)
         env.update(jev_env())
         env.setdefault("CLICKER_OCR_LANGUAGE", "pl")
+        browser = default_browser()
+        if browser:
+            env.setdefault("CLICKER_BROWSER", browser)   # domyślnie program zakłada „Google Chrome”, a użytkownik może mieć np. Comet
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUNBUFFERED"] = "1"
         self._log.clear()
