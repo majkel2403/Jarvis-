@@ -2,6 +2,40 @@
    JARVIS OS — start, pulpit, efekty, paleta, skróty
    ========================================================= */
 'use strict';
+/* BroadcastChannel — dwie karty: druga przechodzi w tryb „tylko podgląd" z przyciskiem „Przejmij" */
+J.tabChannel = (() => {
+  if (typeof BroadcastChannel === 'undefined') return J.tabChannel;
+  const CH = 'jarvis-os', id = J.uid();
+  let primary = false, ch = null, heartT = null, missT = null;
+  const claim = () => {
+    primary = true;
+    document.getElementById('tab-viewer')?.remove();
+    ch?.postMessage({ type: 'claim', id });
+    clearInterval(heartT);
+    heartT = setInterval(() => ch?.postMessage({ type: 'heartbeat', id }), 3000);
+  };
+  const release = () => { primary = false; clearInterval(heartT); };
+  const showViewer = () => {
+    if (document.getElementById('tab-viewer')) return;
+    const d = document.createElement('div'); d.id = 'tab-viewer';
+    d.innerHTML = '<span>Ta karta jest w trybie podglądu — Jarvis działa w innej karcie.</span><button id="tab-takeover">Przejmij</button>';
+    document.body.appendChild(d);
+    document.getElementById('tab-takeover').onclick = () => { claim(); d.remove(); };
+  };
+  try {
+    ch = new BroadcastChannel(CH);
+    ch.onmessage = ({ data: m }) => {
+      if (!m) return;
+      if (m.type === 'heartbeat' && m.id !== id) { clearTimeout(missT); missT = setTimeout(() => { if (!primary) claim(); }, 9000); if (!primary) showViewer(); }
+      if (m.type === 'claim' && m.id !== id) { release(); showViewer(); }
+    };
+    ch.postMessage({ type: 'ping', id });
+    setTimeout(() => { if (!primary) claim(); }, 400);
+  } catch (e) { primary = true; }
+  window.addEventListener('beforeunload', () => { release(); ch?.postMessage({ type: 'gone', id }); });
+  return { get primary() { return primary; }, claim, release };
+})();
+
 (() => {
 const { $, $$, h, esc, icon } = J;
 const S = J.state.settings;
@@ -1078,6 +1112,33 @@ boot().then(() => {
   J.tasks.check();
   if (S.wakeWord && J.ear.supported) setTimeout(() => J.ear.setStandby(true), 1200);
   setTimeout(onboarding, 1500);
+
+  /* ---- tooltips: pojawia się po 600ms najechania na element z [data-tip] lub [title] ---- */
+  (() => {
+    let tipEl = null, tipT = null;
+    const tip = document.createElement('div'); tip.className = 'jtip'; document.body.appendChild(tip);
+    const hide = () => { clearTimeout(tipT); tip.classList.remove('on'); tipEl = null; };
+    document.addEventListener('mouseover', e => {
+      const el = e.target.closest('[data-tip],[title]'); if (el === tipEl) return;
+      hide(); if (!el) return;
+      const txt = el.dataset.tip || el.title; if (!txt) return;
+      if (el.title) el.dataset.tip = el.title, el.removeAttribute('title');
+      tipEl = el;
+      tipT = setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        tip.textContent = txt; tip.classList.add('on');
+        const tw = tip.offsetWidth, vw = window.innerWidth;
+        let left = r.left + r.width / 2 - tw / 2;
+        left = Math.max(6, Math.min(left, vw - tw - 6));
+        tip.style.left = left + 'px'; tip.style.top = (r.bottom + 6) + 'px';
+      }, 600);
+    });
+    document.addEventListener('mouseout', e => { if (e.target === tipEl || tipEl?.contains(e.target)) hide(); });
+    document.addEventListener('mousedown', hide);
+    document.addEventListener('scroll', hide, true);
+    J.tip = { hide };
+  })();
+
   const hr = new Date().getHours();
   const greet = (hr < 5 ? 'Dobranoc' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj' : 'Dobry wieczór');
   const pending = J.tasks.today().filter(t => !t.done && t.time >= J.hhmm());

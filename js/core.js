@@ -104,14 +104,25 @@ const DEFAULTS = () => ({
   winPos: {},
   stats: { actions: 0 }
 });
+const STATE_VERSION = 3;
+const MIGRATIONS = [
+  /* v1→v2 */ s => { delete s.settings.apiKey; delete s.settings.model; },
+  /* v2→v3 */ s => { if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } } }
+];
 J.state = (() => {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { /* brak dostępu do storage */ }
   let s = null;
-  try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* brak dostępu do storage */ }
+  try { s = JSON.parse(raw || 'null'); } catch (e) {
+    if (raw) { try { localStorage.setItem(KEY + ':broken:' + Date.now(), raw.slice(0, 8000)); } catch (e2) { } }
+    J.toast?.('⚠ Stan danych był uszkodzony — Jarvis uruchomił się z ustawieniami domyślnymi. Poprzednie dane są dostępne w Ustawieniach → Dane.', 10000);
+  }
   const d = DEFAULTS();
   if (!s) return d;
+  const ver = s._v || 1;
+  MIGRATIONS.slice(ver - 1).forEach(fn => { try { fn(s); } catch (e) { } });
+  s._v = STATE_VERSION;
   s.settings = Object.assign(d.settings, s.settings || {});
-  if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd (neon HUD): domyślny akcent cyjan-fiolet
-  delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
   for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets', 'alerts', 'notifs']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 }; s.layouts = s.layouts && typeof s.layouts === 'object' ? s.layouts : {};
   return s;
@@ -131,6 +142,8 @@ J.save = J.debounce(() => J.saveNow(), 250);
 J.DEFAULTS = () => DEFAULTS();
 /* tryb bez sieci: żadnych zapytań poza tę stronę (Ustawienia → Interfejs) */
 { const f0 = window.fetch; if (typeof f0 === 'function') window.fetch = (u, o) => { const url = String(u?.url || u); if (J.state?.settings?.offlineMode && /^(https?|wss?):/i.test(url) && !url.startsWith(location.origin)) return Promise.reject(new TypeError('Tryb bez sieci jest włączony')); return f0.call(window, u, o); }; }
+/* BroadcastChannel — inicjalizowany w main.js po bootowaniu aplikacji */
+J.tabChannel = { primary: true, claim: () => {}, release: () => {} };
 /* flagi funkcji (Ustawienia → O programie → Eksperymenty): domyślnie włączone */
 J.flag = k => (J.state.settings.flags || {})[k] !== false;
 J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.history); } catch (e) { /* historia jest pomocnicza */ } }, 400);

@@ -101,16 +101,21 @@ J.market = (() => {
     clearInterval(sim);
     sim = setInterval(() => COINS.forEach(c => { const d = data[c.sym]; d.price *= 1 + (Math.random() - .5) * .003; d.spark.push(d.price); d.spark.shift(); d.chg = (d.price - d.spark[0]) / d.spark[0] * 100; emit(c.sym); }), 1500);
   };
+  let lastFetched = 0;
   const fetchCG = async () => {
     try {
       const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&sparkline=true&price_change_percentage=24h&ids=' + COINS.map(c => c.id).join(','));
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
-      j.forEach(x => { const c = COINS.find(k => k.id === x.id); if (!c) return; const d = data[c.sym]; d.price = x.current_price; d.chg = x.price_change_percentage_24h || 0; const sp = x.sparkline_in_7d?.price || []; d.spark = sp.filter((_, i) => i % 2 === 0).slice(-80); emit(c.sym); });
-      clearInterval(sim); sim = null; loaded = true;
+      j.forEach(x => { const c = COINS.find(k => k.id === x.id); if (!c) return; const d = data[c.sym]; d.price = x.current_price; d.chg = x.price_change_percentage_24h || 0; const sp = x.sparkline_in_7d?.price || []; d.spark = sp.filter((_, i) => i % 2 === 0).slice(-80); d.stale = false; emit(c.sym); });
+      clearInterval(sim); sim = null; loaded = true; lastFetched = Date.now();
       if (!ws || ws.readyState !== 1) source = 'CoinGecko';
       return true;
-    } catch (e) { if (!loaded) simulate(); return false; }
+    } catch (e) {
+      if (!loaded) simulate();
+      else { COINS.forEach(c => { data[c.sym].stale = true; }); source = 'dane z ' + (lastFetched ? new Date(lastFetched).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '?') + ' (offline)'; J.emit('market', null); }
+      return false;
+    }
   };
   const openWS = () => {
     try {

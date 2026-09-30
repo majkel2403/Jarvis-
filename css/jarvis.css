@@ -881,3 +881,11 @@ label.mini{font-size:10.5px;display:flex;gap:4px;align-items:center;color:var(--
 .lp-ins{margin-left:6px}
 .pacts{display:flex;gap:4px;margin-top:6px}
 .notes-foot #nDict.rec{color:#ff5d7a;border-color:rgba(255,93,122,.6)}
+/* tooltips */
+.jtip{position:fixed;z-index:9999;background:rgba(4,10,28,.93);border:1px solid rgba(var(--accent-rgb),.4);color:var(--fg);font-size:11px;padding:4px 9px;border-radius:7px;pointer-events:none;white-space:nowrap;max-width:260px;white-space:normal;opacity:0;transform:translateY(-3px);transition:opacity .12s,transform .12s;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.jtip.on{opacity:1;transform:translateY(0)}
+/* tryb podglądu (dwie karty) */
+#tab-viewer{position:fixed;top:0;left:0;right:0;z-index:9998;background:rgba(20,5,40,.93);border-bottom:1px solid rgba(var(--accent-rgb),.5);color:var(--fg);font-size:12px;display:flex;align-items:center;justify-content:center;gap:12px;padding:7px 16px;text-align:center}
+#tab-viewer span{opacity:.75}
+#tab-takeover{background:rgba(var(--accent-rgb),.15);border:1px solid rgba(var(--accent-rgb),.55);color:var(--accent);padding:4px 14px;border-radius:7px;cursor:pointer;font-size:12px}
+#tab-takeover:hover{background:rgba(var(--accent-rgb),.3)}
