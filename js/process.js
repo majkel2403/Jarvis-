@@ -46,6 +46,13 @@ const paintStep = (s, base) => {
     body.appendChild(row);
   });
   body.appendChild(h('div', { class: 'pmeta' }, `<span>${esc(k.label)}</span><span>+${(off / 1000).toFixed(2)} s · ${J.hhmm(new Date(s.ts))}</span>`));
+  /* „Wstaw do czatu” (cytat kroku w polu wiadomości) i „Kopiuj JSON” (bez kluczy) */
+  const acts = h('div', { class: 'pacts' }, '<button class="btn sm ghost" data-a="chat">Wstaw do czatu</button><button class="btn sm ghost" data-a="json">Kopiuj JSON</button>');
+  const plain = () => s.title + (prev ? ' — ' + prev : '') + (s.fields || []).filter(f => f[1]).map(f => '\n' + f[0] + ': ' + String(f[1]).slice(0, 600)).join('');
+  const scrub = t => String(t).replace(/(sk-[a-z0-9-]{6})[a-z0-9-_]+/gi, '$1…').replace(/(Bearer\s+)\S+/gi, '$1…');
+  acts.querySelector('[data-a=chat]').onclick = e => { e.preventDefault(); J.chatPanel?.show?.(); const inp = $('#chatInput'); if (inp) { inp.value = (inp.value ? inp.value + '\n' : '') + '> ' + scrub(plain()).replace(/\n/g, '\n> ') + '\n'; inp.focus(); inp.dispatchEvent(new Event('input')); } };
+  acts.querySelector('[data-a=json]').onclick = e => { e.preventDefault(); navigator.clipboard?.writeText(scrub(JSON.stringify({ kind: s.kind, title: s.title, status: s.status, dur: s.dur, fields: s.fields }, null, 1))).then(() => J.toast('Skopiowano krok'), () => { }); };
+  body.appendChild(acts);
   if (s.status === 'err' && !s.opened) { el.open = true; s.opened = true; }
   return el;
 };
@@ -156,14 +163,30 @@ const render = () => {
     }
   }
 };
+let cmpSel = [];
+/* podsumowanie zadania do porównania: czas, kroki, narzędzia, błędy, wynik */
+const digest = t => { const tools = t.steps.filter(x => x.kind === 'tool'); return { title: t.title, when: new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), status: t.status, dur: t.dur || 0, steps: t.steps.length, tools: tools.map(x => x.title.replace(/^Narzędzie:?\s*/, '')).slice(0, 12), errors: t.steps.filter(x => x.status === 'err').length, result: String(t.result || '').slice(0, 200) }; };
+const compare = (a, b) => { const A = digest(a), B = digest(b); return { a: A, b: B, faster: A.dur === B.dur ? null : A.dur < B.dur ? 'a' : 'b', onlyA: A.tools.filter(x => !B.tools.includes(x)), onlyB: B.tools.filter(x => !A.tools.includes(x)) }; };
+const compareView = (a, b) => {
+  const c = compare(a, b), box = h('div', { class: 'lp-cmp' }), row = (label, va, vb) => { const r = h('div', { class: 'lp-cmp-r' }, '<small></small><span></span><span></span>'); r.children[0].textContent = label; r.children[1].textContent = va; r.children[2].textContent = vb; box.appendChild(r); };
+  const hd = h('div', { class: 'lp-cmp-h' }, '<b>Porównanie</b><button class="btn sm ghost">Zamknij</button>'); hd.querySelector('button').onclick = () => { cmpSel = []; renderHist(); }; box.appendChild(hd);
+  row('zadanie', c.a.title, c.b.title); row('kiedy', c.a.when, c.b.when); row('wynik', c.a.status, c.b.status); row('czas', fmtDur(c.a.dur) + (c.faster === 'a' ? ' ✓' : ''), fmtDur(c.b.dur) + (c.faster === 'b' ? ' ✓' : ''));
+  row('kroki / błędy', c.a.steps + ' / ' + c.a.errors, c.b.steps + ' / ' + c.b.errors); row('narzędzia', c.a.tools.join(', ') || '—', c.b.tools.join(', ') || '—');
+  if (c.onlyA.length || c.onlyB.length) row('tylko tu', c.onlyA.join(', ') || '—', c.onlyB.join(', ') || '—');
+  row('odpowiedź', c.a.result || '—', c.b.result || '—');
+  return box;
+};
 const renderHist = () => {
   const box = $('#lpHist'); box.innerHTML = '';
   if (!J.state.history.length) { box.innerHTML = '<div class="lp-empty">Historia jest pusta.</div>'; return; }
   const clear = h('button', { class: 'btn sm ghost danger', style: 'margin:8px 12px' }, J.icon('trash', 'width="12" height="12"') + ' Wyczyść historię');
   clear.onclick = () => { J.state.history = []; J.saveHistory(); if (viewing && viewing !== cur) viewing = null; render(); };
   box.appendChild(clear);
+  /* porównanie dwóch zadań (⇄ przy dwóch pozycjach) */
+  if (cmpSel.length === 2) { const a = J.state.history.find(x => x.id === cmpSel[0]), b = J.state.history.find(x => x.id === cmpSel[1]); if (a && b) box.appendChild(compareView(a, b)); else cmpSel = []; }
   J.state.history.forEach(t => {
-    const b = h('button', { class: 'hitem', 'data-s': t.status }, '<span class="hdot"></span><div><b></b><small></small></div>');
+    const b = h('button', { class: 'hitem' + (cmpSel.includes(t.id) ? ' cmp' : ''), 'data-s': t.status }, '<span class="hdot"></span><div><b></b><small></small></div><span class="hcmp" title="Porównaj (wybierz dwa)">⇄</span>');
+    b.querySelector('.hcmp').onclick = e => { e.stopPropagation(); cmpSel = cmpSel.includes(t.id) ? cmpSel.filter(x => x !== t.id) : [...cmpSel, t.id].slice(-2); renderHist(); };
     b.querySelector('b').textContent = t.title;
     b.querySelector('small').textContent = new Date(t.ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' · ' + fmtDur(t.dur || 0) + ' · ' + t.steps.length + ' ' + J.pl(t.steps.length, 'krok', 'kroki', 'kroków');
     b.onclick = () => { viewing = t; tab = 'task'; render(); };
@@ -186,7 +209,7 @@ J.on('plan', p => { if (plan && p) { plan.done = p.done; drawPlan(); } });
 
 /* ---------- publiczne API ---------- */
 J.proc = {
-  start, end, step, log, plan: setPlan, planStep,
+  start, end, step, log, plan: setPlan, planStep, compare,
   get current() { return cur; },
   get active() { return !!cur; },
   open: () => setOpen(true),

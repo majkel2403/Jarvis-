@@ -2,6 +2,40 @@
    JARVIS OS — start, pulpit, efekty, paleta, skróty
    ========================================================= */
 'use strict';
+/* BroadcastChannel — dwie karty: druga przechodzi w tryb „tylko podgląd" z przyciskiem „Przejmij" */
+J.tabChannel = (() => {
+  if (typeof BroadcastChannel === 'undefined') return J.tabChannel;
+  const CH = 'jarvis-os', id = J.uid();
+  let primary = false, ch = null, heartT = null, missT = null;
+  const claim = () => {
+    primary = true;
+    document.getElementById('tab-viewer')?.remove();
+    ch?.postMessage({ type: 'claim', id });
+    clearInterval(heartT);
+    heartT = setInterval(() => ch?.postMessage({ type: 'heartbeat', id }), 3000);
+  };
+  const release = () => { primary = false; clearInterval(heartT); };
+  const showViewer = () => {
+    if (document.getElementById('tab-viewer')) return;
+    const d = document.createElement('div'); d.id = 'tab-viewer';
+    d.innerHTML = '<span>Ta karta jest w trybie podglądu — Jarvis działa w innej karcie.</span><button id="tab-takeover">Przejmij</button>';
+    document.body.appendChild(d);
+    document.getElementById('tab-takeover').onclick = () => { claim(); d.remove(); };
+  };
+  try {
+    ch = new BroadcastChannel(CH);
+    ch.onmessage = ({ data: m }) => {
+      if (!m) return;
+      if (m.type === 'heartbeat' && m.id !== id) { clearTimeout(missT); missT = setTimeout(() => { if (!primary) claim(); }, 9000); if (!primary) showViewer(); }
+      if (m.type === 'claim' && m.id !== id) { release(); showViewer(); }
+    };
+    ch.postMessage({ type: 'ping', id });
+    setTimeout(() => { if (!primary) claim(); }, 400);
+  } catch (e) { primary = true; }
+  window.addEventListener('beforeunload', () => { release(); ch?.postMessage({ type: 'gone', id }); });
+  return { get primary() { return primary; }, claim, release };
+})();
+
 (() => {
 const { $, $$, h, esc, icon } = J;
 const S = J.state.settings;
@@ -28,7 +62,7 @@ const boot = () => new Promise(resolve => {
   const lines = [
     'BIOS v2.0.26 · weryfikacja rdzenia…', 'ładowanie jądra neuronowego  <span class="ok">[OK]</span>', 'montowanie warstwy pulpitu  <span class="ok">[OK]</span>',
     'kalibracja reaktora łukowego… 3.2 GJ/s', 'moduł mowy pl-PL  <span class="ok">[OK]</span>', 'synchronizacja: pogoda · rynek · harmonogram',
-    'przywracanie pamięci użytkownika (' + J.state.notes.length + ' notatek, ' + J.state.tasks.length + ' zadań)', 'uruchamianie interfejsu holograficznego…', 'wszystkie systemy online  <span class="ok">✓</span>'
+    'przywracanie pamięci użytkownika (' + J.notes.live().length + ' notatek, ' + J.state.tasks.length + ' zadań)', 'uruchamianie interfejsu holograficznego…', 'wszystkie systemy online  <span class="ok">✓</span>'
   ];
   const log = $('#bootLog'), bar = $('#bootBar');
   let i = 0; let done = false;
@@ -48,6 +82,19 @@ const boot = () => new Promise(resolve => {
 
 /* =================== TŁO: sieć cząsteczek + FPS =================== */
 const RM = matchMedia('(prefers-reduced-motion: reduce)');   // systemowe „ogranicz ruch”
+const FX = ['off', 'tool', 'standard', 'cinema'];
+J.fx = {
+  LEVELS: FX, cap: 3,   // cap = samoczynne ograniczenie po spadku płynności (3 = bez ograniczenia)
+  rank() { return Math.min(Math.max(0, FX.indexOf(S.fxLevel || 'standard')), RM.matches ? 0 : 3, J.fx.cap); },
+  level() { return FX[J.fx.rank()]; },
+  apply() { const lv = J.fx.level(), app = $('#app'); if (!app) return lv; app.dataset.fx = lv; app.classList.toggle('lowfx', J.fx.rank() < 2); document.documentElement.dataset.fx = lv; J.emit('fx', lv); return lv; },
+  lower() { const r = J.fx.rank(); if (r <= 1) return false; J.fx.cap = r - 1; J.fx.apply(); J.log('Efekty', 'Niska płynność (FPS < 30 przez 5 s) — obniżam poziom efektów do „' + J.fx.level() + '”', 'warn'); return true; },
+  orbits: () => J.fx.rank() >= 2,
+  /* „duch” okna: w trybie kinowym zarys okna pojawia się, zanim agent je otworzy */
+  ghost(id) { if (J.fx.rank() < 3) return; const el = J.wm.ctx(id)?.el; if (!el) return; const g = h('div', { class: 'win-ghost' }); Object.assign(g.style, { left: el.style.left, top: el.style.top, width: el.offsetWidth + 'px', height: el.offsetHeight + 'px' }); el.parentElement?.appendChild(g); setTimeout(() => g.remove(), 900); }
+};
+RM.addEventListener?.('change', () => J.fx.apply());
+J.on('settings', () => J.fx.apply());
 const fx = (() => {
   const cv = $('#fx'), c = cv.getContext('2d');
   let W, H, pts = [], mouse = { x: -999, y: -999 }, frames = 0, last = performance.now();
@@ -62,11 +109,13 @@ const fx = (() => {
     mouse.x = e.clientX; mouse.y = e.clientY;
     const wp = $('#wallpaper'); if (wp) wp.style.transform = `translate(${(e.clientX / W - .5) * -18}px,${(e.clientY / H - .5) * -12}px) scale(1.02)`;
   });
+  /* poziom efektów (docs/spec/09-wyglad-stany.md §7): min(ustawienie, systemowe „ogranicz ruch”, samoczynne obniżenie przy FPS < 30 przez 5 s) */
   let lowSince = 0, okSince = 0; J.quality = 'high';
   const adapt = () => {
     const f = J.fps, t = Date.now();
-    if (J.quality === 'high') { if (f && f < 38) { lowSince = lowSince || t; if (t - lowSince > 3000) { J.quality = 'low'; okSince = 0; $('#app').classList.add('lowfx'); J.toast('Obniżyłem jakość efektów, żeby zachować płynność'); } } else lowSince = 0; }
-    else { if (f >= 55) { okSince = okSince || t; if (t - okSince > 6000) { J.quality = 'high'; lowSince = 0; $('#app').classList.remove('lowfx'); } } else okSince = 0; }
+    if (f && f < 30) { okSince = 0; lowSince = lowSince || t; if (t - lowSince > 5000 && J.fx.lower()) lowSince = 0; }
+    else { lowSince = 0; if (J.fx.cap < 3 && f >= 55) { okSince = okSince || t; if (t - okSince > 8000) { J.fx.cap = Math.min(3, J.fx.cap + 1); okSince = 0; J.fx.apply(); J.log('Efekty', 'Płynność wróciła — przywracam poziom ' + J.fx.level()); } } else okSince = 0; }
+    J.quality = J.fx.rank() >= 2 ? 'high' : 'low';
   };
   const loop = now => {
     if (document.hidden) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle nic nie rysujemy
@@ -74,7 +123,7 @@ const fx = (() => {
     if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
     c.clearRect(0, 0, W, H);
     const LOW = J.quality === 'low';
-    if (S.particles && !LOW && !RM.matches && !$('#app').classList.contains('focus')) {
+    if (S.particles && !LOW && J.fx.rank() >= 2 && !$('#app').classList.contains('focus')) {
       const rgb = getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb').trim() || '33,217,255';
       for (const p of pts) {
         p.x += p.vx; p.y += p.vy;
@@ -165,7 +214,7 @@ function orbDraw(t) {
     }
     oc.restore();
   };
-  orbs.forEach(o => orbitPath(o, false));
+  if (J.fx.orbits()) orbs.forEach(o => orbitPath(o, false));
 
   // — kula: korpus
   oc.save(); oc.beginPath(); oc.arc(C0, C0, RB, 0, TWO); oc.clip();
@@ -236,7 +285,7 @@ function orbDraw(t) {
   }
 
   // — orbity (przednia połowa)
-  orbs.forEach(o => orbitPath(o, true));
+  if (J.fx.orbits()) orbs.forEach(o => orbitPath(o, true));
 
   // — iskry wokół
   SPARK.forEach(s => {
@@ -370,7 +419,7 @@ const renderIcons = () => {
 };
 J.on('shortcuts', renderIcons);
 
-const PINNED = ['chat', 'notes', 'market', 'schedule', 'monitor'];
+const PINNED = J.DOCK_DEFAULT = ['chat', 'notes', 'market', 'schedule', 'monitor'];
 const LABEL = { chat: 'Czat', notes: 'Notatnik', market: 'Tokeny', schedule: 'Harmonogram', weather: 'Pogoda', terminal: 'Terminal', monitor: 'Wynik', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Menu' };
 const renderDock = () => {
   const d = $('#dock'); d.innerHTML = '';
@@ -384,16 +433,40 @@ const renderDock = () => {
   };
   const lib = h('button', { class: 'plain', title: 'Wszystkie aplikacje' }, icon('grid')); lib.onclick = () => J.wm.toggle('library'); d.appendChild(lib);
   d.appendChild(h('span', { class: 'sep' }));
-  PINNED.forEach(id => d.appendChild(btn(id)));
-  const extra = J.wm.list().filter(id => !PINNED.includes(id) && id !== 'library');
+  const order = (J.state.settings.dockOrder || []).filter(id => J.apps[id] && !J.apps[id].widget), pinned = order.length ? order : PINNED;
+  pinned.forEach(id => d.appendChild(btn(id)));
+  const extra = J.wm.list().filter(id => !pinned.includes(id) && id !== 'library');
   extra.forEach(id => d.appendChild(btn(id)));
   d.appendChild(h('span', { class: 'sep' }));
   const w = h('button', { class: 'plain', title: 'Nowy widget na pulpicie' }, icon('plus')); w.onclick = () => { const r = w.getBoundingClientRect(); widgetMenu(r.left, r.top - 130); }; d.appendChild(w);
 };
 J.on('wm', renderDock);
+/* dok klawiaturą: jedno miejsce w kolejności Tab, strzałki między ikonami (roving tabindex), Shift F10 = menu */
+$('#dock').addEventListener('keydown', e => {
+  const l = $$('#dock button'); const i = l.indexOf(document.activeElement); if (i < 0) return;
+  const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'Home' ? -i : e.key === 'End' ? l.length - 1 - i : 0;
+  if (k) { e.preventDefault(); const n = l[(i + k + l.length) % l.length]; l.forEach(b => b.tabIndex = -1); n.tabIndex = 0; n.focus(); }
+});
+J.on('wm', () => { const l = $$('#dock button'); l.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1); });
 
 /* =================== WIDGETY: menu tworzenia =================== */
-const widgetMenu = (x, y) => ctxMenu(x, y, Object.entries(J.widgets.TYPES).map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })));
+const widgetMenu = (x, y) => ctxMenu(x, y, [...Object.entries(J.widgets.TYPES).filter(([k]) => k !== 'spec').map(([k, t]) => ({ ic: t.icon, t: 'Nowy widget: ' + t.label, run: () => J.widgets.create(k, { title: t.label }) })),
+  { ic: 'bolt', t: 'Widget z opisu…', run: async () => { const d = prompt('Opisz widget (np. „top 5 tokenów”, „mini wykres BTC”, „pogoda i zadania na dziś”, „odliczanie do urlopu 15 października”):'); if (!d || !d.trim()) return; const r = await J.uiRun('widget_build', { prompt: d.trim() }, { quiet: true }); if (!r.ok) { if (J.aiReady()) J.brain.handle('Zbuduj widget na pulpicie (widget_build): ' + d.trim()); else J.toast(r.text); } } },
+  { ic: 'chart', t: 'Wykres…', run: () => ctxMenu(x, y, [['crypto', 'Kurs BTC'], ['weather_hours', 'Temperatura'], ['tasks_week', 'Zadania w tygodniu'], ['activity', 'Aktywność'], ['cost', 'Koszt Hermesa'], ['jev_confidence', 'Pewność Jeva']].map(([s, t]) => ({ ic: 'chart', t, run: () => J.uiRun('chart_show', { source: s }) }))) }]);
+
+/* =================== MINIMAPA OKIEN (opcjonalna, Ustawienia → Interfejs) =================== */
+J.minimap = (() => {
+  let box = null;
+  const draw = () => {
+    if (!S.minimap) { box?.remove(); box = null; return; }
+    const desk = $('#desktop') || $('.desktop'); if (!desk) return;
+    if (!box) { box = h('div', { class: 'minimap', role: 'navigation', 'aria-label': 'Minimapa okien' }); document.body.appendChild(box); }
+    const d = desk.getBoundingClientRect(), k = 150 / Math.max(1, d.width); box.style.height = Math.round(d.height * k) + 'px'; box.innerHTML = '';
+    J.wm.info().filter(w => !w.min).forEach(w => { const r = h('button', { class: 'mm-w' + (w.focused ? ' on' : ''), title: w.title, 'aria-label': w.title }); Object.assign(r.style, { left: Math.round(w.x * k) + 'px', top: Math.round(w.y * k) + 'px', width: Math.max(6, Math.round(w.w * k)) + 'px', height: Math.max(5, Math.round(w.h * k)) + 'px' }); r.onclick = () => J.wm.open(w.id); box.appendChild(r); });
+  };
+  J.on('wm', draw); J.on('wm-resize', J.debounce(draw, 120)); J.on('settings', draw);
+  return { draw };
+})();
 
 /* =================== PALETA POLECEŃ =================== */
 const palette = (() => {
@@ -420,27 +493,49 @@ const palette = (() => {
     { g: 'Akcje', ic: 'code', t: 'Matrix', run: () => J.matrix() },
     ...J.registry.list(c => c.palette !== false && !['open_app'].includes(c.id) && !(c.args.required || []).length).map(c => ({ g: c.group, ic: c.id.startsWith('notes') ? 'notes' : c.id.startsWith('tasks') || c.id === 'add_task' ? 'calendar' : c.id.startsWith('wm') || c.id.startsWith('layout') ? 'max' : c.id.startsWith('memory') ? 'star' : c.id.startsWith('files') ? 'folder' : c.id.includes('weather') ? 'weather' : c.id.includes('crypto') || c.id.includes('market') ? 'market' : 'bolt', t: c.label, k: c.examples.join(' '), run: () => J.registry.run(c.id, {}, { source: 'ui' }).then(r => J.toast(r.text)) })),
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
-    ...J.state.notes.slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
+    ...J.notes.live().slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
   ];
+  const TYPE_G = { apps: ['Aplikacje', null], notes: ['Notatki', 'notes'], tasks: ['Zadania', 'calendar'], widgets: ['Widgety', 'list'], shortcuts: ['Skróty', 'link'], settings: ['Ustawienia', 'settings'], commands: ['Polecenia', 'bolt'], memory: ['Pamięć', 'brain'], chat: ['Rozmowy', 'chat'], files: ['Pliki', 'doc'] };
+  const hitItem = hit => ({ g: TYPE_G[hit.type][0], ic: TYPE_G[hit.type][1] || J.apps[hit.id]?.icon || 'star', t: hit.title, s: hit.sub, key: hit.type + ':' + hit.id, open: hit.open, run: () => J.search.open(hit) });
+  const pinned = () => (J.state.ui.pinned = J.state.ui.pinned || []);
+  let seq = 0;
   const render = () => {
-    const raw = inp.value.trim(), q = norm(raw);
+    const raw = inp.value.trim(), q0 = norm(raw), my = ++seq;
     const all = base();
-    if (!q) {
-      const rec = (J.state.ui.recent || []).map(t => all.find(it => it.t === t)).filter(Boolean).map(it => ({ ...it, g: 'Ostatnie' }));
-      items = [...rec, ...all];
+    const prefix = /^[>#@?]/.test(raw) ? raw[0] : '', q = norm(prefix ? raw.slice(1).trim() : raw);
+    if (prefix === '?') {
+      items = (J.KEYS || []).map(([k, t]) => ({ g: 'Skróty klawiszowe', ic: 'bolt', t, s: k, run: () => { } }));
+    } else if (!q0) {
+      const rec = (J.state.ui.recentViews || []).slice(0, 8).map(r => ({ g: 'Ostatnie', ic: J.apps[r.app]?.icon || 'history', t: r.title, key: 'recent:' + r.app + ':' + (r.target || ''), run: () => J.registry.run(r.view ? 'app_view' : 'open_app', r.view ? { app: r.app, view: r.view, target: r.target || undefined } : { app: r.app }, { source: 'ui' }) }));
+      const pins = pinned().map(p => { if (p.open) return { g: 'Przypięte', ic: p.ic, t: p.t, key: p.k, open: p.open, run: () => J.search.open({ open: p.open }) }; const b0 = all.find(it => it.t === p.t); return b0 ? { ...b0, g: 'Przypięte', key: p.k } : null; }).filter(Boolean);
+      items = [...pins, ...rec, ...all];
+    } else if (prefix) {
+      const types = { '>': ['commands'], '#': ['notes'], '@': ['settings'] }[prefix];
+      items = J.search.sync(q, types).sort((a, b) => b.score - a.score).slice(0, 40).map(hitItem);
+      if (prefix === '>') { const m = J.registry.match(raw.slice(1))[0]; if (m) items.unshift({ g: 'Wykonaj', ic: 'bolt', t: m.cmd.label, s: 'Enter', run: () => J.brain.handle(raw.slice(1)) }); }
     } else {
       items = all.map(it => ({ it, sc: Math.max(fz(q, it.t), fz(q, it.k || '') * .6) })).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).map(x => x.it);
       const m = J.registry.match(raw)[0];
       if (m) items.unshift({ g: 'Wykonaj', ic: 'bolt', t: m.cmd.label + (Object.keys(m.args).length ? ': ' + Object.values(m.args).map(v => Array.isArray(v) ? v.join(', ') : String(v)).join(' · ').slice(0, 60) : ''), s: 'Enter', run: () => J.registry.run(m.id, m.args, { source: 'ui' }).then(r => { J.toast(r.text); if (r.ui?.highlight) J.ui.highlight(r.ui.highlight); }) });
+      /* wyniki z danych (notatki, zadania, widgety, skróty, ustawienia) zaraz po poleceniach; pamięć i rozmowy dochodzą asynchronicznie */
+      const byType = {}; J.search.sync(q, ['notes', 'tasks', 'widgets', 'shortcuts', 'settings']).sort((a, b) => b.score - a.score).forEach(hh => { (byType[hh.type] = byType[hh.type] || []).push(hh); });
+      const data = Object.values(byType).flatMap(l => l.slice(0, 8)).map(hitItem).filter(it => !items.some(x => x.t === it.t && x.g === it.g));
+      items.splice(items[0]?.g === 'Wykonaj' ? 1 : 0, 0, ...data);
+      J.search.query(raw, { types: ['memory', 'chat'], limit: 10 }).then(extra => { if (my !== seq || !extra.length || !bg.classList.contains('open')) return; const add = extra.map(hitItem); const at = items.findIndex(it => it.g === 'Jarvis'); items.splice(at < 0 ? items.length : at, 0, ...add); draw(); }).catch(() => { });
       items.push({ g: 'Jarvis', ic: 'chat', t: 'Zapytaj Jarvisa: „' + raw + '”', s: 'Enter', run: () => J.brain.handle(raw), jar: true });
       items.push({ g: 'Jarvis', ic: 'globe', t: 'Szukaj w Google: ' + raw, run: () => window.open('https://www.google.com/search?q=' + encodeURIComponent(raw), '_blank', 'noopener') });
     }
+    draw();
+  };
+  const draw = () => {
     sel = J.clamp(sel, 0, items.length - 1);
     list.innerHTML = ''; let g = '';
     items.forEach((it, i) => {
       if (it.g !== g) { g = it.g; list.appendChild(h('div', { class: 'pgroup' }, esc(g))); }
-      const b = h('button', { class: 'pitem' + (i === sel ? ' sel' : '') }, `<span class="pi">${icon(it.ic)}</span><span></span>${it.s ? `<small>${esc(it.s)}</small>` : ''}`);
-      b.children[1].textContent = it.t;
+      const pk = it.key || ('item:' + it.t), isPin = pinned().some(p => p.k === pk);
+      const b = h('button', { class: 'pitem' + (i === sel ? ' sel' : '') }, `<span class="pi">${icon(it.ic)}</span><span></span>${it.s ? `<small></small>` : ''}<i class="pstar${isPin ? ' on' : ''}" title="${isPin ? 'Odepnij' : 'Przypnij w palecie'}">★</i>`);
+      b.children[1].textContent = it.t; if (it.s) b.querySelector('small').textContent = it.s;
+      b.querySelector('.pstar').onclick = ev => { ev.stopPropagation(); const l = pinned(), k = l.findIndex(p => p.k === pk); if (k >= 0) l.splice(k, 1); else if (l.length < 12) l.push({ k: pk, t: it.t, ic: it.ic, open: it.open || null }); else J.toast('Maksymalnie 12 przypiętych'); J.save(); draw(); };
       b.onclick = () => exec(i); b.onmousemove = () => { if (sel !== i) { sel = i; mark(); } };
       list.appendChild(b);
     });
@@ -483,17 +578,36 @@ const ctxMenu = (x, y, entries) => {
   ctxEl.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; ctxEl.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
 };
 addEventListener('pointerdown', e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); });
+/* menu okna: prawy przycisk na nagłówku albo Alt Spacja */
+const winMenu = (id, x, y) => {
+  if (!id) return; const pinned = J.wm.isPinned(id), isW = id.startsWith('w:');
+  const size = s => ({ ic: 'max', t: s[1], run: () => J.uiRun('wm_move', { app: id, size: s[0] }) });
+  ctxMenu(x, y, [
+    { ic: 'pin', t: pinned ? 'Odepnij' : 'Przypnij na wierzchu', run: () => J.uiRun('wm_pin', { app: id, on: !pinned }) },
+    ...[['S', 'Rozmiar: mały'], ['M', 'Rozmiar: średni'], ['L', 'Rozmiar: duży'], ['half', 'Pół ekranu']].map(size),
+    ...[['left', 'Przyciągnij w lewo'], ['right', 'Przyciągnij w prawo'], ['center', 'Wyśrodkuj']].map(([m, t]) => ({ ic: 'grid', t, run: () => J.uiRun('wm_arrange', { mode: m, app: id }) })),
+    ...(isW ? [] : [{ ic: 'link', t: 'Kopiuj link do tego widoku', run: () => { const st = J.apps[id]?.state?.(J.wm.ctx(id)); const url = location.origin + location.pathname + '#go=' + [id, st?.view, st?.target].filter(Boolean).map(encodeURIComponent).join('/'); navigator.clipboard?.writeText(url).then(() => J.toast('Skopiowano link'), () => J.toast(url)); } }]),
+    ...(isW ? (() => { const w = J.widgets.list.find(x => 'w:' + x.id === id); return w ? [{ ic: 'min', t: w.collapsed ? 'Rozwiń widget' : 'Zwiń widget', run: () => J.uiRun('widget_collapse', { widget: w.id, on: !w.collapsed }) }, { ic: 'plus', t: 'Duplikuj widget', run: () => J.uiRun('widget_duplicate', { widget: w.id }) }] : []; })() : []),
+    { ic: 'save', t: 'Zapisz układ…', run: () => { const n = prompt('Nazwa układu:'); if (n && n.trim()) J.uiRun('layout_save', { name: n.trim() }); } },
+    '-',
+    ...(isW ? [] : [{ ic: 'close', t: 'Zamknij pozostałe', run: () => J.uiRun('wm_close_others', { app: id }) }]),
+    { ic: 'close', t: isW ? 'Usuń widget' : 'Zamknij', danger: isW, run: () => isW ? J.wm.close(id) : J.uiRun('close_app', { app: id }) }
+  ]);
+};
+J.winMenu = winMenu; J.ctxMenu = ctxMenu;
 $('#app').addEventListener('contextmenu', e => {
   if (e.target.closest('input,textarea,.window .win-body,.chat-panel,.log-panel')) return;
   e.preventDefault();
+  const head = e.target.closest('.window .win-head');
+  if (head) return winMenu(head.closest('.window').dataset.app, e.clientX, e.clientY);
   const sc = e.target.closest('[data-sc]');
   if (sc) {
     const s = J.state.shortcuts.find(x => x.id === sc.dataset.sc); if (!s) return;
     return ctxMenu(e.clientX, e.clientY, [
       { ic: 'link', t: 'Otwórz', run: () => J.shortcuts.run(s) },
-      { ic: 'notes', t: 'Zmień nazwę', run: () => { const n = prompt('Nowa nazwa skrótu:', s.name); if (n) { s.name = n.trim(); J.save(); renderIcons(); } } },
-      { ic: 'globe', t: 'Zmień adres', run: () => { const u = prompt('Adres URL:', s.url || 'https://'); if (u) { s.url = /^https?:\/\//i.test(u) ? u : 'https://' + u; s.app = null; s.icon = 'link'; J.save(); renderIcons(); } } },
-      '-', { ic: 'trash', t: 'Usuń z pulpitu', danger: true, run: () => { J.shortcuts.remove(s.id); J.toast('Usunięto „' + s.name + '”'); } }
+      { ic: 'notes', t: 'Zmień nazwę', run: () => { const n = prompt('Nowa nazwa skrótu:', s.name); if (n && n.trim()) J.uiRun('shortcut_edit', { shortcut: s.id, name: n.trim() }); } },
+      { ic: 'globe', t: 'Zmień adres', run: () => { const u = prompt('Adres URL:', s.url || 'https://'); if (u && u.trim()) J.uiRun('shortcut_edit', { shortcut: s.id, url: u.trim() }); } },
+      '-', { ic: 'trash', t: 'Usuń z pulpitu', danger: true, run: () => J.uiRun('shortcut_remove', { name: s.id }) }
     ]);
   }
   ctxMenu(e.clientX, e.clientY, [
@@ -517,7 +631,7 @@ const wrap = $('#coreWrap');
 $('#core').addEventListener('click', () => { if (J.ear.supported) J.ear.toggle(); else J.chatPanel.show(); });
 J.on('ear', on => $('#btnVoice').classList.toggle('rec', on));
 if (!J.ear.supported) $('#coreHint').textContent = 'kliknij, aby porozmawiać';
-J.on('voice-command', t => J.brain.handle(t, { voice: true, source: 'voice' }));
+J.on('voice-command', t => J.voiceRoute ? J.voiceRoute(t) : J.brain.handle(t, { voice: true, source: 'voice' }));
 J.on('ear-standby', on => { $('#app').classList.toggle('standby', on); $('#btnVoice').classList.toggle('standby', on); });
 
 /* =================== PASEK GÓRNY =================== */
@@ -553,9 +667,91 @@ J.setFocus = on => {
 };
 
 /* =================== SKRÓTY KLAWISZOWE =================== */
+/* akcje z domyślnymi skrótami; Ustawienia → Skróty (keys_set) mogą je przemapować (J.state.settings.keys) */
+J.KEY_ACTIONS = {
+  palette: { label: 'Paleta i wyszukiwanie', def: 'Ctrl+K', run: () => palette.isOpen ? palette.close() : palette.open() },
+  voice: { label: 'Mów do Jarvisa', def: 'Ctrl+Space', run: () => J.ear.toggle() },
+  standby: { label: 'Czuwanie („Jarvis…”)', def: 'Alt+J', run: () => J.ear.setStandby(!J.ear.standby) },
+  chat: { label: 'Czat', def: 'Alt+1', run: () => J.chatPanel.toggle() },
+  log: { label: 'Process Log', def: 'Alt+2', run: () => J.proc.toggle() },
+  telemetry: { label: 'Telemetria', def: 'Alt+3', run: () => $('#deckHead')?.click() },
+  notifications: { label: 'Powiadomienia', def: 'Alt+N', run: () => J.notifs.toggle() },
+  nextWindow: { label: 'Następne okno', def: 'Alt+W', run: () => J.wm.cycle() },
+  maximize: { label: 'Maksymalizuj okno', def: 'Alt+Enter', run: () => { const f = J.wm.focused(); if (f) J.wm.toggleMax(f); } },
+  back: { label: 'Wróć', def: 'Ctrl+Alt+ArrowLeft', run: () => J.uiRun('nav_back', {}, { quiet: true }) },
+  forward: { label: 'Dalej', def: 'Ctrl+Alt+ArrowRight', run: () => J.uiRun('nav_forward', {}, { quiet: true }) },
+  desktop: { label: 'Pokaż pulpit / przywróć', def: 'Alt+D', run: () => J.wm.list().some(k => !J.wm.isMin(k)) ? J.uiRun('wm_minimize', { app: 'all' }) : J.uiRun('wm_restore', { app: 'all' }) },
+  tile: { label: 'Ułóż w kafelki', def: 'Alt+T', run: () => J.uiRun('wm_arrange', { mode: 'tile' }) },
+  present: { label: 'Tryb prezentacji', def: 'Alt+P', run: () => J.uiRun('ui_mode', { mode: J.uiMode.get() === 'present' ? 'work' : 'present' }, { offer: false }) },
+  reopen: { label: 'Otwórz ponownie zamknięte', def: 'Ctrl+Shift+T', run: () => J.uiRun('wm_reopen', {}) },
+  undo: { label: 'Cofnij', def: 'Ctrl+Z', run: () => J.uiRun('undo', {}).then(r => r.ok && J.toast(r.text)) },
+  newNote: { label: 'Nowa notatka', def: 'Ctrl+Alt+N', run: () => { const n = J.notes.add('Nowa notatka', ''); J.wm.open('notes', n.id); } },
+  search: { label: 'Szukaj wszędzie', def: 'Ctrl+Shift+F', run: () => palette.open('') },
+  overlay: { label: 'Nakładka diagnostyczna', def: 'Alt+Shift+D', run: () => J.debugOverlay(!J.state.ui.debugOverlay) },
+  help: { label: 'Ściąga skrótów', def: 'F1', run: () => J.keysHelp() },
+  /* F2 / Delete działają na aktywnym oknie: notatka (tytuł / do kosza), widget (nazwa / usuń z „Cofnij”) */
+  rename: { label: 'Zmień nazwę (notatka, widget)', def: 'F2', run: () => { const f = J.wm.focused(); if (f === 'notes') { const t = J.wm.ctx('notes')?.body.querySelector('#nTitle'); t?.focus(); t?.select(); return; } if (f?.startsWith('w:')) { const w = J.widgets.list.find(x => 'w:' + x.id === f); if (!w) return; const v = prompt('Nowa nazwa widgetu:', w.title); if (!v || !v.trim()) return; w.type === 'spec' ? J.uiRun('widget_edit', { widget: w.id, patch: { title: v.trim().slice(0, 60) } }) : J.uiRun('widgets_update', { widget: w.id, title: v.trim().slice(0, 60) }); } } },
+  remove: { label: 'Usuń (notatka do kosza, widget)', def: 'Delete', run: () => { const f = J.wm.focused(); if (f === 'notes') { const st = J.apps.notes.state(J.wm.ctx('notes')); if (st?.noteId) J.uiRun('notes_delete', { note: st.noteId }); } else if (f?.startsWith('w:')) J.wm.close(f); } }
+};
+/* ---------- testy diagnostyczne (Ustawienia → O programie) ---------- */
+J.diagnostics = async () => {
+  const out = [], t = async (name, fn) => { try { const d = await fn(); out.push([true, name, d || '']); } catch (e) { out.push([false, name, String(e?.message || e).slice(0, 120)]); } };
+  await t('Internet', async () => { if (!navigator.onLine) throw new Error('przeglądarka zgłasza brak sieci'); return 'online'; });
+  await t('Zapis (localStorage)', async () => { localStorage.setItem('jarvis-os:probe', '1'); localStorage.removeItem('jarvis-os:probe'); return 'działa'; });
+  await t('Zapis (IndexedDB)', async () => { await J.store.set('probe', 1); if ((await J.store.get('probe')) !== 1) throw new Error('odczyt się nie zgadza'); await J.store.del?.('probe'); return 'działa'; });
+  await t('Hermes (mózg)', async () => { if (!J.aiReady()) return 'wyłączony — działa parser lokalny'; const l = await J.brain.models(); return 'odpowiada (' + (l?.length ?? 0) + ' modeli)'; });
+  await t('Jev (sędzia)', async () => { if (!J.judge.enabled()) return 'wyłączony'; const st = J.judge.status; if (J.judge.breaker?.open) throw new Error('wstrzymany: ' + (J.judge.breaker.reason || 'błędy')); return st.state === 'up' ? 'ostatnio ' + st.latency + ' ms' : 'włączony (bez wywołań w tej sesji)'; });
+  await t('Pogoda (Open-Meteo)', async () => { const d = await J.weather.get(); return d.city + ' ' + Math.round(d.current.temperature_2m) + '°'; });
+  await t('Kursy (Binance/CoinGecko)', async () => { await J.market.ensure(); return J.market.source; });
+  await t('Mowa (syntezator)', async () => { if (!J.voice.supported) throw new Error('brak w tej przeglądarce'); return (J.voice.list().length || 0) + ' głosów'; });
+  await t('Mikrofon (rozpoznawanie)', async () => { if (!J.ear.supported) throw new Error('brak Web Speech — użyj Chrome/Edge'); try { const p = await navigator.permissions?.query({ name: 'microphone' }); return 'zgoda: ' + (p?.state || 'nieznana'); } catch (e) { return 'dostępny'; } });
+  await t('Folder roboczy', async () => { if (!J.files?.supported) throw new Error('brak File System Access — użyj Chrome/Edge'); return J.files.handle ? 'wybrany: ' + J.files.handle.name : 'nie wybrano (Ustawienia → Pliki)'; });
+  return out;
+};
+/* ---------- samouczek (5 kroków, każdy podświetla element) ---------- */
+J.tour = async force => {
+  if (!force && J.state.ui.tourDone) return;
+  const steps = [['core', 'To rdzeń Jarvisa. Kliknij go albo naciśnij Ctrl Spacja, żeby mówić.'], ['chat', 'Czat: wpisz polecenie, np. „przypomnij mi o 18 trening”. Alt 1 pokazuje i chowa czat.'], ['dock', 'Dok z aplikacjami. Okna przeciągasz za nagłówek, Alt ←/→ przyciąga je do krawędzi, prawy przycisk na nagłówku to menu okna.'], ['palette', 'Ctrl K otwiera paletę: szukasz wszędzie i uruchamiasz polecenia.'], ['core', 'Pomyłka? Powiedz „cofnij” albo naciśnij Ctrl Z. „Wróć” wraca do poprzedniego okna. Naciśnij ?, żeby zobaczyć wszystkie skróty.']];
+  for (let i = 0; i < steps.length; i++) { J.ui.highlight(steps[i][0], (i + 1) + '/' + steps.length); const a = await J.ask(steps[i][1], [{ label: i < steps.length - 1 ? 'Dalej' : 'Gotowe', value: 'next', primary: true }, { label: 'Pomiń', value: 'skip' }], { speak: false, timeout: 120000 }); if (a !== 'next') break; }
+  J.state.ui.tourDone = true; J.save();
+};
+/* ---------- nakładka diagnostyczna ---------- */
+J.debugOverlay = on => {
+  J.state.ui.debugOverlay = !!on; J.save(); let el = $('#dbgOv'); clearInterval(J.__dbgT);
+  if (!on) { el?.remove(); return; }
+  if (!el) { el = h('pre', { id: 'dbgOv', class: 'dbg-ov' }); document.body.appendChild(el); }
+  const tick = () => { const last = J.judge?.log?.all?.().slice(-1)[0], p = J.context.packet({ quiet: true }); el.textContent = 'FPS ' + (J.fps || 0) + ' · okna ' + J.wm.count() + ' · tryb ' + J.uiMode.get() + ' · wątek ' + J.threads.current() + '\nCofnij: ' + J.undo.stack.length + (J.undo.last() ? ' (ostatnie: ' + (J.undo.last().text || '').slice(0, 40) + ')' : '') + '\nJev: ' + (last ? last.intent + ' ' + Math.round((last.conf || 0) * 100) + '% → ' + (last.outcome || last.route || '?') + ' (' + (last.ms || 0) + ' ms)' : '—') + (J.judge?.breaker?.open ? ' · WSTRZYMANY' : '') + '\nKontekst: ' + JSON.stringify({ focused: p.desktop?.focused?.app, windows: p.desktop?.windows?.length, tasks: p.tasks?.today?.length, signals: p.signals?.length }); };
+  tick(); J.__dbgT = setInterval(tick, 1000);
+};
+const comboOf = e => { const k = e.key === ' ' ? 'space' : e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase(); return J.normCombo([e.ctrlKey || e.metaKey ? 'ctrl' : '', e.altKey ? 'alt' : '', e.shiftKey && k.length > 1 || e.shiftKey && /[a-z]/.test(k) ? 'shift' : '', e.code === 'Space' ? 'space' : /^Digit\d$/.test(e.code) ? e.code.slice(5) : k].filter(Boolean).join('+')); };
+const keyOf = id => J.state.settings.keys?.[id] || J.KEY_ACTIONS[id].def;
+Object.defineProperty(J, 'KEYS', { get: () => [...Object.entries(J.KEY_ACTIONS).map(([id, a]) => [keyOf(id).replace(/Arrow(Left|Right|Up|Down)/, m => ({ ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' })[m]), a.label]), ['Alt ←→↑↓', 'przyciągnij okno do krawędzi'], ['Alt Shift ←→↑↓', 'przesuń okno'], ['Ctrl Alt Shift ←→↑↓', 'zmień rozmiar okna'], ['Alt Shift W', 'poprzednie okno'], ['Alt Spacja', 'menu okna'], ['Esc', 'zamknij / przerwij / wyjdź z pola'], ['?', 'ściąga skrótów']], configurable: true });
+/* przemapowane skróty mają pierwszeństwo; domyślny skrót akcji przemapowanej przestaje działać */
+addEventListener('keydown', e => {
+  if (!$('#app').classList.contains('on') || e.repeat) return;
+  const inField = !!e.target.closest?.('input,textarea,select,[contenteditable]'), c = comboOf(e), custom = J.state.settings.keys || {};
+  for (const [id, a] of Object.entries(J.KEY_ACTIONS)) {
+    if (J.normCombo(keyOf(id)) !== c) continue;
+    if (inField && !/^(palette|voice|search)$/.test(id) && !/\+(ctrl|alt)|^(ctrl|alt)\+/.test(c)) return;
+    if (inField && id === 'undo') return;   // Ctrl Z w polu tekstowym = cofanie pisania
+    e.preventDefault(); e.stopImmediatePropagation(); a.run(); return;
+  }
+  if (Object.entries(custom).some(([id]) => J.KEY_ACTIONS[id] && J.normCombo(J.KEY_ACTIONS[id].def) === c)) { e.preventDefault(); e.stopImmediatePropagation(); }   // domyślny skrót akcji przemapowanej: nic
+}, true);
 addEventListener('keydown', e => {
   if (!$('#app').classList.contains('on')) return;
-  const mod = e.ctrlKey || e.metaKey;
+  const mod = e.ctrlKey || e.metaKey, inField = !!e.target.closest?.('input,textarea,select,[contenteditable]');
+  const arrows = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+  if (e.key === 'Escape' && inField && !J.ask.pending && !palette.isOpen) { e.target.blur(); return; }   // Esc w polu: najpierw wyjdź z pola
+  if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && !inField) { e.preventDefault(); J.uiRun('undo', {}, { quiet: false }).then(r => r.ok && J.toast(r.text)); return; }
+  if (mod && e.shiftKey && e.key.toLowerCase() === 't' && !inField) { e.preventDefault(); J.uiRun('wm_reopen', {}); return; }
+  if (mod && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !inField) { e.preventDefault(); J.uiRun(e.key === 'ArrowLeft' ? 'nav_back' : 'nav_forward', {}); return; }
+  if (e.altKey && e.shiftKey && arrows[e.key] && !inField) { const f = J.wm.focused(); if (f) { e.preventDefault(); if (mod) { const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 40 : -40; const i = J.wm.info().find(w => w.id === f); J.uiRun('wm_move', { app: f, w: i.w + (e.key === 'ArrowRight' || e.key === 'ArrowLeft' ? k : 0), h: i.h + (e.key === 'ArrowUp' || e.key === 'ArrowDown' ? k : 0) }, { offer: false }); } else J.uiRun('wm_move', { app: f, direction: arrows[e.key], amount: 'small' }, { offer: false }); } return; }
+  if (e.altKey && e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); const ids = J.wm.list(), cur = J.wm.focused(); if (ids.length) J.wm.open(ids[(ids.indexOf(cur) - 1 + ids.length) % ids.length]); return; }
+  if (e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd' && !inField) { e.preventDefault(); J.wm.list().some(k => !J.wm.isMin(k)) ? J.uiRun('wm_minimize', { app: 'all' }) : J.uiRun('wm_restore', { app: 'all' }); return; }
+  if (e.altKey && !e.shiftKey && e.key.toLowerCase() === 't' && !inField) { e.preventDefault(); J.uiRun('wm_arrange', { mode: 'tile' }); return; }
+  if (e.altKey && e.code === 'Space') { const f = J.wm.focused(); if (f) { e.preventDefault(); const r = J.$('.window[data-app="' + f + '"] .win-head')?.getBoundingClientRect(); winMenu(f, r ? r.left + 20 : 100, r ? r.bottom : 100); } return; }
+  if (e.key === '?' && !inField && !mod) { e.preventDefault(); J.keysHelp?.(); return; }
   if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.isOpen ? palette.close() : palette.open(); }
   else if (mod && e.code === 'Space') { e.preventDefault(); J.ear.toggle(); }
   else if (e.altKey && e.key === '1') { e.preventDefault(); J.chatPanel.toggle(); }
@@ -572,6 +768,10 @@ addEventListener('keydown', e => {
     if (J.proc.isOpen && !J.proc.active) return J.proc.close();
     if (J.notifs.isOpen) return J.notifs.close();
     if (J.ask.pending) return J.ask.cancel();
+    if (J.dictation?.active) return J.dictation.stop();
+    /* tryb skupienia: podwójny Esc wychodzi z trybu */
+    if ($('#app').classList.contains('focus') && Date.now() - (J._lastEsc || 0) < 600) { J._lastEsc = 0; return J.uiRun('focus_mode', { on: false }, { quiet: true }); }
+    J._lastEsc = Date.now();
     if (J.brain.abort()) return;
     if (J.voice.speaking) return J.voice.stop();
     if (J.ear.active) return J.ear.stop();
@@ -579,6 +779,12 @@ addEventListener('keydown', e => {
   }
   else if (e.key === '/' && !e.target.closest('input,textarea')) { e.preventDefault(); palette.open(); }
 });
+/* telefon: przesunięcie palcem od lewej krawędzi = „wróć” */
+{ let sx = null, sy = 0; addEventListener('touchstart', e => { const t = e.touches[0]; sx = t.clientX < 24 && innerWidth <= 640 ? t.clientX : null; sy = t.clientY; }, { passive: true }); addEventListener('touchend', e => { if (sx == null) return; const t = e.changedTouches[0]; if (t.clientX - sx > 80 && Math.abs(t.clientY - sy) < 60) J.uiRun('nav_back', {}, { quiet: true }); sx = null; }, { passive: true }); }
+/* przyciski myszy „wstecz / dalej” = historia okien Jarvisa (bez wychodzenia ze strony) */
+addEventListener('mouseup', e => { if (e.button === 3 || e.button === 4) { e.preventDefault(); J.uiRun(e.button === 3 ? 'nav_back' : 'nav_forward', {}, { quiet: true }); } });
+/* ściąga skrótów klawiszowych („?”) */
+J.keysHelp = () => { J.ask('Skróty klawiszowe:\n' + J.KEYS.map(([k, t]) => k + ' — ' + t).join('\n'), [{ label: 'OK', value: 'ok', primary: true }], { speak: false, timeout: 120000 }); };
 
 /* =================== POWIADOMIENIA SYSTEMOWE =================== */
 J.notify = (title, body) => {
@@ -650,11 +856,18 @@ J.on('hermes', syncStatus); J.on('settings', syncStatus);
   const chip = $('#resultChip'), stop = $('#taskStop'); let chipT;
   const pl = J.pl;
   const fmtD = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
-  stop.onclick = () => J.brain.abort();
-  J.ev.on('task.created', e => { if (e.payload.replay) return; stop.classList.remove('hidden'); chip.classList.remove('show'); clearTimeout(chipT); });
+  const pauseB = $('#taskPause'), skipB = $('#taskSkip');
+  stop.onclick = () => { if (J.plan && (J.plan.paused || J.userRoutines?.running)) J.plan.set('stop'); else J.brain.abort(); };
+  pauseB.onclick = () => J.uiRun('plan_control', { op: J.plan.paused ? 'resume' : 'pause' }, { quiet: true });
+  skipB.onclick = () => J.uiRun('plan_control', { op: 'skip' }, { quiet: true });
+  const syncPlan = () => { const on = !stop.classList.contains('hidden'); pauseB.classList.toggle('hidden', !on); skipB.classList.toggle('hidden', !on); pauseB.textContent = J.plan?.paused ? '▶' : '‖'; pauseB.title = J.plan?.paused ? 'Wznów' : 'Wstrzymaj po bieżącym kroku'; };
+  J.on('plan', syncPlan);
+  J.on('routine-step', e => { stop.classList.remove('hidden'); syncPlan(); $('#taskText').textContent = e.name + ' · krok ' + (e.i + 1) + '/' + e.n + ': ' + e.text; $('#task').classList.add('show'); });
+  J.ev.on('routine.completed', () => { if (!J.brain.busy) { stop.classList.add('hidden'); syncPlan(); $('#task').classList.remove('show'); } });
+  J.ev.on('task.created', e => { if (e.payload.replay) return; stop.classList.remove('hidden'); syncPlan(); chip.classList.remove('show'); clearTimeout(chipT); });
   ['task.completed', 'task.failed', 'task.cancelled'].forEach(t => J.ev.on(t, e => {
     if (e.payload.replay) return;
-    stop.classList.add('hidden');
+    if (!J.userRoutines?.running) stop.classList.add('hidden'); syncPlan();
     const l = J.engine.last; if (!l || (l.status === 'completed' && l.tools < 2 && l.nodes < 2)) return;   // proste polecenia i zwykłe odpowiedzi nie tworzą karty wyniku
     const ok = l.status === 'completed';
     chip.dataset.s = l.status;
@@ -694,22 +907,70 @@ J.ask = (() => {
     pend.quick = J.chat.quick(question, opts, finish);
     if (o.speak !== false) J.voice.speak(question + (opts.length && opts.length <= 4 ? ' ' + opts.map(x => x.label).join(', ') + '?' : ''), { priority: 2 }).then(() => { if (!pend) return; const byVoice = J.ear.standby || J.brain.lastSource === 'voice'; if (!byVoice || !J.ear.supported) return; J.ear.expectAnswer(t => { if (!pend) return; const n = J.norm(t); const hit = opts.find(x => n.includes(J.norm(x.label))) || (/^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) && opts[0]) || (/^(nie|anuluj|odmawiam|stop)/.test(n) && opts.find(x => x.danger || /nie|anuluj|zako/i.test(x.label))); finish(hit ? hit.value : t); }); if (!J.ear.standby) J.ear.start({ answer: true }); });
   });
-  api.answer = t => { if (!pend) return false; const n = J.norm(t); const hit = pend.opts.find(x => J.norm(x.label) === n || n.includes(J.norm(x.label))); const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: t }); p.resolve(hit ? hit.value : t); return true; };
+  /* odpowiedź wpisana lub powiedziana: najpierw dokładne dopasowanie etykiety, potem Jev (D15: „no dobra” = tak), na końcu surowy tekst */
+  api.answer = t => {
+    if (!pend) return false;
+    const p = pend, n = J.norm(t), hit = p.opts.find(x => J.norm(x.label) === n || n.includes(J.norm(x.label)));
+    const done = v => { if (pend !== p) return; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: t }); p.resolve(v); };
+    if (hit) { done(hit.value); return true; }
+    if (J.judge?.available() && J.judge.allowed('answer') && p.opts.length) {
+      J.judge.answer(t, p.opts).then(r => {
+        if (pend !== p) return;
+        const th = J.judge.thresholds().yes;
+        if (r && r.kind === 'option' && r.index != null && p.opts[r.index] && r.confidence >= th) return done(p.opts[r.index].value);
+        if (r && r.kind === 'other' && r.confidence >= th) { api.cancel(); J.brain.handle(t, { source: J.brain.lastSource || 'typed' }); return; }   // to nie odpowiedź, tylko nowe polecenie
+        done(t);
+      });
+      return true;
+    }
+    done(t); return true;
+  };
   api.cancel = () => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: null }); p.resolve(null); };
   Object.defineProperty(api, 'pending', { get: () => !!pend });
   return api;
 })();
 /* potwierdzenie ryzykownego narzędzia: 'yes' | 'no' | 'always' | 'timeout' */
-J.confirm = async req => {
+/* dziennik zgód (IndexedDB consent.log, 500 wpisów) — widoczny w Ustawieniach → Agent */
+const logConsent = (req, answer) => { try { J.store.push('consent.log', { ts: Date.now(), id: req.id, label: req.label, args: JSON.stringify(req.args || {}).slice(0, 160), source: req.source || '', forced: !!req.forced, answer }, 500); } catch (e) { } };
+J.confirm = async req => { const v = await confirm0(req); logConsent(req, v); return v; };
+const confirm0 = async req => {
   J.sfx.confirm();
-  const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, { label: 'Zawsze', value: 'always' }], { timeout: 60000 });
+  const v = await J.ask(req.question, [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no', danger: true }, ...(req.forced ? [] : [{ label: 'Zawsze', value: 'always' }])], { timeout: 60000 });
   if (v === null) return 'timeout';
   if (v === 'yes' || v === 'no' || v === 'always') return v;
-  const n = J.norm(String(v)); return /^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) ? 'yes' : /zawsze/.test(n) ? 'always' : 'no';
+  const n = J.norm(String(v)); return /^(tak|zgoda|ok|okej|potwierdzam|jasne|dawaj)/.test(n) ? 'yes' : (/zawsze/.test(n) && !req.forced) ? 'always' : 'no';
 };
+
+/* przycisk „Cofnij” po czynności wykonanej przez Jeva bez pytania (A2), znika po kilku sekundach */
+{
+  const chip = $('#undoChip'); let t = null, cur = null;
+  const hide = () => { clearTimeout(t); cur = null; chip.classList.remove('show'); };
+  J.on('undo-offer', ({ entry, ms }) => {
+    clearTimeout(t); cur = entry;
+    chip.innerHTML = '<span></span><button class="btn sm primary">Cofnij</button><i></i>';
+    $('span', chip).textContent = entry.text || entry.label || 'Wykonano';
+    const bar = $('i', chip); bar.style.transition = 'none'; bar.style.width = '100%';
+    $('button', chip).onclick = async () => { if (cur !== entry) return; hide(); const u = await J.undo.run(60000); J.chat.add('jarvis', u.text); J.sfx[u.ok ? 'notify' : 'error'](); };
+    chip.classList.add('show'); requestAnimationFrame(() => { bar.style.transition = 'width ' + ms + 'ms linear'; bar.style.width = '0%'; });
+    t = setTimeout(hide, ms);
+  });
+  J.on('undo-done', hide);
+}
 
 /* =================== WSKAZYWANIE ELEMENTÓW (Jarvis „pokazuje palcem”) =================== */
 J.ui = {
+  /* wspólny wygląd stanów widoku (docs/spec/09-wyglad-stany.md §1): loading | empty | error | offline | denied | stale | mock */
+  state(el, kind, o = {}) {
+    if (!el) return null;
+    const ICON = { loading: '', empty: 'list', error: 'close', offline: 'wifi', denied: 'key', stale: 'history', mock: 'bolt' };
+    if (kind === 'stale' || kind === 'mock') { el.querySelector('.ui-badge')?.remove(); const b = h('span', { class: 'ui-badge ' + kind }); b.textContent = o.text || (kind === 'mock' ? 'symulacja' : 'nieaktualne'); el.prepend(b); return b; }
+    const box = h('div', { class: 'ui-state ' + kind, role: kind === 'error' ? 'alert' : 'status' });
+    box.innerHTML = kind === 'loading' ? '<i class="sk"></i><i class="sk"></i><i class="sk short"></i>' : '<div class="us-ic">' + icon(ICON[kind] || 'star', 'width="20" height="20"') + '</div><div class="us-t"></div>';
+    if (kind !== 'loading') $('.us-t', box).textContent = o.text || { empty: 'Nic tu jeszcze nie ma.', error: 'Coś poszło nie tak.', offline: 'Brak internetu.', denied: 'Brak dostępu.' }[kind] || '';
+    if (kind === 'loading' && o.text) { const t = h('div', { class: 'us-t' }); t.textContent = o.text; box.appendChild(t); }
+    if (o.action) { const b = h('button', { class: 'btn sm ' + (kind === 'empty' ? 'primary' : 'ghost') }); b.textContent = o.action.label; b.onclick = o.action.run; box.appendChild(b); }
+    el.innerHTML = ''; el.appendChild(box); return box;
+  },
   resolve(target) {
     const t = String(target || '');
     const map = { dock: '#dock', rail: '#iconRail', deck: '#deck', core: '#core', chat: J.chatPanel?.isOpen ? '#chatPanel' : '#chatChip', log: $('#workspace').classList.contains('log-open') ? '#logPanel' : '#logChip', palette: '#searchPill', notifications: '#btnNotif', voice: '#btnVoice', settings: '#btnAvatar' };
@@ -734,9 +995,11 @@ J.notifs = (() => {
   const rel = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 1 ? 'teraz' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); };
   const render = () => {
     const l = J.state.notifs; list.innerHTML = l.length ? '' : '<div class="lp-empty">Brak powiadomień.</div>';
-    l.slice(0, 60).forEach(n => {
-      const el = h('button', { class: 'nt' + (n.read ? '' : ' unread'), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
+    const hi = n => (n.imp ?? 0) >= .66 && Date.now() - n.ts < 864e5;   // D14: ważne (wg Jeva) z ostatniej doby idą na górę
+    [...l.filter(hi), ...l.filter(n => !hi(n))].slice(0, 60).forEach(n => {
+      const el = h('button', { class: 'nt' + (n.read ? '' : ' unread') + (hi(n) ? ' imp' : ''), 'data-k': n.kind || 'info' }, '<i></i><div><b></b><span></span></div><small></small>');
       $('b', el).textContent = n.title; $('span', el).textContent = n.body || ''; $('small', el).textContent = rel(n.ts);
+      if (n.actions?.length && !n.done) { const bar = h('div', { class: 'nt-act' }); n.actions.forEach(a => { const b = h('span', { class: 'btn sm ghost', role: 'button', tabindex: '0' }); b.textContent = a.label; b.onclick = async ev => { ev.stopPropagation(); const r = await J.uiRun(a.cmd, a.args || {}); if (r.ok) { n.done = true; J.save(); render(); J.toast(r.text); } }; bar.appendChild(b); }); $('div', el).appendChild(bar); }
       el.onclick = () => { n.read = true; J.save(); render(); const app = KIND_APP[n.kind]; if (app === 'chat') J.chatPanel.show(); else if (app) J.wm.open(app); };
       list.appendChild(el);
     });
@@ -745,7 +1008,10 @@ J.notifs = (() => {
   const api = {
     get isOpen() { return panel.classList.contains('open'); },
     unread: () => J.state.notifs.filter(n => !n.read).length,
-    open() { panel.classList.add('open'); render(); J.state.notifs.forEach(n => n.read = true); J.save(); setTimeout(render, 600); },
+    open() {
+      panel.classList.add('open'); const fresh = J.state.notifs.filter(n => !n.read); render(); J.state.notifs.forEach(n => n.read = true); J.save(); setTimeout(render, 600);
+      if (fresh.length >= 2 && J.judge?.available() && J.judge.allowed('rank')) J.judge.rank(fresh).then(r => { if (!r) return; r.forEach((v, i) => { if (v != null && fresh[i]) fresh[i].imp = v; }); J.save(); render(); });
+    },
     close() { panel.classList.remove('open'); render(); },
     toggle() { api.isOpen ? api.close() : api.open(); },
     clear() { J.state.notifs = []; J.save(); render(); },
@@ -756,11 +1022,17 @@ J.notifs = (() => {
   return api;
 })();
 /* J.notice: jedno wejście dla powiadomień (toast + centrum + opcjonalnie systemowe) */
-J.notice = ({ title, body, kind = 'info', toast = true, system = false }) => {
-  const n = { id: J.uid(), title: String(title), body: body ? String(body) : '', kind, ts: Date.now(), read: false };
+/* kanały (Ustawienia → Powiadomienia): wyłączony kanał = tylko centrum bez dymka; limit dymków na godzinę; w trybie prezentacji bez treści */
+const toastLog = {};
+J.notice = ({ title, body, kind = 'info', toast = true, system = false, actions }) => {
+  const n = { id: J.uid(), title: String(title), body: body ? String(body) : '', kind, ts: Date.now(), read: false, actions: (actions || []).slice(0, 3) };
   J.state.notifs.unshift(n); J.state.notifs.length = Math.min(J.state.notifs.length, 100); J.save();
-  if (toast) J.toast(n.title + (n.body ? ' — ' + n.body : ''), 5000);
-  if (system) J.notify?.(n.title, n.body);
+  const ch = J.notifChannel ? J.notifChannel(kind) : { on: true, sound: true, perHour: 20 };
+  const recent = (toastLog[kind] = (toastLog[kind] || []).filter(t => Date.now() - t < 3600e3));
+  const show = toast && ch.on && recent.length < (ch.perHour ?? 20);
+  if (show) J.sfx.forKind?.(kind);
+  if (show) { recent.push(Date.now()); J.toast(J.uiMode?.get() === 'present' ? 'Nowe powiadomienie' : n.title + (n.body ? ' — ' + n.body : ''), 5000); }
+  if (system && ch.on && J.uiMode?.get() !== 'present') J.notify?.(n.title, n.body);
   J.notifs.render(); return n;
 };
 
@@ -804,12 +1076,69 @@ J.on('timer', syncWake); J.on('ear-standby', syncWake); document.addEventListene
 J.notifs.render();
 if (J.state.alerts?.length) J.market.subscribeBackground();
 J.files?.load?.();
+/* okna otwarte przy zamykaniu strony (układ startowy „last”) */
+addEventListener('pagehide', () => { try { localStorage.setItem('jarvis-os:openAtExit', JSON.stringify(J.wm.list().filter(k => !k.startsWith('w:') && !J.wm.isMin(k)))); } catch (e) { } });   // osobny klucz: pełny zapis stanu tutaj nadpisałby zmiany z innej karty
+/* link do miejsca w Jarvisie: index.html#go=app/widok/cel (docs/spec/03-nawigacja.md §5) */
+J.openGo = () => {
+  try {
+    const hp = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); const go = hp.get('go'); if (!go) return false;
+    const [app, view, target] = go.split('/').map(decodeURIComponent);
+    hp.delete('go'); history.replaceState(null, '', location.pathname + location.search + (String(hp) ? '#' + hp : ''));
+    if (!J.apps[app]) { J.toast('Link prowadzi do nieznanej aplikacji „' + app + '”'); return false; }
+    J.uiRun(view ? 'app_view' : 'open_app', view ? { app, view, target: target || undefined } : { app }, { offer: false }); return true;
+  } catch (e) { return false; }
+};
+addEventListener('hashchange', () => J.openGo());
+/* druga karta z Jarvisem: dane w tej samej przeglądarce nadpisywałyby się — jedna karta jest „główna” (D-14) */
+try {
+  const bc = new BroadcastChannel('jarvis-os'), me = J.uid(); let yielded = false;
+  bc.onmessage = ev => {
+    const m = ev.data || {};
+    if (m.t === 'hello' && m.id !== me && !yielded) bc.postMessage({ t: 'here', id: me });
+    if (m.t === 'here' && m.id !== me && !yielded && !J.state.__primary) { yielded = true; J.ask('Jarvis działa już w innej karcie. Praca w dwóch kartach naraz nadpisuje dane. Przejąć tutaj?', [{ label: 'Przejmij tutaj', value: 'take', primary: true }, { label: 'Tylko podgląd', value: 'view' }], { speak: false, timeout: 600000 }).then(v => { if (v === 'take') { yielded = false; J.state.__primary = true; bc.postMessage({ t: 'take', id: me }); } else { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.toast('Tryb podglądu — zmiany nie zostaną zapisane'); } }); }
+    if (m.t === 'take' && m.id !== me) { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.notice({ title: 'Jarvis przejęty w innej karcie', body: 'Ta karta działa teraz tylko do podglądu (zmiany nie są zapisywane). Odśwież, aby wrócić.', kind: 'info' }); }
+  };
+  bc.postMessage({ t: 'hello', id: me });
+} catch (e) { /* brak BroadcastChannel — bez ochrony dwóch kart */ }
 boot().then(() => {
-  J.widgets.restore();
+  J.widgets.restore(); setTimeout(() => J.userRoutines?.fire('startup'), 4000); J.fx.apply(); J.on('agent-ui', id => J.fx.ghost(id));
+  /* tryb przestrzeni i układ startowy */
+  { const m = J.state.ui.mode === 'present' ? 'work' : (J.state.ui.mode || S.startMode || 'work'); if (m !== 'work') J.uiMode.set(m); else J.state.ui.mode = 'work'; }
+  { const ls = S.layoutStartup || 'none'; if (ls === 'last') { let l = []; try { l = JSON.parse(localStorage.getItem('jarvis-os:openAtExit') || '[]'); } catch (e) { } l.forEach(id => J.apps[id] && J.wm.open(id)); } else if (ls !== 'none') J.layouts.apply(ls); }
+  setTimeout(() => J.openGo(), 400);
+  if (J.state.ui.debugOverlay) J.debugOverlay(true);
+  if (J.state.ui.onboarded && !J.state.ui.tourDone) setTimeout(() => J.tour(), 2500);
   J.hermesPing();
   J.tasks.check();
   if (S.wakeWord && J.ear.supported) setTimeout(() => J.ear.setStandby(true), 1200);
   setTimeout(onboarding, 1500);
+
+  /* ---- tooltips: pojawia się po 600ms najechania na element z [data-tip] lub [title] ---- */
+  (() => {
+    let tipEl = null, tipT = null;
+    const tip = document.createElement('div'); tip.className = 'jtip'; document.body.appendChild(tip);
+    const hide = () => { clearTimeout(tipT); tip.classList.remove('on'); tipEl = null; };
+    document.addEventListener('mouseover', e => {
+      const el = e.target.closest('[data-tip],[title]'); if (el === tipEl) return;
+      hide(); if (!el) return;
+      const txt = el.dataset.tip || el.title; if (!txt) return;
+      if (el.title) el.dataset.tip = el.title, el.removeAttribute('title');
+      tipEl = el;
+      tipT = setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        tip.textContent = txt; tip.classList.add('on');
+        const tw = tip.offsetWidth, vw = window.innerWidth;
+        let left = r.left + r.width / 2 - tw / 2;
+        left = Math.max(6, Math.min(left, vw - tw - 6));
+        tip.style.left = left + 'px'; tip.style.top = (r.bottom + 6) + 'px';
+      }, 600);
+    });
+    document.addEventListener('mouseout', e => { if (e.target === tipEl || tipEl?.contains(e.target)) hide(); });
+    document.addEventListener('mousedown', hide);
+    document.addEventListener('scroll', hide, true);
+    J.tip = { hide };
+  })();
+
   const hr = new Date().getHours();
   const greet = (hr < 5 ? 'Dobranoc' : hr < 12 ? 'Dzień dobry' : hr < 18 ? 'Witaj' : 'Dobry wieczór');
   const pending = J.tasks.today().filter(t => !t.done && t.time >= J.hhmm());

@@ -21,16 +21,26 @@ const fakeFetch = async (url, init) => {
   }
   return { ok: true, status: 200, json: async () => ({ model: 'jev-1.13.0', answers, usage: { input_tokens: 400, output_tokens: 20, cost: 0.00002 } }) };
 };
-const J = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test', jevPrivate: false } } });
+const J = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test', jevPrivacy: 'P2' } } });
 
-test('judge: domyślnie tryb prywatny — bez tytułów notatek, widgetów i profilu', async () => {
+test('judge: domyślnie poziom P1 — bez tytułów notatek, widgetów i profilu; pick i verify wymagają P2', async () => {
   const P = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test' } } });
-  assert.equal(P.state.settings.jevPrivate, true);
+  assert.equal(P.judge.tier(), 'P1');
   calls.length = 0; P.notes.add('Tajna notatka', 'x');
   await P.judge.decide('otwórz notatnik');
   const st = calls[0].body.state;
   assert.equal(st.notes, undefined); assert.equal(st.widgets, undefined); assert.equal(st.user_profile, undefined);
   assert.ok(!JSON.stringify(calls[0].body).includes('Tajna notatka'), 'tytuł notatki nie wychodzi do zewnętrznego serwisu');
+  assert.equal(await P.judge.pick('q', [{ id: 'a', label: 'Tajna notatka' }, { id: 'b', label: 'Inna' }], 'x'), null, 'pick wysyła tytuły — tylko P2');
+  assert.equal(await P.judge.verify('Zrobione.', [{ name: 'x', ok: true }]), null, 'verify wysyła treść odpowiedzi — tylko P2');
+  assert.ok(!calls.some(c => JSON.stringify(c.body).includes('Tajna notatka')));
+});
+test('judge: poziom P0 wysyła tylko zdanie (bez stanu pulpitu)', async () => {
+  const P = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'sk-or-test', jevPrivacy: 'P0' } } });
+  calls.length = 0; await P.judge.decide('otwórz notatnik');
+  assert.deepEqual(Object.keys(calls[0].body.state), ['utterance']);
+  assert.equal(calls[0].body.questions.clarify, undefined, 'pytania o stan pulpitu są pomijane na P0');
+  assert.ok(calls[0].body.questions.intent && calls[0].body.questions.destructive);
 });
 test('judge: wyłączony bez klucza → null', async () => {
   const J2 = load({ fetch: fakeFetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: '' } } });

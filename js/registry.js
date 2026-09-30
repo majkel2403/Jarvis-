@@ -13,7 +13,8 @@ const norm = s => String(s || '').toLowerCase().replace(/[ąćęłńóśźż]/g,
 J.norm = norm;
 
 /* ---------- koperta wyniku ---------- */
-const ok = (data, text, ui) => ({ ok: true, code: 'OK', data: data ?? null, text: text || 'Gotowe.', ui: ui || null });
+/* undo (opcjonalne): funkcja cofająca skutek; nie jest polem wyliczalnym, więc nie trafia do JSON-a dla modelu ani do logów */
+const ok = (data, text, ui, undo) => { const r = { ok: true, code: 'OK', data: data ?? null, text: text || 'Gotowe.', ui: ui || null }; if (typeof undo === 'function') Object.defineProperty(r, 'undo', { value: undo, enumerable: false }); return r; };
 const fail = (code, text, data) => ({ ok: false, code: code || 'INTERNAL', text: text || 'Nie udało się.', data: data ?? null, ui: null });
 
 /* ---------- język: czas, daty, liczby (PL) ---------- */
@@ -21,6 +22,18 @@ const WORDNUM = { zero: 0, jeden: 1, jedna: 1, jedno: 1, dwa: 2, dwie: 2, trzy: 
 const numIn = s => { const m = /(\d+(?:[.,]\d+)?)/.exec(s); if (m) return parseFloat(m[1].replace(',', '.')); const w = Object.keys(WORDNUM).find(k => new RegExp('\\b' + k + '\\b').test(s)); return w != null ? WORDNUM[w] : null; };
 J.nlp = {
   norm, numIn,
+  /* „codziennie”, „w dni robocze”, „w poniedziałki i czwartki”, „co tydzień”, „co miesiąc”, „co 3 dni” → reguła powtarzania albo null */
+  repeat(text) {
+    const n = norm(text), D = { poniedzialki: 'pn', poniedzialek: 'pn', wtorki: 'wt', wtorek: 'wt', srody: 'sr', sroda: 'sr', czwartki: 'cz', czwartek: 'cz', piatki: 'pt', piatek: 'pt', soboty: 'so', sobota: 'so', niedziele: 'nd', niedziela: 'nd' };
+    if (/\b(codziennie|kazdego dnia|co dzien)\b/.test(n)) return { rule: 'daily' };
+    if (/\b(w dni robocze|w dni powszednie|od poniedzialku do piatku)\b/.test(n)) return { rule: 'weekdays' };
+    let m = /\bco (\d+|dwa|trzy|cztery|piec|szesc|siedem|osiem|dziewiec|dziesiec) dni\b/.exec(n); if (m) return { rule: 'every_n_days', n: +m[1] || numIn(m[1]) };
+    if (/\b(co miesiac|kazdego miesiaca|raz w miesiacu)\b/.test(n)) return { rule: 'monthly' };
+    const days = [...n.matchAll(/\b(poniedzialki|wtorki|srody|czwartki|piatki|soboty|niedziele)\b/g)].map(x => D[x[1]]);
+    if (days.length) return { rule: 'weekly', days: [...new Set(days)] };
+    if (/\b(co tydzien|kazdego tygodnia|raz w tygodniu)\b/.test(n)) return { rule: 'weekly' };
+    return null;
+  },
   /* „18:30”, „18.30”, „o 18”, „o osiemnastej” → HH:MM albo null */
   time(text) {
     const n = norm(text);
@@ -171,26 +184,41 @@ const api = J.registry = {
     const v = coerce(c, input); if (!v.ok) return v;
     const args = v.args;
     if (c.risk === 'blocked' && ctx.source !== 'ui') return fail('DENIED', 'To działanie jest dostępne tylko ręcznie w interfejsie.');
+    /* zaufane: klik w interfejsie, polecenie wpisane ręcznie i zgodne z parserem ('local') albo już potwierdzone.
+       'voice' (mowę łatwo źle usłyszeć), 'jev' (decyzja samego Jeva), 'hermes' i sygnały NIE są zaufane. */
     const trusted = ctx.source === 'ui' || ctx.source === 'local' || ctx.confirmed === true;
     const pre = typeof c.prepare === 'function' ? (c.prepare(args) || {}) : {};
     const dynRisk = c.risk === 'safe' && c.writes.length && !trusted && ctx.judge && ctx.judge.destructive >= (J.judge?.thresholds().destructive ?? .8);   // Jev ocenił wypowiedź jako destrukcyjną
-    if ((c.risk === 'confirm' || dynRisk) && !trusted && !api.allowed(id) && !pre.trusted) {
+    /* forceConfirm (strażnik D9, wykryta wstrzyknięta treść): pytamy zawsze, także gdy narzędzie ma „Zawsze zezwalaj” */
+    const forced = !!ctx.forceConfirm && ctx.source !== 'ui' && ctx.confirmed !== true;
+    if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && (ctx.source === 'routine' || !api.allowed(id)) && !pre.trusted)) {   // rutyna: „zawsze zezwalaj” z czatu nie obowiązuje (11-agent.md §4)
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
-      const q = typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
-      const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source });
-      if (dec === 'always') api.allowAlways(id);
-      else if (dec !== 'yes') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
+      const q = forced ? String(ctx.forceConfirm) : typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
+      const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
+      if (dec === 'always' && !forced) api.allowAlways(id);
+      else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
+    }
+    /* proaktywność (docs/spec/11-agent.md §6): Jarvis sam z siebie (źródło „signal”) niczego nie zmienia ani nie przełącza okien —
+       tylko proponuje; kliknięcie propozycji = polecenie użytkownika (źródło „ui”) */
+    if (ctx.source === 'signal' && c.writes.length) {
+      J.notice?.({ title: 'Propozycja Jarvisa', body: c.label + (Object.keys(args).length ? ': ' + Object.values(args).filter(v => typeof v !== 'object').join(', ').slice(0, 80) : ''), kind: 'agent', actions: [{ label: 'Zrób to', cmd: id, args }] });
+      return ok({ proposed: true, id, args }, 'Zaproponowałem użytkownikowi: ' + c.label + ' (sam z siebie nie zmieniam niczego).');
     }
     if (ctx.signal?.aborted) return fail('TIMEOUT', 'Przerwano.');
+    if (J.state.settings.offlineMode && (c.reads || []).includes('internet')) return fail('OFFLINE', 'Tryb bez sieci jest włączony — „' + c.label + '” potrzebuje internetu.');
     try {
       const r = await c.run(args, { ok, fail, ctx, cmd: c });
       J.action(id);
-      if (r == null) return ok(null, 'Gotowe.');
-      if (typeof r === 'string') return ok(null, r);
-      if (typeof r.ok !== 'boolean') return ok(r, 'Gotowe.');
-      return r;
+      const env = r == null ? ok(null, 'Gotowe.') : typeof r === 'string' ? ok(null, r) : typeof r.ok !== 'boolean' ? ok(r, 'Gotowe.') : r;
+      if (env.ok && typeof env.undo === 'function') env.undoEntry = J.undo?.push({ id, label: c.label, text: env.text, undo: env.undo, changed: typeof env.undo.changed === 'function' ? env.undo.changed : undefined, source: ctx.source }) || null;
+      if (env.undoEntry) Object.defineProperty(env, 'undoEntry', { enumerable: false });
+      if (env.ok && env.ui?.highlight && ctx.source !== 'ui' && ctx.source !== 'local') J.emit('agent-ui', env.ui.highlight);   // efekt „ducha” okna (fx cinema)
+      return env;
     } catch (e) {
       if (e?.name === 'AbortError') return fail('TIMEOUT', 'Przerwano.');
+      if (J.state.settings.offlineMode && e instanceof TypeError) return fail('OFFLINE', 'Tryb bez sieci jest włączony — ta czynność potrzebuje internetu.');
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && (e instanceof TypeError || /fetch|network|sieć|połącz/i.test(e?.message || ''))) return fail('OFFLINE', 'Brak internetu — spróbuj, gdy połączenie wróci.');
+      if (e?.status === 429) return fail('RATE_LIMITED', 'Usługa jest przeciążona — spróbuj za chwilę.');
       if (e?.code) return fail(e.code, e.message);
       return fail('INTERNAL', 'Błąd: ' + (e?.message || e));
     }

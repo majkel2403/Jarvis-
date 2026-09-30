@@ -70,7 +70,10 @@ const P = {
   wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10.5 10.5 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0"/><path d="M12 19.5h.01"/>',
   screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   grid: '<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>',
-  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>'
 };
 J.icon = (name, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${P[name] || P.star}</svg>`;
 
@@ -83,7 +86,8 @@ const DEFAULTS = () => ({
     hermesOn: true, hermesProvider: 'agent', hermesUrl: 'http://localhost:8642/v1', hermesKey: '', hermesModel: 'hermes-agent', toolFormat: 'auto', city: 'Wrocław', lat: 51.1079, lon: 17.0385,
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
-    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivate: true
+    openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: '',
+    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, flags: {}
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -100,14 +104,25 @@ const DEFAULTS = () => ({
   winPos: {},
   stats: { actions: 0 }
 });
+const STATE_VERSION = 3;
+const MIGRATIONS = [
+  /* v1→v2 */ s => { delete s.settings.apiKey; delete s.settings.model; },
+  /* v2→v3 */ s => { if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } } }
+];
 J.state = (() => {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { /* brak dostępu do storage */ }
   let s = null;
-  try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* brak dostępu do storage */ }
+  try { s = JSON.parse(raw || 'null'); } catch (e) {
+    if (raw) { try { localStorage.setItem(KEY + ':broken:' + Date.now(), raw.slice(0, 8000)); } catch (e2) { } }
+    J.toast?.('⚠ Stan danych był uszkodzony — Jarvis uruchomił się z ustawieniami domyślnymi. Poprzednie dane są dostępne w Ustawieniach → Dane.', 10000);
+  }
   const d = DEFAULTS();
   if (!s) return d;
+  const ver = s._v || 1;
+  MIGRATIONS.slice(ver - 1).forEach(fn => { try { fn(s); } catch (e) { } });
+  s._v = STATE_VERSION;
   s.settings = Object.assign(d.settings, s.settings || {});
-  if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } }   // nowy wygląd (neon HUD): domyślny akcent cyjan-fiolet
-  delete s.settings.apiKey; delete s.settings.model; // stara konfiguracja (przed Hermesem)
   for (const k of ['notes', 'tasks', 'shortcuts', 'log', 'history', 'widgets', 'alerts', 'notifs']) if (!Array.isArray(s[k])) s[k] = d[k];
   s.ui = Object.assign(d.ui, s.ui || {}); s.winPos = s.winPos || {}; s.stats = s.stats || { actions: 0 }; s.layouts = s.layouts && typeof s.layouts === 'object' ? s.layouts : {};
   return s;
@@ -124,13 +139,20 @@ J.saveNow = () => {
   return false;
 };
 J.save = J.debounce(() => J.saveNow(), 250);
+J.DEFAULTS = () => DEFAULTS();
+/* tryb bez sieci: żadnych zapytań poza tę stronę (Ustawienia → Interfejs) */
+{ const f0 = window.fetch; if (typeof f0 === 'function') window.fetch = (u, o) => { const url = String(u?.url || u); if (J.state?.settings?.offlineMode && /^(https?|wss?):/i.test(url) && !url.startsWith(location.origin)) return Promise.reject(new TypeError('Tryb bez sieci jest włączony')); return f0.call(window, u, o); }; }
+/* BroadcastChannel — inicjalizowany w main.js po bootowaniu aplikacji */
+J.tabChannel = { primary: true, claim: () => {}, release: () => {} };
+/* flagi funkcji (Ustawienia → O programie → Eksperymenty): domyślnie włączone */
+J.flag = k => (J.state.settings.flags || {})[k] !== false;
 J.saveHistory = J.debounce(() => { try { J.store.set('proc.history', J.state.history); } catch (e) { /* historia jest pomocnicza */ } }, 400);
 /* Konfiguracja z zewnątrz (klucze i ustawienia bez wpisywania w UI):
    1) window.JARVIS_CONFIG z pliku config.local.js (ignorowany przez git, tylko lokalnie);
    2) jednorazowo z adresu: index.html?jevKey=sk-or-…&jevOn=1&hermesKey=… — parametry są zapisywane i usuwane z paska adresu.
    Dozwolone klucze ustawień: tylko z listy poniżej. */
 J.bootstrapConfig = () => {
-  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
+  const ALLOW = ['openrouterKey', 'jevKey', 'jevOn', 'jevModel', 'jevPrivate', 'jevPrivacy', 'jevBudget', 'jevAutonomy', 'jevShadow', 'hermesKey', 'hermesOn', 'hermesUrl', 'hermesModel', 'hermesProvider', 'city', 'user', 'wakeWord', 'proactive', 'briefingTime', 'summaryTime', 'skipBoot'];
   const BOOL = ['jevOn', 'jevPrivate', 'hermesOn', 'wakeWord', 'skipBoot'];
   const apply = (src, from) => { let n = 0; for (const [k, v] of Object.entries(src || {})) { if (!ALLOW.includes(k) || v == null || v === '') continue; J.state.settings[k] = BOOL.includes(k) ? /^(1|true|tak|on|yes)$/i.test(String(v)) : String(v); n++; } if (n) { J.save(); J.configuredFrom = from; } return n; };
   let n = 0;
@@ -165,8 +187,12 @@ J.emit = (ev, data) => (bus[ev] || []).forEach(fn => { try { fn(data); } catch (
 J.sfx = (() => {
   let ctx = null;
   const ac = () => { if (!ctx) { const A = window.AudioContext || window.webkitAudioContext; if (A) ctx = new A(); } if (ctx && ctx.state === 'suspended') ctx.resume(); return ctx; };
+  /* głośność 0–100 %, wyciszenie w ciszy nocnej i w trybie prezentacji (alarm minutnika gra zawsze) — docs/spec/09-wyglad-stany.md §8 */
+  let forced = false;
+  const muted = () => !J.state.settings.sound || (!forced && (J.uiMode?.get?.() === 'present' || !!J.signals?.quietNow?.()));
+  const gain = () => J.clamp((J.state.settings.volume ?? 60) / 60, 0, 1.67);
   const tone = (f, dur = .12, type = 'sine', vol = .06, delay = 0, slide = 0) => {
-    if (!J.state.settings.sound) return; const c = ac(); if (!c) return;
+    if (muted()) return; const c = ac(); if (!c) return; vol *= gain(); if (vol <= 0) return;
     const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
@@ -178,7 +204,10 @@ J.sfx = (() => {
     open: () => { tone(520, .12, 'sine', .045, 0, 880); tone(1320, .08, 'triangle', .02, .06); },
     close: () => tone(700, .12, 'sine', .04, 0, 320),
     notify: () => { tone(880, .12, 'sine', .05); tone(1320, .18, 'sine', .05, .1); },
-    alarm: () => { for (let i = 0; i < 6; i++) { tone(1046, .12, 'square', .03, i * .25); tone(1318, .12, 'square', .03, i * .25 + .12); } },
+    alarm: () => { forced = true; try { for (let i = 0; i < 6; i++) { tone(1046, .12, 'square', .03, i * .25); tone(1318, .12, 'square', .03, i * .25 + .12); } } finally { forced = false; } },
+    /* dźwięk powiadomienia wg kanału (Ustawienia → Powiadomienia: „dźwięk”) */
+    forKind: kind => { const ch = J.notifChannel ? J.notifChannel(kind) : { on: true, sound: true }; if (!ch.on || !ch.sound) return false; (kind === 'timer' ? J.sfx.signal : J.sfx.notify)(); return true; },
+    muted,
     error: () => { tone(220, .18, 'sawtooth', .04); tone(160, .25, 'sawtooth', .04, .12); },
     listen: () => { tone(660, .08, 'sine', .05); tone(990, .1, 'sine', .05, .08); },
     boot: () => {
@@ -209,7 +238,7 @@ J.voice = (() => {
     if (current || !queue.length || !synth) return;
     const it = queue.shift(); current = it;
     const u = new SpeechSynthesisUtterance(it.text);
-    const v = pick(); if (v) u.voice = v; u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04; u.pitch = .92;
+    const v = pick(); if (v) u.voice = v; u.lang = v ? v.lang : 'pl-PL'; u.rate = 1.04 * J.clamp(+J.state.settings.speechRate || 1, .7, 1.5); u.pitch = .92; u.volume = J.clamp((J.state.settings.volume ?? 60) / 60, 0, 1);
     u.onstart = () => { api.speaking = true; J.orb.set('speaking'); J.emit('voice', true); };
     u.onend = u.onerror = () => { current = null; api.speaking = false; if (!queue.length) { J.orb.set('idle'); J.emit('voice', false); } it.resolve(); setTimeout(next, 120); };
     synth.speak(u);
@@ -260,7 +289,7 @@ J.ear = (() => {
     if (active) return;
     J.voice.stop();
     if (srec) { try { srec.abort(); } catch (e) { } }
-    rec = new SR(); rec.lang = 'pl-PL'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec = new SR(); rec.lang = J.state.settings.sttLang || 'pl-PL'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     let finalText = '';
     rec.onstart = () => { active = api.active = true; J.sfx.listen(); J.orb.set('listening', o.answer ? 'słucham odpowiedzi…' : 'słucham…'); J.emit('ear', true); startAnalyser(); };
     rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) finalText += e.results[i][0].transcript; else interim += e.results[i][0].transcript; } J.orb.banner('„' + (finalText + interim).trim() + '”'); };
@@ -280,7 +309,7 @@ J.ear = (() => {
   const startStandby = () => {
     if (!SR || active) return;
     try { srec = new SR(); } catch (e) { return; }
-    srec.lang = 'pl-PL'; srec.interimResults = true; srec.continuous = true; srec.maxAlternatives = 1;
+    srec.lang = J.state.settings.sttLang || 'pl-PL'; srec.interimResults = true; srec.continuous = true; srec.maxAlternatives = 1;
     let heard = '';
     srec.onstart = () => { startAnalyser(); J.emit('ear-standby', true); };
     srec.onresult = e => {
@@ -342,8 +371,10 @@ J.orb = (() => {
 })();
 
 /* ---------- akcent kolorystyczny ---------- */
+J.applyScale = () => { try { document.documentElement.style.setProperty('--ui-scale', String(J.clamp((+J.state.settings.uiScale || 100) / 100, .8, 1.3))); } catch (e) { } };
 J.applyTheme = () => {
   const s = J.state.settings, r = document.documentElement.style;
+  J.applyScale();
   r.setProperty('--accent', s.accent); r.setProperty('--accent-rgb', J.rgb(s.accent));
   r.setProperty('--accent2', s.accent2); r.setProperty('--accent2-rgb', J.rgb(s.accent2));
   const app = J.$('#app'); if (app) app.dataset.wall = s.wall;
@@ -357,18 +388,21 @@ J.THEMES = {
 /* ---------- menedżer okien ---------- */
 J.apps = {};           // rejestr aplikacji: id -> {title, icon, w, h, mount(body, ctx)}
 J.wm = (() => {
-  const open = {};      // id -> {el, cleanups, minimized}
-  let z = 30, cascade = 0;
+  const open = {};      // id -> {el, cleanups, minimized, pinned}
+  let z = 30, zp = 10000, cascade = 0;
+  const MIN_W = 280, MIN_H = 180;
+  const minOf = id => { const a = J.apps[id] || {}; return { w: a.minW || MIN_W, h: a.minH || MIN_H }; };
+  const closedStack = () => (J.state.ui.closedStack = J.state.ui.closedStack || []);
   const desk = () => J.$('#desktop');
   const isMobile = () => innerWidth <= 640;
 
   const savePos = (id, el) => {
     if (el.classList.contains('max') || isMobile()) return;
-    J.state.winPos[id] = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }; J.save();
+    J.state.winPos[id] = { ...(J.state.winPos[id] || {}), x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight, pin: !!open[id]?.pinned }; J.save();
   };
   const focus = id => {
     const w = open[id]; if (!w) return;
-    w.el.style.zIndex = ++z;
+    w.el.style.zIndex = w.pinned ? ++zp : ++z;
     J.$$('.window.focused').forEach(e => e.classList.remove('focused'));
     w.el.classList.add('focused');
     J.emit('wm');
@@ -383,9 +417,23 @@ J.wm = (() => {
     x = J.clamp(x, 0, Math.max(0, d.width - w)); y = J.clamp(y, 0, Math.max(0, d.height - h - 80));
     Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
   };
-  const drag = (id, el, handle, mode) => {
+  /* przyciąganie do innych okien (docs/spec/04-okna.md §5): próg 10 px, krawędzie zewnętrzne i wyrównanie */
+  const EDGE = 10;
+  const edgeSnap = (id, x, y, w, h) => {
+    let bx = null, by = null, dxBest = EDGE + 1, dyBest = EDGE + 1;
+    Object.entries(open).forEach(([oid, o]) => {
+      if (oid === id || o.minimized || o.el.classList.contains('max')) return;
+      const L = o.el.offsetLeft, T = o.el.offsetTop, R = L + o.el.offsetWidth, B = T + o.el.offsetHeight;
+      const vOverlap = y < B + EDGE && y + h > T - EDGE, hOverlap = x < R + EDGE && x + w > L - EDGE;
+      if (vOverlap) [[R, x], [L - w, x], [L, x], [R - w, x]].forEach(([cand]) => { const dd = Math.abs(cand - x); if (dd < dxBest) { dxBest = dd; bx = cand; } });
+      if (hOverlap) [[B, y], [T - h, y], [T, y], [B - h, y]].forEach(([cand]) => { const dd = Math.abs(cand - y); if (dd < dyBest) { dyBest = dd; by = cand; } });
+    });
+    return { x: bx ?? x, y: by ?? y, hit: bx != null || by != null };
+  };
+  const drag = (id, el, handle, mode, edge = 'se') => {
     handle.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('.win-actions')) return;
+      if (isMobile()) return;   // na telefonie okna zajmują cały ekran
       e.preventDefault(); focus(id);
       const d = desk().getBoundingClientRect();
       if (mode === 'move' && el.classList.contains('max')) {
@@ -398,22 +446,29 @@ J.wm = (() => {
       const move = ev => {
         const dx = ev.clientX - sx, dy = ev.clientY - sy;
         if (mode === 'move') {
-          el.style.left = J.clamp(ox + dx, -ow + 120, d.width - 120) + 'px';
-          el.style.top = J.clamp(oy + dy, 0, d.height - 60) + 'px';
+          let nx = J.clamp(ox + dx, -ow + 120, d.width - 120), ny = J.clamp(oy + dy, 0, d.height - 60);
+          if (!ev.altKey) { const sn = edgeSnap(id, nx, ny, ow, oh); nx = sn.x; ny = sn.y; el.classList.toggle('edge-snap', sn.hit); }   // krawędź do krawędzi innego okna (Alt = bez przyciągania)
+          el.style.left = nx + 'px'; el.style.top = ny + 'px';
           const px = ev.clientX - d.left, py = ev.clientY - d.top, m = 14;
           snapPos = px < m ? (py < m ? 'tl' : py > d.height - 90 ? 'bl' : 'left') : px > d.width - m ? (py < m ? 'tr' : py > d.height - 90 ? 'br' : 'right') : py < m ? 'top' : null;
           showSnap(snapPos, d);
         } else {
-          el.style.width = J.clamp(ow + dx, 280, d.width - ox) + 'px';
-          el.style.height = J.clamp(oh + dy, 180, d.height - oy) + 'px';
+          const mn = minOf(id);
+          if (edge.includes('e')) el.style.width = J.clamp(ow + dx, mn.w, d.width - ox) + 'px';
+          if (edge.includes('s')) el.style.height = J.clamp(oh + dy, mn.h, d.height - oy) + 'px';
+          if (edge.includes('w')) { const nw = J.clamp(ow - dx, mn.w, ox + ow); el.style.width = nw + 'px'; el.style.left = (ox + ow - nw) + 'px'; }
+          if (edge.includes('n')) { const nh = J.clamp(oh - dy, mn.h, oy + oh); el.style.height = nh + 'px'; el.style.top = (oy + oh - nh) + 'px'; }
+          const asp = J.apps[id]?.aspect; if (asp) el.style.height = Math.max(mn.h, Math.round(el.offsetWidth / asp)) + 'px';   // stałe proporcje (np. kalkulator)
         }
       };
       let snapPos = null;
-      const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); showSnap(null); if (snapPos) { api.snap(id, snapPos); snapPos = null; return; } savePos(id, el); J.emit('wm-resize', id); };
+      const up = () => { dragging = null; el.classList.remove('edge-snap'); handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); showSnap(null); if (snapPos) { api.snap(id, snapPos); snapPos = null; return; } savePos(id, el); J.emit('wm-resize', id); };
+      dragging = id;
       handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
     });
   };
 
+  let dragging = null;   // okno przeciągane teraz przez użytkownika (agent nie może go wtedy ruszać)
   /* podgląd przyciągania przy przeciąganiu okna do krawędzi */
   let snapEl = null;
   const showSnap = (pos, d) => {
@@ -428,7 +483,7 @@ J.wm = (() => {
     const d = desk().getBoundingClientRect(); if (!d.width || isMobile()) return;
     Object.values(open).forEach(({ el }) => {
       if (el.classList.contains('max')) return;
-      const w = Math.min(el.offsetWidth, Math.max(280, d.width - 16)), h = Math.min(el.offsetHeight, Math.max(180, d.height - 92));
+      const w = Math.min(el.offsetWidth, Math.max(MIN_W, d.width - 16)), h = Math.min(el.offsetHeight, Math.max(MIN_H, d.height - 92));
       if (w !== el.offsetWidth) el.style.width = w + 'px'; if (h !== el.offsetHeight) el.style.height = h + 'px';
       el.style.left = J.clamp(el.offsetLeft, 0, Math.max(0, d.width - w)) + 'px'; el.style.top = J.clamp(el.offsetTop, 0, Math.max(0, d.height - h - 80)) + 'px';
     });
@@ -445,9 +500,9 @@ J.wm = (() => {
         return true;
       }
       const el = J.h('div', { class: 'window', 'data-app': id, role: 'dialog', 'aria-label': app.title });
-      el.innerHTML = `<div class="win-head"><span class="wico">${J.icon(app.icon)}</span><b></b>
-        <div class="win-actions"><button class="mn" title="Minimalizuj">${J.icon('min')}</button><button class="mx" title="Maksymalizuj">${J.icon('max')}</button><button class="x" title="Zamknij">${J.icon('close')}</button></div></div>
-        <div class="win-body ${app.flush ? 'flush' : ''}"></div><div class="resize"></div>`;
+      el.innerHTML = `<div class="win-head"><button class="bk" title="Wróć" aria-label="Wróć">‹</button><span class="wico">${J.icon(app.icon)}</span><b></b>
+        <div class="win-actions"><button class="pn" title="Przypnij na wierzchu">${J.icon('pin')}</button><button class="mn" title="Minimalizuj">${J.icon('min')}</button><button class="mx" title="Maksymalizuj">${J.icon('max')}</button><button class="x" title="Zamknij">${J.icon('close')}</button></div></div>
+        <div class="win-body ${app.flush ? 'flush' : ''}"></div><div class="resize"></div>${['n', 's', 'e', 'w', 'ne', 'nw', 'sw'].map(e => `<div class="rz rz-${e}" data-e="${e}"></div>`).join('')}`;
       el.querySelector('b').textContent = app.title;
       desk().appendChild(el); place(id, el, app);
       if (!ro && window.ResizeObserver) { ro = new ResizeObserver(J.debounce(reflow, 60)); ro.observe(desk()); }
@@ -458,15 +513,19 @@ J.wm = (() => {
         setTitle: t => { el.querySelector('.win-head b').textContent = t; },
         close: () => api.close(id)
       };
-      open[id] = { el, cleanups, minimized: false, ctx };
+      open[id] = { el, cleanups, minimized: false, ctx, pinned: false };
       const head = el.querySelector('.win-head');
-      drag(id, el, head, 'move'); drag(id, el, el.querySelector('.resize'), 'resize');
+      drag(id, el, head, 'move'); drag(id, el, el.querySelector('.resize'), 'resize', 'se');
+      el.querySelectorAll('.rz').forEach(r => drag(id, el, r, 'resize', r.dataset.e));
+      el.querySelector('.pn').onclick = () => api.pin(id, !open[id]?.pinned);
+      el.querySelector('.bk').onclick = () => J.uiRun ? J.uiRun('nav_back', {}, { quiet: true }) : null;
       head.addEventListener('dblclick', e => { if (!e.target.closest('.win-actions')) api.toggleMax(id); });
       el.querySelector('.mn').onclick = () => api.minimize(id);
       el.querySelector('.mx').onclick = () => api.toggleMax(id);
       el.querySelector('.x').onclick = () => api.close(id);
       el.addEventListener('pointerdown', () => focus(id), true);
       try { app.mount(ctx.body, ctx, arg); } catch (e) { console.error(e); ctx.body.innerHTML = '<div class="empty">Błąd aplikacji: ' + J.esc(e.message) + '</div>'; }
+      if (J.state.winPos[id]?.pin) api.pin(id, true, true);
       focus(id); J.sfx.open();
       J.log('Uruchomiono: ' + app.title, 'Okno aplikacji otwarte na pulpicie.', 'info');
       J.emit('wm');
@@ -476,6 +535,7 @@ J.wm = (() => {
       if (id === 'chat') { J.chatPanel?.hide(); return; }
       const w = open[id]; if (!w) return;
       savePos(id, w.el);
+      if (!id.startsWith('w:')) { const st = closedStack(), view = J.apps[id]?.state?.(w.ctx) || null; st.push({ id, pos: { ...J.state.winPos[id] }, max: w.el.classList.contains('max'), view, ts: Date.now() }); if (st.length > 10) st.shift(); J.save(); }
       w.cleanups.forEach(fn => { try { fn(); } catch (e) { } });
       delete open[id];
       w.el.classList.add('closing'); J.sfx.close();
@@ -504,7 +564,7 @@ J.wm = (() => {
     info() { return Object.entries(open).map(([id, w]) => ({ id, title: J.apps[id]?.title || id, x: w.el.offsetLeft, y: w.el.offsetTop, w: w.el.offsetWidth, h: w.el.offsetHeight, min: !!w.minimized, max: w.el.classList.contains('max'), focused: w.el.classList.contains('focused') })); },
     cycle() { const ids = Object.keys(open); if (!ids.length) return null; const cur = api.focused(); const i = ids.indexOf(cur); const nxt = ids[(i + 1) % ids.length]; api.open(nxt); return nxt; },
     move(id, x, y) { const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(); w.el.classList.remove('max'); if (x != null) w.el.style.left = J.clamp(x, 0, Math.max(0, d.width - w.el.offsetWidth)) + 'px'; if (y != null) w.el.style.top = J.clamp(y, 0, Math.max(0, d.height - w.el.offsetHeight - 80)) + 'px'; savePos(id, w.el); J.emit('wm-resize', id); },
-    resize(id, wd, ht) { const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(); w.el.classList.remove('max'); if (wd != null) w.el.style.width = J.clamp(wd, 280, d.width - w.el.offsetLeft) + 'px'; if (ht != null) w.el.style.height = J.clamp(ht, 180, d.height - w.el.offsetTop - 80) + 'px'; savePos(id, w.el); J.emit('wm-resize', id); },
+    resize(id, wd, ht) { const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(); w.el.classList.remove('max'); if (wd != null) w.el.style.width = J.clamp(wd, minOf(id).w, d.width - w.el.offsetLeft) + 'px'; if (ht != null) w.el.style.height = J.clamp(ht, minOf(id).h, d.height - w.el.offsetTop - 80) + 'px'; savePos(id, w.el); J.emit('wm-resize', id); },
     /* przyciąganie do krawędzi / ćwiartek: left right top bottom tl tr bl br center */
     snap(id, pos) {
       const w = open[id]; if (!w) return; const d = desk().getBoundingClientRect(), W = d.width, H = d.height - 84, g = 8, half = (W - g * 3) / 2, hh = (H - g * 3) / 2;
@@ -520,8 +580,32 @@ J.wm = (() => {
       J.sfx.snap(); J.emit('wm-resize'); return n;
     },
     setMax(id, on) { const w = open[id]; if (!w) return; w.el.classList.toggle('max', on !== false); J.emit('wm-resize', id); },
+    /* przypięcie „zawsze na wierzchu” (maks. 3 naraz; czwarte odpina najstarsze) */
+    pin(id, on = true, quiet) {
+      const w = open[id]; if (!w) return false;
+      if (on && !w.pinned) { const pinned = Object.keys(open).filter(k => open[k].pinned).sort((a, b) => (+open[a].el.style.zIndex) - (+open[b].el.style.zIndex)); if (pinned.length >= 3) { api.pin(pinned[0], false, true); if (!quiet) J.toast?.('Odpięto „' + (J.apps[pinned[0]]?.title || pinned[0]) + '” (maks. 3 przypięte)'); } }
+      w.pinned = !!on; w.el.classList.toggle('pinned', w.pinned); w.el.style.zIndex = w.pinned ? ++zp : ++z;
+      J.state.winPos[id] = { ...(J.state.winPos[id] || {}), pin: w.pinned }; J.save(); J.emit('wm'); return true;
+    },
+    isPinned: id => !!open[id]?.pinned,
+    /* ostatnio zamknięte okna (stos 10) → otwórz ponownie w tej samej pozycji i widoku */
+    closed: () => closedStack().slice(),
+    reopen(id) {
+      const st = closedStack(); let i = st.length - 1; if (id) i = st.map(x => x.id).lastIndexOf(id); if (i < 0) return null;
+      const e = st.splice(i, 1)[0]; J.save(); if (!J.apps[e.id]) return null;
+      api.open(e.id, e.view || undefined); if (e.pos && e.pos.w) { api.move(e.id, e.pos.x, e.pos.y); api.resize(e.id, e.pos.w, e.pos.h); } if (e.max) api.setMax(e.id, true);
+      return e.id;
+    },
+    restore(id) { const ids = id === 'all' || !id ? Object.keys(open) : [id]; let n = 0; ids.forEach(k => { const w = open[k]; if (w?.minimized) { w.minimized = false; w.el.classList.remove('hidden', 'minimizing'); n++; } }); if (n) { focus(ids[ids.length - 1]); J.emit('wm'); } return n; },
+    closeOthers(keep) { const l = Object.keys(open).filter(k => k !== keep && !k.startsWith('w:')); l.forEach(api.close); return l; },
+    /* migawka położenia wszystkich okien (do „Cofnij” po kafelkach, przyciąganiu, układzie) */
+    snapshot() { return Object.entries(open).map(([id, w]) => ({ id, x: w.el.offsetLeft, y: w.el.offsetTop, w: w.el.offsetWidth, h: w.el.offsetHeight, min: !!w.minimized, max: w.el.classList.contains('max') })); },
+    applySnapshot(snap) { const ids = new Set(snap.map(s => s.id)); Object.keys(open).forEach(k => { if (!ids.has(k) && !k.startsWith('w:')) api.minimize(k); }); snap.forEach(s => { if (!J.apps[s.id]) return; if (!open[s.id]) api.open(s.id); const w = open[s.id]; w.el.classList.toggle('max', !!s.max); w.el.style.left = s.x + 'px'; w.el.style.top = s.y + 'px'; w.el.style.width = s.w + 'px'; w.el.style.height = s.h + 'px'; if (s.min) api.minimize(s.id); else if (w.minimized) { w.minimized = false; w.el.classList.remove('hidden', 'minimizing'); } savePos(s.id, w.el); }); J.emit('wm-resize'); J.emit('wm'); },
+    dragging: () => dragging,
+    minSize: minOf,
     isOpen: id => id === 'chat' || !!open[id],
     isMin: id => !!open[id]?.minimized,
+    edgeSnap: (id, x, y, w, h) => edgeSnap(id, x, y, w, h),
     isFocused: id => !!open[id]?.el.classList.contains('focused'),
     ctx: id => open[id]?.ctx,
     count: () => Object.keys(open).length,
@@ -546,11 +630,13 @@ J.layouts = (() => {
   };
   return {
     list: () => [...Object.keys(PRESETS), ...Object.keys(J.state.layouts || {})],
-    save(name) { const apps = J.wm.info().filter(w => !w.min).map(w => ({ id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max })); J.state.layouts[name] = { apps, ts: Date.now() }; J.save(); return { name, apps: apps.map(a => a.id) }; },
+    save(name) { const apps = J.wm.info().filter(w => !w.min).map(w => { let view = null; try { view = J.apps[w.id]?.state?.(J.wm.ctx(w.id)) || null; } catch (e) { } return { id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, max: w.max, pin: J.wm.isPinned(w.id), view }; }); J.state.layouts[name] = { apps, ts: Date.now() }; J.save(); return { name, apps: apps.map(a => a.id) }; },
+    presets: () => Object.keys(PRESETS),
+    isPreset: n => Object.keys(PRESETS).some(k => J.norm(k) === J.norm(n)),
     remove(name) { delete J.state.layouts[name]; J.save(); },
     apply(name) {
       const key = J.norm(name || ''); const custom = Object.keys(J.state.layouts).find(k => J.norm(k) === key); const preset = Object.keys(PRESETS).find(k => J.norm(k) === key);
-      if (custom) { const l = J.state.layouts[custom]; J.wm.minimizeAll(); l.apps.forEach(a => { J.wm.open(a.id); J.wm.move(a.id, a.x, a.y); J.wm.resize(a.id, a.w, a.h); if (a.max) J.wm.setMax(a.id, true); }); return { ok: true, name: custom, apps: l.apps.map(a => a.id) }; }
+      if (custom) { const l = J.state.layouts[custom]; J.wm.minimizeAll(); const have = l.apps.filter(a => J.apps[a.id]); have.forEach(a => { J.wm.open(a.id, a.view || undefined); J.wm.move(a.id, a.x, a.y); J.wm.resize(a.id, a.w, a.h); if (a.max) J.wm.setMax(a.id, true); if (a.pin) J.wm.pin(a.id, true, true); }); return { ok: true, name: custom, apps: have.map(a => a.id), skipped: l.apps.length - have.length }; }
       if (preset) { const p = PRESETS[preset]; J.wm.minimizeAll(); if (p.mode === 'min') return { ok: true, name: preset, apps: [] }; p.apps.forEach(id => J.wm.open(id)); if (p.mode === 'tile') J.wm.tile(p.apps); else p.apps.forEach(id => J.wm.snap(id, 'center')); return { ok: true, name: preset, apps: p.apps }; }
       return { ok: false };
     }
@@ -559,6 +645,10 @@ J.layouts = (() => {
 
 /* ---------- licznik akcji (tool calls) ---------- */
 J.action = (label) => {
-  J.state.stats.actions = (J.state.stats.actions || 0) + 1; J.save();
+  J.state.stats.actions = (J.state.stats.actions || 0) + 1;
+  /* dzienna historia (wykres aktywności, stats_series): 30 dni */
+  const dh = J.state.stats.daily = J.state.stats.daily || {}, d = J.today(); dh[d] = dh[d] || { actions: 0, cost: 0 }; dh[d].actions++;
+  const ks = Object.keys(dh).sort(); while (ks.length > 30) delete dh[ks.shift()];
+  J.save();
   J.emit('action', label);
 };
