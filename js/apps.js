@@ -1317,6 +1317,8 @@ J.apps.settings = {
       bInfo.textContent = !s.bridgeOn ? 'Most wyłączony — Hermes dostaje narzędzia w treści zapytania (tryb prompt).'
         : b.status === 'up' ? '✓ Most połączony · ' + b.tools.length + ' narzędzi MCP · ' + (names.length ? 'Hermes używa mostu (profile: ' + names.join(', ') + ')' + (J.brain.mcp ? ' — tryb MCP aktywny dla „' + s.hermesModel + '”' : ' — ale wybrany model „' + s.hermesModel + '” nie korzysta z mostu') : 'Hermes jeszcze się nie zgłosił (uruchom gateway profilu jarvis-desktop)')
         : b.status === 'connecting' ? 'Łączę z mostem…' : '✗ Most niedostępny — uruchom bridge\\start-bridge.bat (połączenie wznawia się samo).';
+      const a = b.status === 'up' ? b.agents : null;
+      if (a) bInfo.textContent += ' ┃ Agenci Jeva: klucz ' + (a.key ? 'jest' : 'BRAK (integrations\\set-key.ps1)') + ' · przeglądarka ' + (a.web?.up ? 'działa' : 'uruchomi się przy pierwszym użyciu') + ' · komputer ' + (a.computer?.installed ? (a.computer.running ? 'zadanie trwa' : 'gotowy') : 'niezainstalowany (integrations\\setup.ps1)');
     };
     drawB(); sub(ctx, 'bridge', drawB);
     const saveB = () => { s.bridgeOn = bOn.checked; s.bridgeUrl = bUrl.value.trim(); s.bridgeToken = bTok.value.trim(); s.hermesMode = hMode.value; J.save(); J.emit('settings'); drawB(); };

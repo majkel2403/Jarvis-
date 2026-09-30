@@ -29,6 +29,7 @@
 | ui | `agent-ui` | registry.js |
 | ui | `app-view` | apps.js, commands-ext.js |
 | ui | `attach` | commands-w4.js |
+| ui | `bridge` | bridge.js |
 | ui | `dictation` | commands-w4.js |
 | ui | `ear` | core.js |
 | ui | `ear-standby` | core.js |

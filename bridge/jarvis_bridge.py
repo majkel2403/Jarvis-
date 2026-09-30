@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import atexit
 import json
 import os
 import re
@@ -21,6 +22,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -179,9 +181,13 @@ async def status(request: Request) -> Response:
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     now = time.time()
     target = newest()
+    try:
+        agents_info = await get_agents().status()
+    except Exception:  # noqa: BLE001 — status mostu nie może zależeć od agentów
+        agents_info = None
     return cors(request, JSONResponse({"ok": True, "clients": len(CLIENTS), "tools": sorted(TOOLS),
                                        "browsers": [{"id": c.id, "visible": c.visible, "target": c is target} for c in CLIENTS.values()],
-                                       "hermes": {k: round(now - v) for k, v in HERMES_SEEN.items()}}))
+                                       "hermes": {k: round(now - v) for k, v in HERMES_SEEN.items()}, "agents": agents_info}))
 
 
 @mcp.custom_route("/bridge/pair", methods=["GET", "OPTIONS"])
@@ -269,6 +275,91 @@ async def tools_route(request: Request) -> Response:
     if changed:
         print(f"[jarvis-bridge] rejestr narzędzi zmieniony ({len(TOOLS)}) — zrestartuj gateway Hermesa, by je zobaczył", file=sys.stderr)
     return cors(request, JSONResponse({"ok": True, "tools": len(TOOLS), "changed": changed}))
+
+
+# ---------------------------------------------------------------- agenci lokalni: WWW (Jev + Playwright) i komputer (Jev + Windows)
+
+AGENTS: agents_mod.Agents | None = None
+
+
+def get_agents() -> agents_mod.Agents:
+    global AGENTS
+    if AGENTS is None:
+        AGENTS = agents_mod.Agents(TOKEN)
+        atexit.register(AGENTS.shutdown)   # koniec mostu = koniec agenta WWW i ewentualnego zadania na komputerze
+    return AGENTS
+
+
+async def agents_guard(request: Request) -> Response | None:
+    """OPTIONS i uwierzytelnienie; None = można przetwarzać."""
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    return None
+
+
+async def read_json(request: Request) -> dict:
+    if int(request.headers.get("content-length") or 0) > 65536:
+        raise agents_mod.AgentError("za duże żądanie", 413)
+    try:
+        body = await request.json()
+    except Exception:
+        raise agents_mod.AgentError("bad json", 400)
+    return body if isinstance(body, dict) else {}
+
+
+def agent_error(request: Request, e: Exception) -> Response:
+    if isinstance(e, agents_mod.AgentError):
+        return cors(request, JSONResponse({"error": str(e)}, status_code=e.status))
+    return cors(request, JSONResponse({"error": f"błąd agenta: {e}"}, status_code=500))
+
+
+@mcp.custom_route("/agents/status", methods=["GET", "OPTIONS"])
+async def agents_status(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    return cors(request, JSONResponse(await get_agents().status()))
+
+
+WEB_ACTIONS = {"command": "POST", "confirm": "POST", "pick": "POST", "goto": "POST", "read": "GET", "state": "GET"}
+
+
+@mcp.custom_route("/agents/web/{action}", methods=["GET", "POST", "OPTIONS"])
+async def agents_web(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    action = request.path_params["action"]
+    if WEB_ACTIONS.get(action) != request.method:
+        return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+    try:
+        path, body = f"/agent/{action}", None
+        if request.method == "POST":
+            body = await read_json(request)
+        elif action == "read" and request.query_params.get("max", "").isdigit():
+            path += "?max=" + request.query_params["max"]
+        return cors(request, JSONResponse(await get_agents().web.call(request.method, path, body)))
+    except Exception as e:  # noqa: BLE001 — każdy błąd agenta wraca do strony jako JSON
+        return agent_error(request, e)
+
+
+@mcp.custom_route("/agents/computer/{action}", methods=["GET", "POST", "OPTIONS"])
+async def agents_computer(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    action, comp = request.path_params["action"], get_agents().computer
+    try:
+        if action == "run" and request.method == "POST":
+            b = await read_json(request)
+            return cors(request, JSONResponse(await comp.start(b.get("goal"), b.get("steps", 25), b.get("delay", 1.5))))
+        if action == "status" and request.method == "GET":
+            tail = request.query_params.get("tail", "25")
+            return cors(request, JSONResponse(comp.snapshot(int(tail) if tail.isdigit() else 25)))
+        if action == "stop" and request.method == "POST":
+            return cors(request, JSONResponse(await comp.stop()))
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+    return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
 
 
 class BearerGate:

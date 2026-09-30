@@ -20,6 +20,7 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Głos i dźwięk | `wakeWord` | `false` | boolean | tak | — |
 | Hermes (mózg) | `hermesDailyBudget` | `0` | number | — | — |
 | Hermes (mózg) | `hermesKey` | — | string | tak | tak |
+| Hermes (mózg) | `hermesMode` | `"auto"` | string | tak | — |
 | Hermes (mózg) | `hermesModel` | `"hermes-agent"` | string | tak | — |
 | Hermes (mózg) | `hermesModelLite` | `""` | string | — | — |
 | Hermes (mózg) | `hermesOn` | `true` | boolean | tak | — |
@@ -27,6 +28,9 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Hermes (mózg) | `hermesProvider` | `"agent"` | string | tak | — |
 | Hermes (mózg) | `hermesUrl` | `"http://localhost:8642/v1"` | string | tak | — |
 | Hermes (mózg) | `toolFormat` | `"auto"` | string | — | — |
+| Inne | `bridgeOn` | `true` | boolean | tak | — |
+| Inne | `bridgeToken` | `""` | string | — | — |
+| Inne | `bridgeUrl` | `"http://127.0.0.1:8651"` | string | tak | — |
 | Inne | `dockOrder` | `[]` | object | — | — |
 | Inne | `favCities` | `[]` | object | — | — |
 | Inne | `flags` | `{}` | object | — | — |

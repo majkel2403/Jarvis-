@@ -24,7 +24,7 @@ async function refresh() {
   if (!J.bridge.connected || !S().bridgeToken) return;
   try {
     const r = await fetch(base() + '/bridge/status', { headers: auth(), signal: AbortSignal.timeout(5000) });
-    if (r.ok) { const j = await r.json(); J.bridge.hermes = j.hermes || {}; J.bridge.tools = j.tools || J.bridge.tools; J.bridge.checked = Date.now(); J.emit('bridge'); }
+    if (r.ok) { const j = await r.json(); J.bridge.hermes = j.hermes || {}; J.bridge.agents = j.agents || null; J.bridge.tools = j.tools || J.bridge.tools; J.bridge.checked = Date.now(); J.emit('bridge'); }
   } catch (e) { /* most chwilowo niedostępny */ }
 }
 

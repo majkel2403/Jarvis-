@@ -130,6 +130,39 @@ Jev to szybki „sędzia”: przy każdym zdaniu w ~200 ms decyduje, co zrobić.
    To samo robi workflow **Jev — test kontraktowy i sonda** (nocny test kontraktowy, ręcznie pełna sonda) — wymaga sekretu `OPENROUTER_API_KEY` w repozytorium. Progi w Ustawieniach są na razie ostrożnymi hipotezami, dopóki sonda nie zostanie uruchomiona z prawdziwym kluczem.
 6. Endpoint: `POST https://openrouter.ai/api/v1/systemone`, model `typesafe/jev-1.13`; pytania `choice` / `noul` / `score`. Koszt: tokeny wyjściowe darmowe, wejściowe ok. 0,04 $ za milion (jedna decyzja ≈ 0,0001 $).
 
+## Internet i prawdziwy komputer przez Jeva
+
+Jarvis potrafi, przez model decyzyjny **Jev** (TypeSafe „System One”, decyzja w ok. 300 ms), sterować dwiema rzeczami poza swoim pulpitem. Oba źródła to cudze repozytoria, wdrożone bez zmian w kodzie (dwie drobne poprawki: `integrations/patches`):
+
+| | Repozytorium | Co robi | Jak mówisz |
+|---|---|---|---|
+| **Internet** | [moritzkremb/jev-voice-browser](https://github.com/moritzkremb/jev-voice-browser) | prawdziwy Chromium (Playwright, osobny profil — bez Twoich logowań): zdanie → Jev wybiera intencję i element strony → klik / wpisanie / przewinięcie / nawigacja | „**w przeglądarce** wejdź na wikipedię”, „w przeglądarce wyszukaj zielone jabłka”, „w przeglądarce kliknij pierwszy wynik”, „w przeglądarce przeczytaj stronę” |
+| **Prawdziwy komputer** | [awlevin/typesafe-computer-use](https://github.com/awlevin/typesafe-computer-use) | czyta ekran Windows (UI Automation + OCR), Jev wybiera akcję, program klika i pisze na PRAWDZIWYM pulpicie, aż cel zostanie osiągnięty | „**na komputerze** otwórz notatnik”, „w Windows uruchom kalkulator”; stop: „zatrzymaj komputer” |
+| **Wewnątrz** (okna, notatki, widgety Jarvis OS) | — | jak dotąd, zwykłe polecenia rejestru (sędzia Jev routuje je bez czekania na Hermesa) | „otwórz notatnik”, „ułóż okna” |
+
+**Przykład dla laika:** „Jarvis, w przeglądarce wyszukaj pogodę w Krakowie i kliknij pierwszy wynik” → Jarvis otwiera osobne okno Chromium, Jev dopasowuje polecenie do elementów strony, kilka sekund i gotowe. „Jarvis, na komputerze otwórz Notatnik i wpisz cześć” → Jarvis **najpierw pyta o zgodę**, potem sam przejmuje mysz i klawiaturę.
+
+**Jak to działa:** polecenia to zwykłe wpisy Command Registry (`js/agents.js`: `web_command`, `web_read`, `computer_use`, `computer_status`, `computer_stop`, `agents_status`), więc mają tę samą walidację, zgody i Process Log co reszta, a Hermes (przez most MCP) widzi je jako narzędzia. Zdania po polsku są tłumaczone deterministycznie na angielskie komendy Jeva (treść zapytania i etykiety zostają dosłownie); domena albo adres otwiera się od razu, bez pytania Jeva. Most (`bridge/agents.py`) uruchamia agenta WWW przy pierwszym użyciu i pilnuje procesów: po zamknięciu mostu (także „na twardo”) system zabija agenta, Chromium i ewentualne zadanie sterujące myszą.
+
+```
+„w przeglądarce…” ─► registry (PL→EN) ─► most :8651 ─► agent WWW :8788 ─► Jev ─► Playwright (Chromium)
+„na komputerze…”  ─► registry + ZGODA ─► most ─► clicker (uv) ─► UI Automation + OCR ─► Jev ─► mysz/klawiatura
+```
+
+### Instalacja (Windows, bez WSL)
+1. `powershell -ExecutionPolicy Bypass -File integrations\setup.ps1` — pobiera oba repozytoria na przypięte, przetestowane wersje do `%USERPROFILE%\.jarvis-os\vendor`, nakłada poprawki, instaluje zależności (Node 20+, `uv` i Chromium już masz z Hermesem/Playwrightem).
+2. `powershell -ExecutionPolicy Bypass -File integrations\set-key.ps1` — wpisujesz klucz w ukrytym polu; trafia tylko do `%USERPROFILE%\.jarvis-os\jev.env` (dostęp tylko dla Twojego konta). **Jeden klucz OpenRouter** ([openrouter.ai/keys](https://openrouter.ai/keys)) wystarcza dla wszystkiego: agenta WWW, sterowania komputerem, jego modeli pomocniczych do wpisywania tekstu i sędziego Jev w samym Jarvisie. Można też użyć klucza TypeSafe (`-Provider typesafe`).
+3. `bridge\start-bridge.bat` (most) i `hermes\start-desktop-gateway.bat` — po zmianie liczby narzędzi zrestartuj gateway, żeby Hermes je zobaczył.
+4. `powershell -ExecutionPolicy Bypass -File integrations\doctor.ps1 -Live` — pokazuje, co działa, a co nie, i robi jedno prawdziwe zapytanie do Jeva (ułamek grosza), mierząc opóźnienie.
+
+### Bezpieczeństwo agentów
+- **Prawdziwy komputer: każde zadanie wymaga Twojej zgody** (także polecenie wpisane ręcznie; „Zawsze zezwalaj” jest tu wyłączone). Przerwanie w każdej chwili: klawisz **Esc**, „zatrzymaj komputer” albo **mysz w lewy górny róg ekranu**. Limit kroków (domyślnie 25, maks. 60) i twardy limit czasu. Podczas zadania nie dotykaj myszy — program o nią walczy.
+- **Internet:** działania nieodwracalne (kup, wyślij, usuń, opublikuj) Jev oznacza jako ryzykowne, a Jarvis pyta o zgodę; niejednoznaczny element → pytanie „który?” z numerami. Osobny profil przeglądarki (`%USERPROFILE%\.jarvis-os\web-profile`) — bez Twoich sesji i haseł; nie loguj się tam na konta, którymi nie chcesz sterować.
+- **Treść stron to dane niezaufane:** `web_read` oznacza ją tak dla Hermesa, a jego instrukcje (`hermes/SOUL.md`) zabraniają wykonywania poleceń zaszytych w stronach.
+- Agent WWW nasłuchuje tylko na `127.0.0.1`, wymaga tokenu mostu i **odrzuca żądania pochodzące ze stron** (nagłówki `Origin`/`Host`). Celowo nie uruchamiamy panelu z mikrofonem ani gniazda WebSocket z repozytorium autora — gniazdo na `127.0.0.1` jest dostępne z dowolnej strony otwartej w Twojej przeglądarce.
+- Zrzuty ekranu z zadań (`%USERPROFILE%\.jarvis-os\runs`) mogą zawierać prywatne dane — most zostawia tylko 5 ostatnich uruchomień.
+- Znane ograniczenia: autor określa wsparcie Windows jako eksperymentalne; OCR czyta jeden język (u Ciebie polski, ustawiany w `jev.env`); tylko główny monitor; Comet/Chrome nie publikują drzewa UI Automation, więc w przeglądarce działa OCR; program zakłada angielskie cele („open Notepad”).
+
 ## Skróty klawiszowe
 
 | Skrót | Akcja |
@@ -148,6 +181,8 @@ Jev to szybki „sędzia”: przy każdym zdaniu w ~200 ms decyduje, co zrobić.
 ```bash
 node --test "tests/unit/*.test.js"     # rejestr, silnik lokalny, NLP, kalkulator, parsery Hermesa, reduktor, kontekst, ICS
 node tests/e2e/smoke.js http://localhost:8090   # Chromium (Playwright): boot → polecenia → zgody → pytania → trwałość
+node --test integrations/tests/web-agent.test.mjs   # agent WWW: prawdziwy Chromium + atrapa Jeva (bez klucza i internetu)
+%USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe bridge\test_agents.py   # most: agenci, zadania na komputerze (atrapa), pełny łańcuch
 ```
 
 Workflow `.github/workflows/ci.yml` uruchamia oba zestawy przy każdym pushu.
@@ -169,6 +204,7 @@ js/jev-flow.js        ścieżka polecenia: parser → Jev → dopytanie → wyko
 js/undo.js            stos „Cofnij” i historia nawigacji („wróć”)
 js/ai.js              silnik lokalny + pętla Hermesa (dwa transporty + tryb MCP, plan, pytania, budżety, streszczenia)
 js/bridge.js          klient mostu MCP: polecenia Hermesa (SSE) → Command Registry, publikacja schematów
+js/agents.js          internet i prawdziwy komputer przez Jeva: polecenia web_* i computer_*, tłumaczenie PL→EN, zgody
 js/process.js         Process Log (kroki, plan, historia, replay)
 js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje
 js/widgets.js         widgety pulpitu
@@ -177,7 +213,8 @@ js/dash.js            wskaźnik trybu, pasek statusu, telemetria
 js/main.js            start, efekty, pulpit, dok, paleta, pytania/zgody, powiadomienia, onboarding, skróty
 sw.js                 service worker (offline)
 tests/                testy jednostkowe (Node) i dymne (Playwright)
-bridge/               most MCP (Python), migawka narzędzi tools.json, testy, atrapa gatewaya
+bridge/               most MCP (Python), agents.py (agent WWW + sterowanie komputerem), migawka narzędzi tools.json, testy
+integrations/         wdrożenie agentów Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), poprawki, testy
 hermes/               profil jarvis-desktop: SOUL.md, apply_profile.py, install-profile.ps1, start-desktop-gateway.bat
 docs/ROADMAP.md       plan rozwoju i stan realizacji
 ```
