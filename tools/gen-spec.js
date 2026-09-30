@@ -77,18 +77,18 @@ const docBlocks = {};
 const areaDocs = fs.readdirSync(OUT).filter(f => /^\d\d-.*\.md$/.test(f) && (NEW.some(c => c.doc === f) || fs.readFileSync(path.join(OUT, f), 'utf8').includes(START)));
 for (const doc of areaDocs) {
   const l = NEW.filter(c => c.doc === doc);
-  if (!l.length) { const f = path.join(OUT, doc), src = fs.readFileSync(f, 'utf8'), i = src.indexOf(START), j = src.indexOf(END); const b = START + '\n\n## Planowane polecenia tej części\n\nWszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).\n\n' + END; docBlocks[doc] = i >= 0 && j > i ? src.slice(0, i) + b + src.slice(j + END.length) : src; continue; }
+  if (!l.length) { const f = path.join(OUT, doc), src = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n'), i = src.indexOf(START), j = src.indexOf(END); const b = START + '\n\n## Planowane polecenia tej części\n\nWszystkie zaplanowane polecenia tej części są już w rejestrze — zobacz [katalog-polecen.md](katalog-polecen.md).\n\n' + END; docBlocks[doc] = i >= 0 && j > i ? src.slice(0, i) + b + src.slice(j + END.length) : src; continue; }
   let b = START + '\n\n## Planowane polecenia tej części\n\n| polecenie | co robi | poziom | cofanie | fala |\n|---|---|---|---|---|\n';
   for (const c of l) b += `| \`${c.id}\`${c.extends ? ' (rozszerzenie)' : ''} | ${esc(c.label)} | ${c.level} | ${esc(c.undo || '—')} | ${c.phase} |\n`;
   b += '\nPełne argumenty i przykłady: [katalog-nowych-polecen.md](katalog-nowych-polecen.md).\n\n' + END;
-  const f = path.join(OUT, doc), src = fs.readFileSync(f, 'utf8');
+  const f = path.join(OUT, doc), src = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
   const i = src.indexOf(START), j = src.indexOf(END);
   docBlocks[doc] = i >= 0 && j > i ? src.slice(0, i) + b + src.slice(j + END.length) : src.replace(/\s*$/, '') + '\n\n' + b + '\n';
 }
 
 const files = { 'katalog-polecen.md': md, 'katalog-polecen.json': JSON.stringify(cmds, null, 1) + '\n', 'katalog-ustawien.md': ms, 'katalog-zdarzen.md': me, 'katalog-nowych-polecen.md': mn, ...docBlocks };
 if (process.argv.includes('--check')) {
-  const stale = Object.entries(files).filter(([f, c]) => { try { return fs.readFileSync(path.join(OUT, f), 'utf8') !== c; } catch (e) { return true; } }).map(([f]) => f);
+  const stale = Object.entries(files).filter(([f, c]) => { try { return fs.readFileSync(path.join(OUT, f), 'utf8').replace(/\r\n/g, '\n') !== c; } catch (e) { return true; } }).map(([f]) => f);
   if (stale.length) { console.error('Nieaktualne: ' + stale.join(', ') + ' — uruchom: node tools/gen-spec.js'); process.exit(1); }
   console.log('Katalogi aktualne.'); process.exit(0);
 }
