@@ -108,6 +108,8 @@ INSTRUCTIONS = (
 TOOLS_FILE = Path(os.environ.get("JARVIS_BRIDGE_TOOLS_FILE") or Path(__file__).resolve().parent / "tools.json")
 # nazwa -> {name, description, parameters}; źródło: migawka tools.json, nadpisywana schematami z przeglądarki
 TOOLS: dict[str, dict] = {}
+# nazwy z migawki przy starcie mostu (= aktualny kod, node bridge/export-tools.js): karta ze starym kodem nie może ich usunąć
+BASELINE: set[str] = set()
 
 
 def load_tools() -> None:
@@ -115,15 +117,24 @@ def load_tools() -> None:
         data = json.loads(TOOLS_FILE.read_text(encoding="utf-8"))
         TOOLS.clear()
         TOOLS.update({t["name"]: t for t in data if isinstance(t, dict) and t.get("name")})
+        BASELINE.clear()
+        BASELINE.update(TOOLS)
     except (OSError, ValueError) as e:
         print(f"[jarvis-bridge] brak migawki narzędzi {TOOLS_FILE}: {e}", file=sys.stderr)
 
 
+def stale_names(tools: list) -> list[str]:
+    """Narzędzia z aktualnego kodu, których zgłoszony rejestr nie ma — karta działa na starej wersji strony."""
+    have = {t.get("name") for t in tools if isinstance(t, dict)}
+    return sorted(BASELINE - have)
+
+
 def update_tools(tools: list) -> bool:
-    """Przeglądarka zgłasza aktualny rejestr. Zmiana trafia do pliku — Hermes zobaczy ją po restarcie gatewaya."""
+    """Przeglądarka zgłasza aktualny rejestr. Zmiana trafia do pliku — Hermes zobaczy ją po restarcie gatewaya.
+    Rejestr bez narzędzi z aktualnego kodu (stara karta) jest odrzucany: inaczej wypierał nowe narzędzia i nadpisywał migawkę."""
     fresh = {t["name"]: {"name": t["name"], "description": str(t.get("description") or ""), "parameters": t.get("parameters") or {"type": "object", "properties": {}}}
              for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", t["name"])}
-    if not fresh or fresh == TOOLS:
+    if not fresh or fresh == TOOLS or stale_names(list(fresh.values())):
         return False
     TOOLS.clear()
     TOOLS.update(fresh)
@@ -272,7 +283,12 @@ async def tools_route(request: Request) -> Response:
         body = await request.json()
     except Exception:
         return cors(request, JSONResponse({"error": "bad json"}, status_code=400))
-    changed = update_tools(body.get("tools") or [])
+    tools = body.get("tools") or []
+    missing = stale_names(tools)
+    if missing:
+        print(f"[jarvis-bridge] karta ze starą wersją Jarvisa (brak {len(missing)} narzędzi, np. {missing[0]}) — pominięto jej listę; karta powinna się odświeżyć", file=sys.stderr)
+        return cors(request, JSONResponse({"ok": True, "tools": len(TOOLS), "changed": False, "stale": True, "missing": missing[:20]}))
+    changed = update_tools(tools)
     if changed:
         print(f"[jarvis-bridge] rejestr narzędzi zmieniony ({len(TOOLS)}) — zrestartuj gateway Hermesa, by je zobaczył", file=sys.stderr)
     return cors(request, JSONResponse({"ok": True, "tools": len(TOOLS), "changed": changed}))
@@ -323,7 +339,7 @@ async def agents_status(request: Request) -> Response:
     return cors(request, JSONResponse(await get_agents().status()))
 
 
-WEB_ACTIONS = {"command": "POST", "confirm": "POST", "pick": "POST", "goto": "POST", "read": "GET", "state": "GET"}
+WEB_ACTIONS = {"command": "POST", "confirm": "POST", "pick": "POST", "goto": "POST", "play": "POST", "media": "POST", "read": "GET", "state": "GET"}
 
 
 @mcp.custom_route("/agents/web/{action}", methods=["GET", "POST", "OPTIONS"])

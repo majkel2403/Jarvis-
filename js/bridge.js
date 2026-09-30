@@ -43,9 +43,22 @@ async function publishTools() {
     const tools = J.registry.tools().map(t => t.function);
     const r = await fetch(base() + '/bridge/tools', { method: 'POST', headers: auth(), body: JSON.stringify({ tools }) });
     const j = await r.json();
+    /* most ma nowszą wersję Jarvisa niż ta karta (np. po wdrożeniu) — odśwież raz, gdy Jarvis nic nie robi; inaczej Hermes wołałby
+       narzędzia, których ta karta nie zna */
+    if (j.stale) {
+      let done = false; try { done = sessionStorage.getItem('jarvis-stale-reload') === String(j.tools); } catch (e) { }
+      if (!done) {
+        try { sessionStorage.setItem('jarvis-stale-reload', String(j.tools)); } catch (e) { }
+        J.toast?.('Jest nowsza wersja Jarvisa — odświeżam kartę', 4000);
+        const go = () => (J.brain?.queue || busyNow()) ? setTimeout(go, 3000) : location.reload();
+        setTimeout(go, 2500);
+      } else J.log('Most: ta karta ma starszą wersję Jarvisa', 'Brakuje: ' + (j.missing || []).slice(0, 5).join(', ') + ' — odśwież stronę (Ctrl+F5)', 'warn');
+    }
     if (j.changed) J.log('Most: zmieniona lista narzędzi', 'Zrestartuj gateway Hermesa (hermes\\start-desktop-gateway.bat), by zobaczył ' + j.tools + ' narzędzi', 'warn');
   } catch (e) { /* most starszej wersji albo chwilowo niedostępny */ }
 }
+
+const busyNow = () => !!document.querySelector('.orb.thinking, #orb.thinking') || J.orb?.state === 'thinking';
 
 const safe = v => { try { return JSON.parse(JSON.stringify(v ?? null)); } catch (e) { return null; } };
 async function handle(cmd) {

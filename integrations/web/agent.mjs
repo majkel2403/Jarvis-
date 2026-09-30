@@ -81,6 +81,7 @@ export async function startChrome({ log = () => { }, profileDir, port, mode } = 
     fs.mkdirSync(dir, { recursive: true });
     child = spawn(exe, [`--remote-debugging-port=${p}`, '--remote-debugging-address=127.0.0.1', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
       '--disable-features=BackForwardCache',   // jak w Chromium z Playwrighta: przy bfcache goBack(domcontentloaded) czeka do limitu 15 s
+      '--autoplay-policy=no-user-gesture-required',   // „puść piosenkę”: film ma grać z dźwiękiem od razu, a nie czekać na kliknięcie
       '--window-size=1280,900', '--window-position=40,40', 'about:blank'], { stdio: 'ignore', detached: false });
     child.on('error', e => log('Chrome nie wystartował: ' + e.message));
     for (let i = 0; i < 100 && !info; i++) { await new Promise(r => setTimeout(r, 150)); info = await probe(); if (child.exitCode !== null) break; }
@@ -227,6 +228,107 @@ export async function createAgent(opts = {}) {
     return { status: 'done', summary: 'open ' + target, ms, page: await settle() };
   });
 
+  /* „puść X”: wyszukiwanie na YouTube → ekran zgody na cookies (UE) → pierwszy prawdziwy film (bez reklam, Shorts i kanałów) → sprawdzenie,
+     że gra. Deterministycznie, bez Jeva: ta sama sekwencja zawsze, ~3–6 s. Adres bazowy można podmienić (JARVIS_YT_BASE) — dla testów. */
+  const YT = (process.env.JARVIS_YT_BASE || 'https://www.youtube.com').replace(/\/+$/, '');
+  /* zgoda na cookies (UE): osobna strona consent.youtube.com ALBO okno „Zanim przejdziesz do YouTube” na samej stronie —
+     to okno zasłania odtwarzacz (przechwytuje kliknięcia) i blokuje odtwarzanie, dopóki się go nie zamknie. Przyciski szukamy po
+     WIDOCZNYM tekście: ich nazwa dostępności to długi opis („Nie wyrażaj zgody na wykorzystywanie plików cookie…”). */
+  const REJECT = /^\s*(odrzuć wszystko|reject all|alle ablehnen)\s*$/i, ACCEPT = /^\s*(zaakceptuj wszystko|accept all|alle akzeptieren)\s*$/i;
+  const passConsent = async page => {
+    const btn = re => page.locator('button, [role="button"]').filter({ hasText: re, visible: true }).first();
+    let b = btn(REJECT);   // najpierw „Odrzuć” (mniej śledzenia), inaczej „Zaakceptuj”
+    if (!(await b.count().catch(() => 0))) { b = btn(ACCEPT); if (!(await b.count().catch(() => 0))) return false; }
+    const onPage = /consent\.(youtube|google)\./.test(page.url());
+    await b.click({ timeout: 5000 });
+    if (onPage) await page.waitForURL(u => !/consent\./.test(String(u)), { timeout: 10000 }).catch(() => { });
+    else await b.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
+    return true;
+  };
+  /* Odtwarzacz YouTube steruje się jego własnym API (#movie_player.playVideo/pauseVideo/nextVideo). Bezpośrednie video.play()
+     YouTube natychmiast cofa do pauzy (sprawdzone: „play” i zaraz „pause”), zwłaszcza w trakcie reklamy. Bez API (inne strony,
+     testy) — zwykły element <video>. ctl: 'play' | 'pause' | 'next' | null (tylko odczyt). */
+  const player = (page, ctl) => page.evaluate(ctl => {
+    const pl = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+    const v = document.querySelector('#movie_player video, video');
+    if (!v && !pl?.getPlayerState) return null;
+    const api = typeof pl?.playVideo === 'function';
+    const ad = !!pl?.classList.contains('ad-showing');
+    if (ctl === 'play') {
+      if (ad) document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern')?.click();   // „Pomiń reklamę”, gdy już można
+      if (api) { const s = pl.getPlayerState(); if (s !== 1 && s !== 3) pl.playVideo(); if (pl.isMuted?.()) pl.unMute(); }
+      else if (v) { if (v.paused) v.play().catch(() => { }); v.muted = false; }
+    } else if (ctl === 'pause') { if (api) pl.pauseVideo(); else v?.pause(); }
+    else if (ctl === 'next' && api && typeof pl.nextVideo === 'function') pl.nextVideo();
+    const state = api ? pl.getPlayerState() : null;   // 1 gra, 2 pauza, 3 buforuje, -1 nie ruszył, 0 koniec, 5 w kolejce
+    const t = api ? pl.getCurrentTime() : v?.currentTime ?? 0, d = api ? pl.getDuration() : v?.duration || 0;
+    const title = (api && !ad && pl.getVideoData?.().title) || document.querySelector('h1.ytd-watch-metadata, #title h1, h1.title')?.innerText?.trim() || document.title.replace(/\s*-\s*YouTube$/, '');
+    return { api, state, paused: api ? state !== 1 && state !== 3 : !!v?.paused, muted: api ? !!pl.isMuted?.() : !!v?.muted, t, d, ad, title };
+  }, ctl || null).catch(() => null);
+  const probe = page => player(page, 'play');
+  /* „gra” = czas filmu naprawdę idzie do przodu (sam brak pauzy kłamie: YouTube podmienia źródło na reklamę, która potrafi stanąć) */
+  const ensurePlaying = async (page, maxMs = 15000) => {
+    const end = Date.now() + maxMs, quarter = Date.now() + maxMs * 0.25, half = Date.now() + maxMs * 0.5; let last = null, st = null, moving = 0, reloaded = false, clicked = false;
+    while (Date.now() < end) {
+      /* nie wystartował (-1) / buforuje w miejscu (3) / czeka w kolejce (5) — prawdziwe kliknięcie w odtwarzacz (gest użytkownika) */
+      if (!clicked && Date.now() > quarter && !moving && st?.api && [-1, 3, 5].includes(st.state)) { clicked = true; await page.locator('#movie_player').click({ position: { x: 200, y: 150 }, timeout: 2000 }).catch(() => { }); }
+      /* odtwarzacz zawieszony (np. reklama, która zaczęła się pod oknem zgody) — jedno przeładowanie strony zwykle go odblokowuje */
+      if (!reloaded && Date.now() > half && !moving && /\/watch\?v=/.test(page.url())) { reloaded = true; await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { }); last = null; continue; }
+      await passConsent(page).catch(() => false);   // okno zgody na stronie filmu zatrzymuje odtwarzacz
+      st = await probe(page);
+      if (st && last && !st.paused && st.t > last.t + 0.2) { if (++moving >= 2) return { ...st, playing: true }; } else moving = 0;
+      last = st; await new Promise(r => setTimeout(r, 400));
+    }
+    return { ...(st || {}), playing: false };
+  };
+
+  const play = query => serial(async () => {
+    const q = String(query || '').trim().slice(0, 200);
+    if (!q) return { status: 'failed', summary: 'Nie podano, co puścić.' };
+    const t0 = Date.now(), page = await browser.ensurePage();
+    await page.bringToFront().catch(() => { });
+    const results = YT + '/results?search_query=' + encodeURIComponent(q);
+    await page.goto(results, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const link = page.locator('ytd-video-renderer a#video-title[href*="/watch?v="]').first();
+    let consent = false, found = false;
+    for (const end = Date.now() + (+process.env.JARVIS_YT_WAIT_MS || 12000); Date.now() < end && !found;) {   // okno zgody bywa dorysowane po chwili
+      if (await passConsent(page).catch(() => false)) { consent = true; if (!/\/results/.test(page.url())) await page.goto(results, { waitUntil: 'domcontentloaded', timeout: 15000 }); }
+      found = await link.isVisible().catch(() => false);
+      if (!found) await new Promise(r => setTimeout(r, 250));
+    }
+    if (!found) return { status: 'failed', summary: 'play ' + q, detail: 'Nie znalazłem żadnego filmu w wynikach YouTube.', consent, ms: Date.now() - t0, page: await settle() };
+    const title = ((await link.getAttribute('title').catch(() => null)) || (await link.innerText().catch(() => '')) || q).trim();
+    const href = await link.getAttribute('href');
+    /* prawdziwe kliknięcie = gest użytkownika (dźwięk dozwolony także bez flagi autoplay); gdy nakładka YouTube przechwytuje mysz
+       („subtree intercepts pointer events”), klik skryptem, a w ostateczności wejście wprost w adres filmu */
+    let via = 'click';
+    try { await link.click({ timeout: 2500 }); }
+    catch { via = 'js'; await link.evaluate(a => a.click()).catch(() => { }); }
+    try { await page.waitForURL(/\/watch\?v=/, { timeout: 4000 }); }
+    catch { via = 'goto'; await page.goto(new URL(href, page.url()).href, { waitUntil: 'domcontentloaded', timeout: 15000 }); }
+    const st = await ensurePlaying(page, +process.env.JARVIS_YT_PLAY_MS || 15000);
+    const playing = st.playing;
+    return { status: playing ? 'done' : 'failed', summary: 'play ' + q, title: st.ad || !st.title || st.title === 'YouTube' ? title : st.title, playing, muted: !!st.muted, ad: !!st.ad, consent, via, detail: playing ? '' : 'Film otwarty, ale odtwarzacz nie ruszył.', ms: Date.now() - t0, page: await settle() };
+  });
+
+  /* sterowanie tym, co gra: pause | resume | next (następny w kolejce/miksie YouTube) | status */
+  const media = action => serial(async () => {
+    const page = await browser.ensurePage();
+    const look = () => player(page, null);
+    let st = await look();
+    if (!st) return { status: 'failed', summary: 'media ' + action, detail: 'Nic nie jest otwarte w odtwarzaczu.', page: await settle() };
+    if (!['pause', 'resume', 'next', 'status'].includes(action)) return { status: 'failed', summary: 'media ' + action, detail: 'Nieznana akcja.' };
+    if (action === 'pause') { await player(page, 'pause'); await page.waitForTimeout(300); st = { ...(await look()), playing: false }; }
+    else if (action === 'next') {
+      const before = page.url();
+      if (!st.api) await page.keyboard.press('Shift+N').catch(() => { }); else await player(page, 'next');
+      await page.waitForURL(u => String(u) !== before, { timeout: 6000 }).catch(() => { });
+      st = await ensurePlaying(page, +process.env.JARVIS_YT_PLAY_MS || 15000);
+    } else if (action === 'resume') st = await ensurePlaying(page, +process.env.JARVIS_YT_PLAY_MS || 15000);
+    else { const a = await look(); await page.waitForTimeout(800); const b = await look(); st = { ...b, playing: !!a && !!b && !b.paused && b.t > a.t }; }
+    return { status: 'done', summary: 'media ' + action, playing: !!st.playing, ad: !!st.ad, title: st.title, position: st.t != null ? Math.round(st.t) : null, duration: st.d ? Math.round(st.d) : null, page: await settle() };
+  });
+
   const read = async (maxChars = 4000) => {
     const page = await browser.ensurePage();
     const text = await page.evaluate(() => (document.body?.innerText || '').replace(/\n{3,}/g, '\n\n').trim()).catch(() => '');
@@ -257,6 +359,8 @@ export async function createAgent(opts = {}) {
         if (url.pathname === '/agent/confirm') return json(res, 200, await confirm(b.accept !== false));
         if (url.pathname === '/agent/goto') return json(res, 200, await goto(b.url));
         if (url.pathname === '/agent/pick') return json(res, 200, await pick(b.n));
+        if (url.pathname === '/agent/play') return json(res, 200, await play(b.query));
+        if (url.pathname === '/agent/media') return json(res, 200, await media(String(b.action || 'status')));
       }
       json(res, 404, { error: 'nie ma takiej ścieżki' });
     } catch (e) { json(res, e.status || 500, { error: String(e.message || e) }); }

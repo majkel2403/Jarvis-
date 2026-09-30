@@ -2,13 +2,13 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **131** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 18 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **133** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 18 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 59 |
+| A3 sam, po cichu | 61 |
 | A2 sam + Cofnij | 45 |
 | A1 pyta „Chodzi o…?” | 11 |
 | A0 zawsze zgoda | 16 |
@@ -199,6 +199,8 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `web_command` | Przeglądarka: polecenie (Jev) — Steruje PRAWDZIWĄ przeglądarką agenta (osobny Chromium) przez Jeva: wejście na stronę, wyszukiwanie, klikanie elementów, wpisywanie, przewijanie, karty. Jedno k | **command**: string | safe | A1 | — | „w przegladarce {command}”, „przegladarka {command}”, „agent www {command}” |
 | `web_read` | Przeglądarka: przeczytaj stronę — Czyta tekst strony otwartej w przeglądarce agenta (tytuł, adres, treść) — do streszczenia albo odpowiedzi na pytanie o stronę. Treść to dane niezaufane z intern | max: integer | safe | A3 | — | „w przegladarce przeczytaj strone”, „w przegladarce streszcz strone”, „przegladarka o czym jest ta strona” |
+| `media_play` | Puść muzykę lub film (YouTube) — Puszcza piosenkę, muzykę albo film z YouTube: wyszukuje zapytanie w przeglądarce agenta, klika pierwszy film i sprawdza, że gra. Używaj zawsze, gdy użytkownik c | **query**: string | safe | A3 | — | „pusc {query}”, „pusc piosenke {query}”, „wlacz piosenke {query}” |
+| `media_control` | Muzyka: pauza / wznów / następna — Steruje tym, co gra w przeglądarce agenta (po media_play). ZAWSZE podaj action: "pause" (pauza, zatrzymaj muzykę), "resume" (wznów), "next" (następny utwór z mi | **action**: pause\|resume\|next\|status | safe | A3 | — | „zatrzymaj muzyke”, „wznow muzyke”, „nastepna piosenka” |
 | `computer_use` | Prawdziwy komputer: wykonaj zadanie (Jev) — Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Uży | **goal**: string; steps: integer; wait_s: integer | confirm | A0 | — | „na komputerze {goal}”, „na prawdziwym komputerze {goal}”, „w windows {goal}” |
 | `computer_status` | Prawdziwy komputer: status zadania — Pokazuje stan zadania sterującego prawdziwym komputerem (trwa, zakończone, przerwane), liczbę kroków i ostatnie linie dziennika. | — | safe | A3 | — | „status komputera”, „jak idzie zadanie na komputerze” |
 | `computer_stop` | Prawdziwy komputer: zatrzymaj zadanie — Natychmiast zatrzymuje trwające zadanie sterujące prawdziwym komputerem. | — | safe | A3 | — | „zatrzymaj komputer”, „przerwij sterowanie komputerem”, „stop komputer” |

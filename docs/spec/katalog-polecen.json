@@ -5225,6 +5225,90 @@
   "needsConfirmText": false
  },
  {
+  "id": "media_play",
+  "group": "Internet i komputer",
+  "label": "Puść muzykę lub film (YouTube)",
+  "description": "Puszcza piosenkę, muzykę albo film z YouTube: wyszukuje zapytanie w przeglądarce agenta, klika pierwszy film i sprawdza, że gra. Używaj zawsze, gdy użytkownik chce czegoś posłuchać lub obejrzeć („puść…”, „włącz piosenkę…”, „otwórz youtube i puść…”) — jedno wywołanie zamiast kilku web_command. query = tytuł i/lub wykonawca, dosłownie jak podał użytkownik.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string",
+     "maxLength": 200,
+     "description": "co puścić: tytuł, wykonawca"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  },
+  "required": [
+   "query"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "web"
+  ],
+  "hermes": true,
+  "examples": [
+   "pusc {query}",
+   "pusc piosenke {query}",
+   "wlacz piosenke {query}",
+   "zagraj {query}",
+   "pusc na youtube {query}",
+   "otworz youtube i pusc {query}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "media_control",
+  "group": "Internet i komputer",
+  "label": "Muzyka: pauza / wznów / następna",
+  "description": "Steruje tym, co gra w przeglądarce agenta (po media_play). ZAWSZE podaj action: \"pause\" (pauza, zatrzymaj muzykę), \"resume\" (wznów), \"next\" (następny utwór z miksu YouTube), \"status\" (co teraz gra). Przykład: {\"action\": \"pause\"}.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "pause",
+      "resume",
+      "next",
+      "status"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  "required": [
+   "action"
+  ],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "web"
+  ],
+  "hermes": true,
+  "examples": [
+   "zatrzymaj muzyke",
+   "wznow muzyke",
+   "nastepna piosenka",
+   "co teraz gra"
+  ],
+  "needsConfirmText": false
+ },
+ {
   "id": "computer_use",
   "group": "Internet i komputer",
   "label": "Prawdziwy komputer: wykonaj zadanie (Jev)",

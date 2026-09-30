@@ -154,6 +154,9 @@ async def main():
                         rr = (await hc4.post(f"{BASE}/bridge/tools", json={"tools": extra}, headers={"X-Bridge-Token": TOKEN})).json()
                         check("POST /bridge/tools aktualizuje listę", rr.get("changed") is True and rr.get("tools") == len(extra), json.dumps(rr))
                         check("POST /bridge/tools bez tokenu = 401", (await hc4.post(f"{BASE}/bridge/tools", json={"tools": extra})).status_code == 401)
+                        old_tab = [t for t in extra if t["name"] != expected[0]["name"]]   # karta ze starym kodem: brakuje narzędzia z aktualnej migawki
+                        rs = (await hc4.post(f"{BASE}/bridge/tools", json={"tools": old_tab}, headers={"X-Bridge-Token": TOKEN})).json()
+                        check("stara karta nie wypiera nowych narzędzi (stale, lista bez zmian)", rs.get("stale") is True and rs.get("changed") is False and rs.get("tools") == len(extra) and expected[0]["name"] in rs.get("missing", []), json.dumps(rs)[:200])
                     check("migawka zapisana na dysk", any(t["name"] == "boom" for t in json.loads(tools_copy.read_text(encoding="utf-8"))))
                     r = await session.call_tool("boom", {})
                     check("błąd z pulpitu -> is_error z kodem", r.is_error and json.loads(r.content[0].text).get("ok") is False, str(r))

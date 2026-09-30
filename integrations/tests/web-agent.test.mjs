@@ -14,7 +14,28 @@ import { makeFakeDecide } from '../web/fake-jev.mjs';
 const VENDOR = process.env.JARVIS_JEV_BROWSER || path.join(os.homedir(), '.jarvis-os', 'vendor', 'jev-voice-browser');
 const HAVE = fs.existsSync(path.join(VENDOR, 'src', 'controller.js')) && fs.existsSync(path.join(VENDOR, 'node_modules'));
 const TOKEN = 'test-token-xyz';
-let site, agent, base, clicks = 0, searched = [];
+let site, agent, base, clicks = 0, searched = [], ytQueries = [];
+
+/* udawany YouTube: ekran zgody (UE) → wyniki z reklamą na pierwszym miejscu → strona filmu z odtwarzaczem */
+const YT_CONSENT = `<!doctype html><title>Zanim przejdziesz do YouTube</title><form action="/yt/consent" method="post"><input type="hidden" name="continue" value="{{CONT}}"><button>Zaakceptuj wszystko</button><button>Odrzuć wszystko</button></form>`;
+const ytResults = q => q === 'zawieszony' ? '<!doctype html><title>YouTube</title><ytd-video-renderer><a id="video-title" title="Zawieszony" href="/yt/watch?v=stuck">Zawieszony</a></ytd-video-renderer>' : q === 'brak-wynikow' ? '<!doctype html><title>YouTube</title><p>Brak wyników</p>' : `<!doctype html><title>${q} - YouTube</title>
+<ytd-ad-slot-renderer><a id="video-title" title="REKLAMA" href="/yt/watch?v=ad">Reklama</a></ytd-ad-slot-renderer>
+<ytd-video-renderer><a id="video-title" title="Dawid Podsiadło - Małomiasteczkowy" href="/yt/watch?v=vid1">Dawid Podsiadło - Małomiasteczkowy</a></ytd-video-renderer>
+<ytd-video-renderer><a id="video-title" title="Inny film" href="/yt/watch?v=vid2">Inny film</a></ytd-video-renderer>`;
+const YT_TITLES = { vid1: 'Dawid Podsiadło - Małomiasteczkowy', vid2: 'Inny film' };
+/* odtwarzacz: czas płynie tylko podczas grania (agent sprawdza, że currentTime rośnie); ?stuck=1 — film, który nigdy nie ruszy */
+const ytWatch = id => `<!doctype html><title>${YT_TITLES[id] || 'Film'} - YouTube</title><h1 class="title">${YT_TITLES[id] || 'Film'}</h1><div id="movie_player" class="html5-video-player"><video></video></div><script>
+const v = document.querySelector('video'); let on = false, acc = 0, since = 0; const now = () => performance.now() / 1000;
+Object.defineProperty(v, 'paused', { get: () => !on }); Object.defineProperty(v, 'duration', { get: () => 200 });
+Object.defineProperty(v, 'currentTime', { get: () => acc + (on ? now() - since : 0) });
+v.play = () => { if (!on && !${id === 'stuck'}) { on = true; since = now(); } return Promise.resolve(); }; v.pause = () => { if (on) { acc += now() - since; on = false; } };</script>`;
+function youtube(req, res, u) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  if (u.pathname === '/yt/consent') { let s = ''; req.on('data', c => s += c); req.on('end', () => { res.writeHead(303, { 'Set-Cookie': 'SOCS=ok; Path=/', Location: new URLSearchParams(s).get('continue') || '/yt/' }); res.end(); }); return; }
+  if (!/SOCS=ok/.test(req.headers.cookie || '')) { res.end(YT_CONSENT.replace('{{CONT}}', u.pathname + u.search)); return; }
+  if (u.pathname === '/yt/results') { const q = u.searchParams.get('search_query'); ytQueries.push(q); res.end(ytResults(q)); return; }
+  res.end(ytWatch(u.searchParams.get('v')));
+}
 
 const PAGE = `<!doctype html><title>Sklep testowy</title><h1>Sklep testowy</h1>
 <a href="/a">First result</a> <a href="/b">Second result</a>
@@ -27,12 +48,14 @@ before(async () => {
   if (!HAVE) return;
   site = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
+    if (u.pathname.startsWith('/yt/')) return youtube(req, res, u);
     if (u.pathname === '/buy') { clicks++; res.end('ok'); return; }
     if (u.pathname === '/search') searched.push(u.searchParams.get('q'));
     res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(u.pathname === '/' ? PAGE : `<title>${u.pathname}</title><p>Podstrona ${u.pathname} ${u.search}</p>`);
   });
   await new Promise(r => site.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${site.address().port}`;
+  process.env.JARVIS_YT_BASE = base + '/yt'; process.env.JARVIS_YT_WAIT_MS = '1500'; process.env.JARVIS_YT_PLAY_MS = '2500';
   const jev = await import(pathToFileURL(path.join(VENDOR, 'src', 'jev.js')).href);
   agent = await createAgent({ headless: true, port: 0, token: TOKEN, profileDir: fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-web-')), decideFn: makeFakeDecide(jev.buildRequest), log: () => { } });
 });
@@ -156,6 +179,23 @@ test('nie-polecenie kończy się od razu (bez pętli zapytań do modelu)', skip,
   assert.ok(Date.now() - t0 < 3000);
   await new Promise(r => setTimeout(r, 1500));
   assert.equal(agent.controller.stats.calls - before, 1, 'dokładnie jedno wywołanie modelu, bez ponawiania w tle');
+});
+
+test('play: wyszukanie → ekran zgody na cookies → pierwszy film (nie reklama) → gra', skip, async () => {
+  const r = (await call('POST', '/agent/play', { query: 'Małomiasteczkowy' })).body;
+  assert.equal(r.status, 'done', JSON.stringify(r));
+  assert.equal(r.playing, true, 'film gra');
+  assert.equal(r.consent, true, 'przeszedł ekran zgody');
+  assert.equal(r.title, 'Dawid Podsiadło - Małomiasteczkowy', 'kliknięty pierwszy prawdziwy film, nie reklama');
+  assert.match(r.page.url, /\/watch\?v=vid1$/);
+  assert.equal(ytQueries.at(-1), 'Małomiasteczkowy', 'zapytanie dosłownie, z polskimi znakami');
+  const m = async action => (await call('POST', '/agent/media', { action })).body;
+  assert.equal((await m('pause')).playing, false, 'pauza');
+  assert.equal((await m('resume')).playing, true, 'wznowienie');
+  const s = await m('status'); assert.equal(s.title, 'Dawid Podsiadło - Małomiasteczkowy', 'tytuł z odtwarzacza'); assert.equal(s.playing, true, 'czas filmu płynie');
+  assert.equal((await call('POST', '/agent/play', { query: 'zawieszony' })).body.status, 'failed', 'film, który nie rusza, to porażka — nie „gra”');
+  assert.equal((await call('POST', '/agent/play', { query: 'brak-wynikow' })).body.status, 'failed', 'brak filmów = czytelna porażka');
+  assert.equal((await m('pause')).status, 'failed', 'bez odtwarzacza: nic nie gra');
 });
 
 test('błąd modelu (zły klucz, brak sieci) nie zabija agenta', skip, async () => {

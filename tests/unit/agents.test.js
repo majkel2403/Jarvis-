@@ -271,6 +271,58 @@ test('jawny prefiks omija sędziego Jev: „w przeglądarce wróć” i „na ko
   assert.equal(runs.length, before + 0, 'bez prefiksu nic nie trafia do agentów');
 });
 
+test('media_play: „puść / włącz piosenkę / otwórz youtube i puść” to jedno polecenie z dosłownym zapytaniem', () => {
+  const { J } = setup();
+  const top = s => J.registry.match(s)[0];
+  const cases = {
+    'otwórz youtube i puść piosenkę Dawid Podsiadło Małomiasteczkowy': 'Dawid Podsiadło Małomiasteczkowy',
+    'Otwórz YouTube i włącz Małomiasteczkowy.': 'Małomiasteczkowy',
+    'puść na youtube Bohemian Rhapsody': 'Bohemian Rhapsody',
+    'na youtube puść lo-fi do nauki': 'lo-fi do nauki',
+    'włącz piosenkę Kwiat Jabłoni Dziś późno pójdę spać na youtube': 'Kwiat Jabłoni Dziś późno pójdę spać',
+    'puść mi Queen': 'Queen',
+    'zagraj teledysk Sanah Szampan': 'Sanah Szampan',
+    'włącz Małomiasteczkowy na yt': 'Małomiasteczkowy'
+  };
+  for (const [s, q] of Object.entries(cases)) { const m = top(s); assert.equal(m?.id, 'media_play', s); assert.equal(m.args.query, q, s); }
+  for (const s of ['włącz dźwięk', 'włącz tryb skupienia', 'otwórz youtube', 'otwórz notatnik']) assert.notEqual(top(s)?.id, 'media_play', s);
+  assert.equal(J.policy.level('media_play', { query: 'x' }), 'A3', 'puszczanie muzyki bez pytania');
+  assert.equal(J.flow.parserSure('otwórz youtube i puść Małomiasteczkowy', top('otwórz youtube i puść Małomiasteczkowy')), true, 'spójnik „i” nie dzieli tego zdania');
+  assert.equal(J.flow.parserSure('otwórz notatnik i ustaw minutnik 5 minut', top('otwórz notatnik i ustaw minutnik 5 minut')), false, 'inne łańcuchy dalej idą przez Jeva');
+  assert.ok(J.registry.tools().map(t => t.function.name).includes('media_play'), 'Hermes widzi media_play');
+});
+
+test('media_play: agent puszcza film; bez mostu otwiera wyniki YouTube; błąd agenta jest czytelny', async () => {
+  const { J, calls } = setup({ 'POST /agents/web/play': b => ({ status: 'done', title: 'Dawid Podsiadło - Małomiasteczkowy', playing: true, ad: b.query === 'z reklamą', page: { url: 'https://www.youtube.com/watch?v=abc' }, ms: 4100 }) });
+  let r = await J.registry.run('media_play', { query: 'Małomiasteczkowy' }, { source: 'local' });
+  assert.equal(r.ok, true, r.text); assert.match(r.text, /Gra: „Dawid Podsiadło - Małomiasteczkowy”/);
+  assert.deepEqual(calls.at(-1).body, { query: 'Małomiasteczkowy' });
+  r = await J.registry.run('media_play', { query: 'z reklamą' }, { source: 'local' }); assert.match(r.text, /reklama/);
+  const bad = setup({ 'POST /agents/web/play': { status: 'failed', detail: 'Nie znalazłem żadnego filmu w wynikach YouTube.' } });
+  r = await bad.J.registry.run('media_play', { query: 'xyz' }, { source: 'local' });
+  assert.equal(r.ok, false); assert.match(r.text, /Nie znalazłem żadnego filmu/);
+  const off = setup({}, { token: '' });   // brak mostu: wyniki YouTube w nowej karcie albo link w czacie
+  r = await off.J.registry.run('media_play', { query: 'Małomiasteczkowy' }, { source: 'local' });
+  assert.equal(r.ok, true, r.text); assert.match(r.text, /Most jest wyłączony/); assert.match(r.data.url, /results\?search_query=Ma%C5%82omiasteczkowy/);
+});
+
+test('media_control: pełne zwroty zawsze; gołe „pauza / następna” tylko gdy coś gra; „stop / cisza” zostają przy swoich poleceniach', async () => {
+  const { J, calls } = setup({ 'POST /agents/web/play': { status: 'done', title: 'Utwór', playing: true, page: {} }, 'POST /agents/web/media': b => ({ status: 'done', playing: b.action !== 'pause', title: 'Utwór - YouTube'.replace(/ - YouTube$/, '') }) });
+  const top = s => J.registry.match(s)[0]?.id;
+  for (const s of ['zatrzymaj muzykę', 'wyłącz muzykę', 'następna piosenka', 'pomiń utwór', 'co teraz gra', 'graj dalej']) assert.equal(top(s), 'media_control', s);
+  for (const s of ['pauza', 'wznów', 'następna', 'zatrzymaj']) assert.notEqual(top(s), 'media_control', 'nic nie gra: ' + s);
+  assert.equal(top('stop'), 'plan_control'); assert.equal(top('cisza'), 'sound_toggle'); assert.equal(top('zatrzymaj minutnik'), 'timer_control');
+  await J.registry.run('media_play', { query: 'x' }, { source: 'local' });
+  for (const s of ['pauza', 'wznów', 'następna', 'zatrzymaj']) assert.equal(top(s), 'media_control', 'gra muzyka: ' + s);
+  assert.equal(top('stop'), 'plan_control', '„stop” zawsze zatrzymuje plan Jarvisa');
+  const r = await J.registry.run('media_control', { action: 'pause' }, { source: 'local' });
+  assert.equal(r.ok, true); assert.match(r.text, /^Pauza: „Utwór”/); assert.deepEqual(calls.at(-1).body, { action: 'pause' });
+  assert.equal(top('wznów'), 'media_control', 'po pauzie „wznów” dalej znaczy muzykę');
+  J.userRoutines = { ...(J.userRoutines || {}), running: true };   // plan „aktywny” (jak w trakcie obsługi wiadomości) — muzyka i tak wygrywa gołe słowa
+  assert.equal(top('pauza'), 'media_control', '„pauza” przy grającej muzyce to muzyka, nie plan');
+  assert.equal(top('wstrzymaj zadanie'), 'plan_control', 'plan wstrzymuje się pełnym zwrotem');
+});
+
 test('ustawienia: token mostu nie trafia do kopii zapasowej', async () => {
   const { J } = setup();
   J.state.settings.bridgeToken = 'sekretny-token';

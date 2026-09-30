@@ -119,7 +119,7 @@ const flow = J.flow = {
   parserSure(text, top) {
     if (!top || !top.cmd) return false;
     if (P.level(top.cmd, top.args) !== 'A3' || top.score < 100) return false;
-    if (CONJ.test(' ' + norm(text) + ' ') || /,/.test(text)) return false;   // lista rzeczy po przecinku = kilka poleceń
+    if (!top.cmd.spansConj && (CONJ.test(' ' + norm(text) + ' ') || /,/.test(text))) return false;   // lista rzeczy po przecinku = kilka poleceń (chyba że polecenie samo obejmuje całe zdanie, np. „otwórz youtube i puść X”)
     if (top.cmd.sure && !top.cmd.sure(top.args)) return false;   // polecenie samo wie, kiedy argumenty wyglądają na pewne
     return missingRequired(top.cmd, top.args).length === 0;
   },

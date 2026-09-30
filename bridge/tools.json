@@ -2593,6 +2593,44 @@
   }
  },
  {
+  "name": "media_play",
+  "description": "Puszcza piosenkę, muzykę albo film z YouTube: wyszukuje zapytanie w przeglądarce agenta, klika pierwszy film i sprawdza, że gra. Używaj zawsze, gdy użytkownik chce czegoś posłuchać lub obejrzeć („puść…”, „włącz piosenkę…”, „otwórz youtube i puść…”) — jedno wywołanie zamiast kilku web_command. query = tytuł i/lub wykonawca, dosłownie jak podał użytkownik. Np.: „pusc query”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string",
+     "maxLength": 200,
+     "description": "co puścić: tytuł, wykonawca"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  }
+ },
+ {
+  "name": "media_control",
+  "description": "Steruje tym, co gra w przeglądarce agenta (po media_play). ZAWSZE podaj action: \"pause\" (pauza, zatrzymaj muzykę), \"resume\" (wznów), \"next\" (następny utwór z miksu YouTube), \"status\" (co teraz gra). Przykład: {\"action\": \"pause\"}. Np.: „zatrzymaj muzyke”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "pause",
+      "resume",
+      "next",
+      "status"
+     ]
+    }
+   },
+   "required": [
+    "action"
+   ]
+  }
+ },
+ {
   "name": "computer_use",
   "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko (po polsku lub angielsku), np. \"open Notepad and type hello\". Potrafi: uruchomić program z listy (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia), kliknąć WIDOCZNY element, wpisać tekst w pole, przewinąć. Nie potrafi: skrótów klawiszowych, menu Start ani paska zadań, elementów niewidocznych na ekranie; nie nadpisze cudzego tekstu w edytorze. Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund (pisanie tekstu ~8 s); przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika. Np.: „na komputerze goal”.",
   "parameters": {

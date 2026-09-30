@@ -174,6 +174,18 @@ Badanie na prawdziwej Wikipedii (ten sam scenariusz: otwórz → szukaj → klik
 | Chrome ma pamięć podręczną „wstecz/dalej”, na którą `goBack` czekał 15 s | `--disable-features=BackForwardCache` (Playwright robi tak w swoim Chromium) | „wstecz” 18 s → 1 s |
 | Wynik i następne polecenie widziały stronę sprzed wysłania formularza | czekanie na nawigację po Enter | poprawny adres i treść |
 
+### Muzyka i filmy: „puść …” (`media_play`, `media_control`)
+„Otwórz youtube i puść piosenkę X” działało słabo: Jev uznawał zdanie za wieloetapowe, a bez Hermesa silnik lokalny ciął je na „i” i otwierał tylko stronę główną YouTube. Teraz jedno polecenie obejmuje całe zdanie („puść X”, „włącz piosenkę X na youtube”, „otwórz youtube i puść X”) i wykonuje się od razu, bez Jeva i Hermesa. Agent WWW sam wyszukuje, klika pierwszy film i sprawdza, że **czas filmu naprawdę płynie**. Dalej: „pauza”, „wznów”, „następna piosenka”, „co teraz gra”, „zatrzymaj muzykę”. Gołe „pauza/następna” znaczą muzykę tylko wtedy, gdy coś gra, a „stop” zawsze zatrzymuje plan Jarvisa. Hermes ma te same narzędzia i wskazówkę w `SOUL.md`.
+
+| Problem (sprawdzony na prawdziwym YouTube) | Poprawka |
+|---|---|
+| Okno „Zanim przejdziesz do YouTube” na stronie zasłania odtwarzacz i przechwytuje kliknięcia; przyciski mają nazwę dostępności inną niż napis | przycisk „Odrzuć wszystko” wyszukiwany po widocznym tekście, na wynikach i na stronie filmu |
+| `video.play()` YouTube od razu cofa do pauzy (szczególnie reklamę) | sterowanie API odtwarzacza: `playVideo` / `pauseVideo` / `nextVideo` |
+| Brak pauzy nie znaczy, że gra (reklama potrafi stanąć) | „gra” = czas filmu rośnie; zawieszony odtwarzacz: prawdziwe kliknięcie, potem jedno przeładowanie |
+| Stara karta Jarvisa po restarcie mostu wypierała nowe narzędzia (Hermes ich nie widział) i nadpisywała `tools.json` | most odrzuca listę bez narzędzi z aktualnego kodu, a karta sama się odświeża |
+
+Pomiar: 10/10 piosenek gra, ~7 s na polecenie (pierwsze z uruchomieniem Chrome ~10–15 s), pauza/wznów/następna 0,4–2,5 s.
+
 ### Rozszerzenia dla Windows (`integrations/computer/jarvis_clicker.py`)
 Wynik badań programu autora na Windows 11 (polski system, 125% skalowania). Dodatek nakłada poprawki w locie, bez zmian w kodzie autora (43 testy: `uv run --project %USERPROFILE%\.jarvis-os\vendor\typesafe-computer-use python -m pytest integrations/computer`):
 
