@@ -58,10 +58,22 @@ def has_key() -> bool:
     return bool(e.get("TYPESAFE_API_KEY") or e.get("JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY"))
 
 
-def has_writer() -> bool:
-    """Model pomocniczy sterowania komputerem (wpisywanie tekstu, odpowiedź końcowa) — nigdy przez OpenRouter, więc osobny od klucza Jeva."""
+def openrouter_key() -> str:
+    """Klucz OpenRouter z jev.env (ten sam co dla Jeva), albo pusty."""
     e = jev_env()
-    return bool(e.get("CLICKER_WRITER_BASE_URL") or e.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
+    return e.get("TYPESAFE_API_KEY", "") if "openrouter" in e.get("TYPESAFE_BASE_URL", "") else ""
+
+
+def writer_via_proxy() -> bool:
+    """Model pomocniczy idzie przez pośrednika (bridge/writer_proxy.py): darmowe modele OpenRouter z łańcuchem awaryjnym, na końcu Hermes.
+    JARVIS_WRITER=direct wraca do bezpośredniej konfiguracji CLICKER_WRITER_* z jev.env."""
+    return os.environ.get("JARVIS_WRITER", "proxy") != "direct" and bool(openrouter_key())
+
+
+def has_writer() -> bool:
+    """Model pomocniczy sterowania komputerem (wpisywanie tekstu, odpowiedź końcowa): pośrednik, albo jawnie skonfigurowany w jev.env."""
+    e = jev_env()
+    return writer_via_proxy() or bool(e.get("CLICKER_WRITER_BASE_URL") or e.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
 
 def default_browser() -> str | None:
@@ -234,7 +246,8 @@ class WebAgent:
 # ----------------------------------------------------------------------------- sterowanie komputerem
 
 class ComputerAgent:
-    def __init__(self):
+    def __init__(self, token: str = ""):
+        self.token = token
         self.run: dict | None = None
         self._proc: asyncio.subprocess.Process | None = None
         self._log: deque[str] = deque(maxlen=300)
@@ -286,6 +299,10 @@ class ComputerAgent:
         env = dict(os.environ)
         env.update(jev_env())
         env.setdefault("CLICKER_OCR_LANGUAGE", "pl")
+        if writer_via_proxy() and self.token:   # model pomocniczy: pośrednik na moście (darmowe modele → Hermes), bez zrzutów ekranu
+            port = os.environ.get("JARVIS_BRIDGE_PORT", "8651")
+            env.update(CLICKER_WRITER_API="openai", CLICKER_WRITER_BASE_URL=f"http://127.0.0.1:{port}/writer/v1", CLICKER_WRITER_API_KEY=self.token,
+                       CLICKER_WRITER_MODEL="writer", CLICKER_ANSWER_MODEL="writer", CLICKER_WRITER_VISION="false")
         browser = default_browser()
         if browser:
             env.setdefault("CLICKER_BROWSER", browser)   # domyślnie program zakłada „Google Chrome”, a użytkownik może mieć np. Comet
@@ -357,7 +374,7 @@ class ComputerAgent:
 class Agents:
     def __init__(self, token: str):
         self.web = WebAgent(token)
-        self.computer = ComputerAgent()
+        self.computer = ComputerAgent(token)
 
     def shutdown(self) -> None:
         self.web.stop()

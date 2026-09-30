@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
+import writer_proxy           # bridge/writer_proxy.py: model pomocniczy (darmowe modele → Hermes)
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -360,6 +361,26 @@ async def agents_computer(request: Request) -> Response:
     except Exception as e:  # noqa: BLE001
         return agent_error(request, e)
     return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+
+
+@mcp.custom_route("/writer/v1/chat/completions", methods=["POST"])
+async def writer_completions(request: Request) -> Response:
+    """Model pomocniczy clickera (OpenAI-compatible): darmowe modele OpenRouter z łańcuchem awaryjnym, na końcu Hermes. Tylko z tokenem mostu."""
+    auth = request.headers.get("authorization", "")
+    if not (auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], TOKEN)) and not authorized(request):
+        return JSONResponse({"error": {"message": "unauthorized"}}, status_code=401)
+    try:
+        body = await request.json()
+        if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+            raise ValueError("brak messages")
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": {"message": "bad json"}}, status_code=400)
+    try:
+        reply, used = await writer_proxy.complete(body, agents_mod.openrouter_key(), log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr))
+    except RuntimeError as e:
+        return JSONResponse({"error": {"message": str(e)}}, status_code=502)
+    reply["x_jarvis_model"] = used
+    return JSONResponse(reply)
 
 
 class BearerGate:
