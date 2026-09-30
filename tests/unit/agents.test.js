@@ -242,6 +242,9 @@ test('computer_status / computer_stop / agents_status', async () => {
   let r = await J.registry.run('computer_status', {}, { source: 'hermes' }); assert.equal(r.ok, true); assert.match(r.text, /running po 4 s/);
   r = await J.registry.run('computer_stop', {}, { source: 'hermes' }); assert.match(r.text, /Zatrzymano/);
   r = await J.registry.run('agents_status', {}, { source: 'hermes' }); assert.match(r.text, /Klucz Jeva: jest/); assert.match(r.text, /agent WWW: działa/); assert.match(r.text, /gotowe/);
+  assert.match(r.text, /BEZ modelu pomocniczego/, 'bez writera komputer tylko klika — trzeba to powiedzieć');
+  const w = setup({ 'GET /agents/status': { key: true, web: { up: true, autostart: true }, computer: { installed: true, running: false, writer: true } } });
+  assert.doesNotMatch((await w.J.registry.run('agents_status', {}, { source: 'hermes' })).text, /BEZ modelu/);
   const nk = setup({ 'GET /agents/status': { key: false, web: { up: false, autostart: true }, computer: { installed: false, running: false } } });
   r = await nk.J.registry.run('agents_status', {}, { source: 'hermes' }); assert.match(r.text, /BRAK/); assert.match(r.text, /setup\.ps1/);
   const idle = setup({ 'GET /agents/computer/status': { state: 'idle' } });

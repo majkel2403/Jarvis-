@@ -181,7 +181,7 @@ R.add({ id: 'agents_status', group: 'Internet i komputer', label: 'Agenci: statu
   args: { type: 'object', properties: {} }, examples: ['status agentow', 'czy agent www dziala', 'czy moge sterowac komputerem'],
   run: guard(async (_, { ok }) => {
     const r = await api('/agents/status', { timeout: 15000 });
-    return ok(r, 'Klucz Jeva: ' + (r.key ? 'jest' : 'BRAK (integrations\\set-key.ps1)') + ' · agent WWW: ' + (r.web.up ? 'działa' : r.web.autostart ? 'uruchomi się przy pierwszym użyciu' : 'wyłączony') + ' · sterowanie komputerem: ' + (r.computer.installed ? (r.computer.running ? 'zadanie trwa' : 'gotowe') : 'nie zainstalowane (integrations\\setup.ps1)') + '.');
+    return ok(r, 'Klucz Jeva: ' + (r.key ? 'jest' : 'BRAK (integrations\\set-key.ps1)') + ' · agent WWW: ' + (r.web.up ? 'działa' : r.web.autostart ? 'uruchomi się przy pierwszym użyciu' : 'wyłączony') + ' · sterowanie komputerem: ' + (r.computer.installed ? (r.computer.running ? 'zadanie trwa' : 'gotowe') + (r.computer.writer ? '' : ', ale BEZ modelu pomocniczego — kliknie, lecz nie wpisze tekstu') : 'nie zainstalowane (integrations\\setup.ps1)') + '.');
   }) });
 
 /* poziomy autonomii (js/jev-policy.js): odczyty i zatrzymanie po cichu; polecenia z pytaniem/zgodą zostają na domyślnym A1/A0 */

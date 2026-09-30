@@ -58,6 +58,12 @@ def has_key() -> bool:
     return bool(e.get("TYPESAFE_API_KEY") or e.get("JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY"))
 
 
+def has_writer() -> bool:
+    """Model pomocniczy sterowania komputerem (wpisywanie tekstu, odpowiedź końcowa) — nigdy przez OpenRouter, więc osobny od klucza Jeva."""
+    e = jev_env()
+    return bool(e.get("CLICKER_WRITER_BASE_URL") or e.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
+
+
 def kill_tree(pid: int) -> None:
     """Windows: zabij proces z potomkami (uv → python), inaczej zostaje sierota sterująca myszą."""
     if os.name == "nt":
@@ -336,4 +342,4 @@ class Agents:
     async def status(self) -> dict:
         web = self.web.status()
         web["up"] = await self.web.up()
-        return {"key": has_key(), "web": web, "computer": {"installed": self.computer.installed(), "running": self.computer.running()}}
+        return {"key": has_key(), "web": web, "computer": {"installed": self.computer.installed(), "running": self.computer.running(), "writer": has_writer()}}

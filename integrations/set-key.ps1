@@ -7,8 +7,11 @@
   plik czytają most, agent WWW i sterowanie komputerem. Opcjonalnie dopisuje ten sam klucz do config.local.js
   (ignorowany przez git), żeby działał też sędzia Jev w samym Jarvis OS.
 
-  -Provider openrouter  (domyślnie) jeden klucz z openrouter.ai/keys obsługuje Jeva ORAZ modele pomocnicze do wpisywania tekstu
-  -Provider typesafe    klucz z console.typesafe.ai/keys (tylko Jev; do wpisywania tekstu podaj osobno klucz Anthropic albo OpenRouter)
+  ZASADA: przez OpenRouter idzie WYŁĄCZNIE Jev (typesafe/jev-1.13). Modele pomocnicze do wpisywania tekstu (writer) NIGDY nie idą
+  przez OpenRouter — podajesz je osobno (klucz Anthropic bezpośrednio) albo zostawiasz bez nich: wtedy komputer tylko klika.
+
+  -Provider openrouter  (domyślnie) klucz z openrouter.ai/keys — Jev (agent WWW, sterowanie komputerem, sędzia w Jarvisie)
+  -Provider typesafe    klucz z console.typesafe.ai/keys — Jev bezpośrednio
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File integrations\set-key.ps1
 #>
@@ -28,15 +31,12 @@ if ($Provider -eq 'openrouter' -and $key -notmatch '^sk-or-') { Write-Warning 'K
 $lines = @('# Jarvis OS — klucz i ustawienia Jeva dla agentów. Plik lokalny, nie commituj, nie wysyłaj.', "# dostawca: $Provider ($(Get-Date -Format 'yyyy-MM-dd'))")
 if ($Provider -eq 'openrouter') {
   $lines += @(
-    "TYPESAFE_API_KEY=$key", 'TYPESAFE_BASE_URL=https://openrouter.ai/api', 'TYPESAFE_DEFAULT_MODEL=typesafe/jev-1.13', 'JEV_MODEL=typesafe/jev-1.13',
-    '# modele pomocnicze sterowania komputerem (wpisywanie tekstu, odpowiedź końcowa) — przez OpenRouter tym samym kluczem',
-    'CLICKER_WRITER_API=openai', 'CLICKER_WRITER_BASE_URL=https://openrouter.ai/api/v1', "CLICKER_WRITER_API_KEY=$key",
-    'CLICKER_WRITER_MODEL=anthropic/claude-haiku-4.5', 'CLICKER_ANSWER_MODEL=anthropic/claude-sonnet-5')
+    "TYPESAFE_API_KEY=$key", 'TYPESAFE_BASE_URL=https://openrouter.ai/api', 'TYPESAFE_DEFAULT_MODEL=typesafe/jev-1.13', 'JEV_MODEL=typesafe/jev-1.13')
 } else {
   $lines += @("TYPESAFE_API_KEY=$key")
-  $w = Ask-Secret 'Opcjonalnie: klucz Anthropic do wpisywania tekstu (Enter = pomiń; bez niego komputer nie wpisze tekstu)'
-  if ($w) { $lines += "ANTHROPIC_API_KEY=$w" }
 }
+$w = Ask-Secret 'Opcjonalnie: klucz Anthropic (bezpośrednio, NIE OpenRouter) do wpisywania tekstu przez sterowanie komputerem (Enter = pomiń; bez niego komputer tylko klika)'
+if ($w) { $lines += "ANTHROPIC_API_KEY=$w" } else { $lines += '# brak modelu pomocniczego (writer): sterowanie komputerem klika, ale nie wpisuje tekstu ani nie składa odpowiedzi końcowej' }
 $lines += @('# Windows OCR: pakiet języka systemu (angielski bywa niezainstalowany)', 'CLICKER_OCR_LANGUAGE=pl')
 
 New-Item -ItemType Directory -Force $root | Out-Null

@@ -23,7 +23,8 @@ $e = EnvFile (Join-Path $root 'jev.env')
 $key = $e['TYPESAFE_API_KEY']; if (-not $key) { $key = $e['JEV_API_KEY'] }
 if ($key) { Ok ("jev.env: klucz " + $key.Substring(0, [Math]::Min(7, $key.Length)) + '… · adres ' + $(if ($e['TYPESAFE_BASE_URL']) { $e['TYPESAFE_BASE_URL'] } else { 'api.typesafe.ai (bezpośrednio)' }) + ' · model ' + $(if ($e['JEV_MODEL']) { $e['JEV_MODEL'] } else { 'domyślny' })) }
 else { No 'brak klucza w %USERPROFILE%\.jarvis-os\jev.env' 'powershell -ExecutionPolicy Bypass -File integrations\set-key.ps1' }
-if ($e['CLICKER_WRITER_MODEL'] -or $e['ANTHROPIC_API_KEY']) { Ok 'model pomocniczy do wpisywania tekstu skonfigurowany' } else { Warn 'brak modelu pomocniczego — sterowanie komputerem nie wpisze tekstu (tylko klika)' }
+if ($e['CLICKER_WRITER_BASE_URL'] -or $e['ANTHROPIC_API_KEY']) { Ok 'model pomocniczy (writer) skonfigurowany' } else { Warn 'brak modelu pomocniczego (writer, nie przez OpenRouter) — sterowanie komputerem klika, ale nie wpisze tekstu' }
+if ($e['CLICKER_WRITER_BASE_URL'] -match 'openrouter') { No 'writer przez OpenRouter — wbrew zasadzie „OpenRouter tylko dla Jeva”' 'usuń CLICKER_WRITER_* z jev.env' }
 
 Head 'Wdrożone repozytoria'
 foreach ($n in 'jev-voice-browser', 'typesafe-computer-use') {
