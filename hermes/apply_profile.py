@@ -109,6 +109,12 @@ def main() -> int:
         old.unlink(missing_ok=True)
     cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     env_path.write_text("\n".join(env) + "\n", encoding="utf-8")
+    if soul_path.exists():
+        soul_bak = soul_path.with_name(f"SOUL.md.bak-jarvis-desktop-{time.strftime('%Y%m%d-%H%M%S')}")
+        shutil.copy2(soul_path, soul_bak)
+        print(f"  kopia zapasowa SOUL: {soul_bak.name}")
+    for old_soul in sorted(pdir.glob("SOUL.md.bak-jarvis-desktop-*"))[:-3]:
+        old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
     if key:
         print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS â†’ Ustawienia â†’ klucz API): {key}")

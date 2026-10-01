@@ -110,11 +110,19 @@ function disconnect(quiet) {
   if (!quiet) set('off');
 }
 
+/* "Budzę się" — handshake do mostu, że karta właśnie startuje. Most czeka do WAKE_WAIT na prawdziwe połączenie SSE,
+   więc pierwsze wywołanie MCP w tym oknie nie wyściga się z handshake. Bez tego → OFFLINE przy cold starcie. */
+const reportWake = () => {
+  if (!S().bridgeOn || !S().bridgeToken) return;
+  fetch(base() + '/bridge/wake', { method: 'POST', headers: auth() }).catch(() => { });
+};
+
 async function connect() {
   disconnect(true);
   if (!S().bridgeOn) return set('off');
   if (!S().bridgeToken && !(await autoPair())) { set('down'); retryTimer = setTimeout(connect, Math.min(30000, 1500 * 2 ** Math.min(retry++, 5))); return; }
   set('connecting');
+  reportWake();
   es = new EventSource(base() + '/bridge/events?token=' + encodeURIComponent(S().bridgeToken));
   es.addEventListener('hello', e => {
     retry = 0; try { const h = JSON.parse(e.data); J.bridge.tools = h.tools || []; myId = h.client || ''; } catch (er) { }
@@ -131,8 +139,12 @@ async function connect() {
   };
 }
 
-/* przełączenie ustawień → reconnect tylko gdy zmieniła się konfiguracja mostu */
+/* zgłaszamy mostowi, czy ta karta jest widoczna — polecenia trafiają do aktywnej karty, nie do „najnowszej" */
 J.on('settings', () => { const n = [S().bridgeOn, S().bridgeUrl, S().bridgeToken].join('|'); if (n !== sig) { sig = n; connect(); } });
 sig = [S().bridgeOn, S().bridgeUrl, S().bridgeToken].join('|');
+/* Wyślij /bridge/wake OD RAZU (przed setTimeout(connect, 600)) — bridge ma 4 s na SSE handshake,
+   więc już pierwsze wywołanie MCP po otwarciu karty nie wyściga się. Bez tego: race 0.4-1.2 s OFFLINE
+   na zimnym starcie Edge (drill t_93ab5e70). */
+reportWake();
 setTimeout(connect, 600);
 })();

@@ -1232,7 +1232,7 @@
  },
  {
   "name": "files_write",
-  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapisz plik name: text”.",
+  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Np.: „zapisz plik name: text”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1240,7 +1240,8 @@
      "type": "string"
     },
     "text": {
-     "type": "string"
+     "type": "string",
+     "maxLength": 500000
     },
     "append": {
      "type": "boolean"

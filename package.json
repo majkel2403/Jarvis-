@@ -1,0 +1,28 @@
+{
+  "name": "jarvis-",
+  "version": "1.0.0",
+  "description": "Wirtualne środowisko AI w przeglądarce — neonowy pulpit HUD sterowany przez agenta **Jarvis**, głosem lub tekstem.\r Czysty HTML/CSS/JS, bez builda i bez zależności: wystarczy otworzyć `index.html` albo wdrożyć na GitHub Pages.",
+  "main": "config.local.example.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/majkel2403/Jarvis-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/majkel2403/Jarvis-/issues"
+  },
+  "homepage": "https://github.com/majkel2403/Jarvis-#readme",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

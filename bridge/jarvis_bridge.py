@@ -19,8 +19,11 @@ import secrets
 import sys
 import time
 import uuid
+from collections import deque
 from pathlib import Path
+from threading import Lock
 from typing import Optional
+from urllib.parse import quote
 
 import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
 import writer_proxy           # bridge/writer_proxy.py: model pomocniczy (darmowe modele → Hermes)
@@ -32,7 +35,106 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 DEFAULT_ORIGINS = ["http://localhost:4000", "http://127.0.0.1:4000", "https://majkel2403.github.io"]
+# /bridge/pair oddaje token tylko originom lokalnym. Strona z GitHub Pages ma CORS (ORIGINS), ale token
+# wkleja się tam raz ręcznie: origin Pages jest wspólny dla wszystkich repozytoriów użytkownika, więc
+# automatyczne oddanie tokenu dałoby kontrolę nad komputerem każdej stronie na tej domenie.
+PAIR_ORIGINS = ["http://localhost:4000", "http://127.0.0.1:4000"]
+# Ochrona przed DNS rebinding; ustawiane w main() z faktycznego portu.
+# Puste = bez sprawdzania, bo testy startują build_app() bez main(), na portach losowych.
+ALLOWED_HOSTS: set[str] = set()
 CALL_TIMEOUT = float(os.environ.get("JARVIS_BRIDGE_CALL_TIMEOUT", "90"))   # zapas na potwierdzenie użytkownika (Tak / Nie)
+
+# Circuit breaker (per-tool). Chroni przed pętlą OFFLINE/INTERNAL/TIMEOUT: po N failed w T sekundach
+# kolejne wywołanie danego narzędzia dostaje jawny {code:"THROTTLED", retry_after_s} zamiast cichego odrzucenia.
+# Stan globalny: licznik per-tool; OPEN/HALF_OPEN dotyczy jednego narzędzia, nie całego mostu.
+CB_FAIL_THRESHOLD = int(os.environ.get("JARVIS_BRIDGE_CB_FAIL_THRESHOLD", "5"))   # N failed → OPEN
+CB_FAIL_WINDOW = float(os.environ.get("JARVIS_BRIDGE_CB_FAIL_WINDOW", "10"))      # okno czasowe (s)
+CB_COOLDOWN = float(os.environ.get("JARVIS_BRIDGE_CB_COOLDOWN", "15"))            # pauza przed HALF_OPEN (s)
+CB_FAILURE_CODES = {"OFFLINE", "INTERNAL", "TIMEOUT"}                             # kody zliczane jako failed
+
+
+class CircuitBreaker:
+    """Trzy stany na narzędzie: CLOSED (normalny) → OPEN (odrzuca z retry_after_s) → HALF_OPEN (jeden dozwolony
+    probe) → CLOSED po sukcesie / OPEN po failed. Progi: CB_FAIL_THRESHOLD failed w CB_FAIL_WINDOW sekund."""
+
+    __slots__ = ("_state", "_lock", "_failures", "_opened_at", "_half_open_in_flight")
+
+    def __init__(self) -> None:
+        self._state: dict[str, str] = {}                     # name → "CLOSED" | "OPEN" | "HALF_OPEN"
+        self._lock = Lock()
+        self._failures: dict[str, deque[float]] = {}        # name → ts ostatnich failed
+        self._opened_at: dict[str, float] = {}              # name → ts wejścia w OPEN
+        self._half_open_in_flight: set[str] = set()         # nazwy z aktywnym HALF_OPEN probe
+
+    def _now(self) -> float:
+        return time.monotonic()
+
+    def check(self, name: str) -> tuple[bool, float]:
+        """Zwraca (allow, retry_after_s). allow=True = wywołanie przechodzi; False = throttled z retry_after_s."""
+        with self._lock:
+            state = self._state.get(name, "CLOSED")
+            if state == "CLOSED":
+                return True, 0.0
+            if state == "OPEN":
+                opened = self._opened_at.get(name, 0.0)
+                retry_after = CB_COOLDOWN - (self._now() - opened)
+                if retry_after <= 0:
+                    # Cooldown minął → HALF_OPEN (dopuszczamy jeden probe)
+                    self._state[name] = "HALF_OPEN"
+                    self._half_open_in_flight.add(name)
+                    return True, 0.0
+                return False, retry_after
+            # HALF_OPEN: tylko jeden probe naraz (limit poniżej)
+            if name in self._half_open_in_flight:
+                return False, 1.0
+            self._half_open_in_flight.add(name)
+            return True, 0.0
+
+    def record(self, name: str, ok: bool, code: Optional[str]) -> None:
+        """Rejestruj wynik wywołania. PO ok == False i kodzie w CB_FAILURE_CODES → +1 failed; OPEN jeśli próg."""
+        with self._lock:
+            state = self._state.get(name, "CLOSED")
+            if ok:
+                # Sukces resetuje stan (nawet w HALF_OPEN)
+                self._state[name] = "CLOSED"
+                self._failures.pop(name, None)
+                self._opened_at.pop(name, None)
+                self._half_open_in_flight.discard(name)
+                return
+            if code not in CB_FAILURE_CODES:
+                # NOT_FOUND/INVALID_ARGS/DENIED to nie awaria mostu — nie zwiększamy licznika
+                self._half_open_in_flight.discard(name)
+                return
+            if state == "HALF_OPEN":
+                # Probe się nie powiódł → wracamy do OPEN z odświeżonym opened_at
+                self._state[name] = "OPEN"
+                self._opened_at[name] = self._now()
+                self._half_open_in_flight.discard(name)
+                return
+            # CLOSED: dodaj do sliding window
+            dq = self._failures.setdefault(name, deque())
+            now = self._now()
+            dq.append(now)
+            cutoff = now - CB_FAIL_WINDOW
+            while dq and dq[0] < cutoff:
+                dq.popleft()
+            if len(dq) >= CB_FAIL_THRESHOLD:
+                self._state[name] = "OPEN"
+                self._opened_at[name] = now
+
+    def snapshot(self) -> dict:
+        """Stan do diagnostyki: ile narzędzi jest OPEN/HALF_OPEN i których."""
+        with self._lock:
+            return {
+                "threshold": CB_FAIL_THRESHOLD,
+                "window_s": CB_FAIL_WINDOW,
+                "cooldown_s": CB_COOLDOWN,
+                "states": {n: s for n, s in self._state.items() if s != "CLOSED"},
+                "failures": {n: len(d) for n, d in self._failures.items()},
+            }
+
+
+CB = CircuitBreaker()
 
 
 def token_path() -> Path:
@@ -74,6 +176,21 @@ class Browser:
 CLIENTS: dict[str, Browser] = {}
 PENDING: dict[str, tuple[asyncio.Future, str]] = {}
 HERMES_SEEN: dict[str, float] = {}   # nazwa profilu Hermesa (nagłówek X-Jarvis-Profile) -> ostatnie żądanie /mcp
+# Wake handshake: karta zgłasza POST /bridge/wake gdy tylko zaczyna się ładować (przed SSE). Most ma wtedy 3 s na
+# pojawienie się SSE handshake zamiast natychmiast zwracać OFFLINE. Bez tego pierwsze wywołanie MCP po otwarciu karty
+# przegrywa wyścig (~0.4–1.2 s) i daje fałszywy OFFLINE. Token mostu -> czas ostatniego /bridge/wake.
+WAKE: dict[str, float] = {}
+WAKE_TTL = 3.0
+WAKE_WAIT = 2.0   # ile relay() czeka na klienta gdy wake świeży
+
+
+def _wake_event() -> asyncio.Event:
+    """Event tworzony leniwie w bieżącym event loopie.
+
+    Stały globalny Event w module jest powiązany z pętlą, w której go utworzono — w testach
+    izolowany most działa na własnej pętli i `await event.wait()` rzuca `bound to different event loop`.
+    """
+    return asyncio.Event()
 
 
 def newest() -> Optional[Browser]:
@@ -82,10 +199,31 @@ def newest() -> Optional[Browser]:
 
 
 async def relay(name: str, args: dict) -> dict:
-    """Wyślij polecenie do przeglądarki i poczekaj na wynik."""
+    """Wyślij polecenie do przeglądarki i poczekaj na wynik.
+
+    Race fix: jeśli brak klienta SSE, ale karta właśnie wysłała /bridge/wake (PWA-side handshake),
+    czekaj krótko (do WAKE_WAIT) na zakończenie SSE handshake zamiast natychmiast rzucać OFFLINE.
+    Bez handshake → natychmiast OFFLINE (karta dawno zamknięta, narzędzie musi zgłosić błąd od razu).
+    """
     client = newest()
     if client is None:
-        raise ToolError("Jarvis OS nie jest połączony z mostem — użytkownik musi mieć otwartą kartę Jarvis OS (np. http://localhost:4000) z włączonym mostem w Ustawieniach.")
+        last_wake = WAKE.get(TOKEN, 0.0)
+        if time.time() - last_wake < WAKE_TTL:
+            deadline = time.time() + WAKE_WAIT
+            while time.time() < deadline:
+                if time.time() - last_wake >= WAKE_TTL:
+                    break
+                client = newest()
+                if client is not None:
+                    break
+                try:
+                    await asyncio.wait_for(WAKE_EVENT.wait(), min(0.1, deadline - time.time()))
+                except asyncio.TimeoutError:
+                    pass
+                WAKE_EVENT.clear()
+            client = newest()
+        if client is None:
+            raise ToolError("Jarvis OS nie jest połączony z mostem — użytkownik musi mieć otwartą kartę Jarvis OS (np. http://localhost:4000) z włączonym mostem w Ustawieniach.")
     cid = uuid.uuid4().hex[:12]
     fut: asyncio.Future = asyncio.get_running_loop().create_future()
     PENDING[cid] = (fut, client.id)
@@ -97,6 +235,117 @@ async def relay(name: str, args: dict) -> dict:
     finally:
         PENDING.pop(cid, None)
     return res
+
+
+# -------------------- media_play / media_control (most-owned, bez karty) --------------------
+# Te dwa narzędzia nie potrzebują karty Jarvis OS (SSE) — działają przez WebAgent (osobny Chromium agenta Jeva).
+# Dlatego NIE idą przez relay() i NIE rzucają OFFLINE gdy karta jest zamknięta (typowy przypadek: user na Telegramie
+# bez otwartej karty, albo headless drill kanban). Fallback gdy WebAgent nie działa (brak klucza Jeva / brak Node):
+#   - media_play    → ok=True z url=YouTube search (zamiast playback). User może kliknąć i posłuchać.
+#   - media_control → ok=False code=OFFLINE (tu nie ma sensu zwracać URL — playback nie ruszy).
+YT_SEARCH_URL = "https://www.youtube.com/results?search_query="
+MEDIA_PLAY_PATH = "/agent/play"
+MEDIA_CONTROL_PATH = "/agent/media"
+MEDIA_ACTIONS = {"pause", "resume", "next", "status"}
+
+
+async def _bridge_handle_media(name, args, cb):
+    """Wykonaj media_play/media_control bezpośrednio z mostu przez WebAgent (bez karty SSE).
+
+    Routing: most → WebAgent.call("POST", "/agent/play"|"/agent/media", body) → envelope.
+    Circuit breaker: każde wywołanie sprawdza/prosi o stan CB; INTERNAL/TIMEOUT/OFFLINE → +1 failed.
+    """
+    args = args or {}
+
+    def _envelope(code, ok, data, text):
+        body = {"ok": ok, "code": code, "data": data, "text": text}
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(body, ensure_ascii=False))],
+                              is_error=not ok)
+
+    allow, retry_after = cb.check(name)
+    if not allow:
+        return _envelope("THROTTLED", False, {"retry_after_s": round(retry_after, 3)},
+                         f"Circuit breaker dla '{name}' otwarty po {CB_FAIL_THRESHOLD} failed w {CB_FAIL_WINDOW:g}s. Ponów za {retry_after:.2f}s.")
+
+    if name == "media_play":
+        query = (args.get("query") or "").strip()
+        if not query:
+            cb.record(name, ok=False, code="INVALID_ARGS")
+            return _envelope("INVALID_ARGS", False, {"query": ""},
+                             "media_play: brak query (tytuł lub wykonawca).")
+        web = get_agents().web
+        try:
+            await web.ensure()
+            data = await web.call("POST", MEDIA_PLAY_PATH, {"query": query})
+        except agents_mod.AgentError as e:
+            cb.record(name, ok=False, code=str(e.code) if hasattr(e, "code") else "INTERNAL")
+            url = YT_SEARCH_URL + quote(query, safe="")
+            return _envelope("OK", True,
+                             {"query": query, "url": url, "title": query,
+                              "playing": False, "fallback": "youtube_search"},
+                             f"Agent WWW niedostępny ({e}); otwieram wyniki YouTube dla „{query}”.")
+        except (asyncio.TimeoutError, RuntimeError) as e:
+            cb.record(name, ok=False, code="TIMEOUT" if isinstance(e, asyncio.TimeoutError) else "INTERNAL")
+            url = YT_SEARCH_URL + quote(query, safe="")
+            return _envelope("OK", True,
+                             {"query": query, "url": url, "title": query,
+                              "playing": False, "fallback": "youtube_search"},
+                             f"Agent WWW nie odpowiedział; otwieram wyniki YouTube dla „{query}”.")
+        status = data.get("status") if isinstance(data, dict) else None
+        if status != "done":
+            cb.record(name, ok=False, code="INTERNAL")
+            url = YT_SEARCH_URL + quote(query, safe="")
+            return _envelope("INTERNAL", False,
+                             {"query": query, "url": url,
+                              "title": (data or {}).get("title", query),
+                              "detail": (data or {}).get("detail", "brak wyników")},
+                             (data or {}).get("summary") or f"Agent WWW nie znalazł „{query}”. Otwórz {url}.")
+        page = data.get("page") or {}
+        cb.record(name, ok=True, code="OK")
+        return _envelope("OK", True,
+                         {"query": query,
+                          "url": page.get("url") or (YT_SEARCH_URL + quote(query, safe="")),
+                          "title": data.get("title", query),
+                          "playing": bool(data.get("playing", False)),
+                          "ad": bool(data.get("ad", False)),
+                          "ms": data.get("ms")},
+                         f"Puszczam „{data.get('title', query)}”.")
+
+    if name == "media_control":
+        action = (args.get("action") or "").strip().lower()
+        if action not in MEDIA_ACTIONS:
+            cb.record(name, ok=False, code="INVALID_ARGS")
+            return _envelope("INVALID_ARGS", False, {"action": action or ""},
+                             f"media_control: nieznana akcja „{action}”. Dozwolone: {', '.join(sorted(MEDIA_ACTIONS))}.")
+        web = get_agents().web
+        try:
+            await web.ensure()
+            data = await web.call("POST", MEDIA_CONTROL_PATH, {"action": action})
+        except agents_mod.AgentError as e:
+            cb.record(name, ok=False, code="OFFLINE")
+            return _envelope("OFFLINE", False, {"action": action},
+                             f"media_control: agent WWW niedostępny ({e}).")
+        except (asyncio.TimeoutError, RuntimeError):
+            cb.record(name, ok=False, code="INTERNAL")
+            return _envelope("OFFLINE", False, {"action": action},
+                             "media_control: agent WWW nie odpowiedział.")
+        cb.record(name, ok=True, code="OK")
+        return _envelope("OK", True,
+                         {"action": action,
+                          "playing": bool((data or {}).get("playing", False)),
+                          "title": (data or {}).get("title"),
+                          "position": (data or {}).get("position"),
+                          "duration": (data or {}).get("duration")},
+                         f"media_control {action} wykonane.")
+
+    cb.record(name, ok=False, code="INVALID_ARGS")
+    return _envelope("INVALID_ARGS", False, {"name": name}, f"Nieobsługiwane media_* narzędzie: {name}")
+
+
+# Narzędzia obsługiwane przez most bezpośrednio (BRIDGE_OWNED) — nie wymagają karty Jarvis OS / SSE.
+BRIDGE_OWNED = frozenset({"media_play", "media_control"})
+
+
 
 
 INSTRUCTIONS = (
@@ -155,12 +404,31 @@ class DesktopMCP(MCPServer):
         name, args = params.name, params.arguments or {}
         if name not in TOOLS:
             return CallToolResult(content=[TextContent(type="text", text=f"Nieznane narzędzie: {name}")], is_error=True)
+        # Narzędzia BRIDGE_OWNED (media_play, media_control) — most obsługuje je bezpośrednio przez WebAgent,
+        # NIE wymagają karty Jarvis OS (SSE). Dlatego NIE idą przez relay() i NIE rzucają OFFLINE gdy karta
+        # zamknięta. To jest fix z t_874a5201 / B4: wcześniej każde media_* bez karty → OFFLINE.
+        if name in BRIDGE_OWNED:
+            return await _bridge_handle_media(name, args, CB)
+        # Circuit breaker: przed relay() sprawdź czy to narzędzie nie jest w trakcie cooldown.
+        # Chroni przed pętlą OFFLINE/INTERNAL/TIMEOUT — model widzi jawny kod THROTTLED zamiast cichego odrzucenia.
+        allow, retry_after = CB.check(name)
+        if not allow:
+            payload = {"ok": False, "code": "THROTTLED",
+                       "text": (f"Circuit breaker dla '{name}' otwarty po {CB_FAIL_THRESHOLD} failed w "
+                                f"{CB_FAIL_WINDOW:g}s. Ponów za {retry_after:.2f}s."),
+                       "data": {"retry_after_s": round(retry_after, 3)}}
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))], is_error=True)
         try:
             res = await relay(name, args)
         except ToolError as e:
+            # ToolError to awaria mostu (brak karty, timeout) → traktuj jak failure
+            CB.record(name, ok=False, code="INTERNAL")
             return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
+        ok = bool(res.get("ok"))
+        code = res.get("code")
+        CB.record(name, ok=ok, code=code)
         payload = {k: res.get(k) for k in ("ok", "code", "data", "text")}
-        return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, default=str))], is_error=not res.get("ok"))
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, default=str))], is_error=not ok)
 
 
 mcp = DesktopMCP("jarvis-desktop", instructions=INSTRUCTIONS, version="2.0.0")
@@ -181,6 +449,8 @@ def cors(request: Request, resp: Response) -> Response:
 
 
 def authorized(request: Request) -> bool:
+    if ALLOWED_HOSTS and request.headers.get("host", "") not in ALLOWED_HOSTS:
+        return False
     tok = request.headers.get("x-bridge-token") or request.query_params.get("token") or ""
     return secrets.compare_digest(tok, TOKEN)
 
@@ -193,23 +463,44 @@ async def status(request: Request) -> Response:
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     now = time.time()
     target = newest()
+    last_wake = WAKE.get(TOKEN, 0.0)
+    wake_age = round(now - last_wake, 3) if last_wake else None
+    wake_valid = wake_age is not None and wake_age < WAKE_TTL
     try:
         agents_info = await get_agents().status()
     except Exception:  # noqa: BLE001 — status mostu nie może zależeć od agentów
         agents_info = None
     return cors(request, JSONResponse({"ok": True, "clients": len(CLIENTS), "tools": sorted(TOOLS),
+                                       "circuit_breaker": CB.snapshot(),
                                        "browsers": [{"id": c.id, "visible": c.visible, "target": c is target} for c in CLIENTS.values()],
-                                       "hermes": {k: round(now - v) for k, v in HERMES_SEEN.items()}, "agents": agents_info}))
+                                       "hermes": {k: round(now - v) for k, v in HERMES_SEEN.items()}, "agents": agents_info,
+                                       "wake": {"age_s": wake_age, "valid": wake_valid, "ttl_s": WAKE_TTL, "wait_s": WAKE_WAIT}}))
 
 
 @mcp.custom_route("/bridge/pair", methods=["GET", "OPTIONS"])
 async def pair(request: Request) -> Response:
-    """Zero-konfiguracji: token dostaje wyłącznie strona z dozwolonego Origin (przeglądarka nie pozwala go podrobić)."""
+    """Zero-konfiguracji: token dostaje wyłącznie strona z lokalnego Origin (przeglądarka nie pozwala go podrobić).
+    Origin publiczny (GitHub Pages) jest w ORIGINS dla CORS, ale tokenu tą drogą nie dostanie — patrz PAIR_ORIGINS."""
     if request.method == "OPTIONS":
         return cors(request, Response(status_code=204))
-    if request.headers.get("origin", "") not in ORIGINS:
+    if request.headers.get("origin", "") not in PAIR_ORIGINS:
         return JSONResponse({"error": "origin not allowed"}, status_code=403)
     return cors(request, JSONResponse({"token": TOKEN}))
+
+
+@mcp.custom_route("/bridge/wake", methods=["POST", "OPTIONS"])
+async def wake(request: Request) -> Response:
+    """Handshake z karty: „idę do SSE". Most rezerwuje WAKE_TTL s na pojawienie się klienta SSE.
+    Pierwsze wywołanie MCP po otwarciu karty (race 0.4–1.2 s) czeka w relay() zamiast natychmiast dostać OFFLINE.
+    Body może być puste lub {client_hint: "..."} — bez walidacji, handshake to tylko znacznik czasu.
+    """
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    WAKE[TOKEN] = time.time()
+    WAKE_EVENT.set()   # obudź też czekające relay() — karta zgłosiła się
+    return cors(request, JSONResponse({"ok": True, "ttl_s": WAKE_TTL, "wait_s": WAKE_WAIT}))
 
 
 @mcp.custom_route("/bridge/hermes", methods=["GET", "OPTIONS"])
@@ -267,6 +558,7 @@ async def events(request: Request) -> Response:
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     client = Browser()
     CLIENTS[client.id] = client
+    WAKE_EVENT.set()   # obudź czekające relay(), pojawił się klient
 
     async def stream():
         try:
@@ -497,7 +789,7 @@ def build_app(host: str = "127.0.0.1"):
 
 
 def main() -> None:
-    global TOKEN, ORIGINS
+    global TOKEN, ORIGINS, ALLOWED_HOSTS
     ap = argparse.ArgumentParser(description="Jarvis OS <-> Hermes MCP bridge")
     ap.add_argument("--host", default=os.environ.get("JARVIS_BRIDGE_HOST", "127.0.0.1"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("JARVIS_BRIDGE_PORT", "8651")))
@@ -506,6 +798,7 @@ def main() -> None:
     TOKEN = load_token()
     load_tools()
     ORIGINS = DEFAULT_ORIGINS + [o.strip() for o in os.environ.get("JARVIS_BRIDGE_ORIGINS", "").split(",") if o.strip()]
+    ALLOWED_HOSTS = {f"127.0.0.1:{args.port}", f"localhost:{args.port}"}
     if args.show_token:
         print(TOKEN)
         return

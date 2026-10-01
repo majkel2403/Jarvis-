@@ -87,3 +87,31 @@ test('pamięć: remember/recall/forget', async () => {
   const f = await R.run('memory_forget', { fact: 'kawę' }, { source: 'local' }); assert.equal(f.data.removed, 1);
 });
 test('describe i groups', () => { assert.match(R.describe(), /Notatki/); assert.ok(Object.keys(R.groups()).length >= 6); });
+test('run: market_watch B9 — hermes pyta o confirm (default), silent=true nie pyta', async () => {
+  let asked = 0; let captured = '';
+  J.confirm = async req => { asked++; captured = req.question; return 'no'; };
+  // 1) default (silent brak) → source=hermes → prosi o confirm → user klika Nie → DENIED, alert NIE zapisany
+  J.state.alerts = [];
+  const r1 = await R.run('market_watch', { symbol: 'BTC', direction: 'above', price: 999999999 }, { source: 'hermes' });
+  assert.equal(r1.code, 'DENIED', 'default musi pytać, user odmówił');
+  assert.equal(asked, 1, 'J.confirm powinien być wywołany dokładnie raz');
+  assert.match(captured, /BTC.*\$999,999,999/, 'pytanie powinno zawierać symbol + kwotę');
+  assert.equal((J.state.alerts || []).length, 0, 'alert NIE powinien być zapisany po odmowie');
+  // 2) silent=true → trusted escape → wykonuje cicho, alert zapisany
+  J.state.alerts = [];
+  const r2 = await R.run('market_watch', { symbol: 'BTC', direction: 'above', price: 999999999, silent: true }, { source: 'hermes' });
+  assert.equal(r2.ok, true, 'silent=true musi wykonać cicho');
+  assert.equal(r2.code, 'OK');
+  assert.equal(asked, 1, 'J.confirm NIE powinien być wywołany dla silent=true');
+  assert.equal((J.state.alerts || []).length, 1, 'alert zapisany');
+  // 3) ui source → trusted zawsze, bez pytania nawet bez silent
+  J.state.alerts = [];
+  const r3 = await R.run('market_watch', { symbol: 'ETH', direction: 'below', price: 1000 }, { source: 'ui' });
+  assert.equal(r3.ok, true);
+  assert.equal(asked, 1, 'ui nie pyta');
+  // 4) local source → trusted zawsze
+  J.state.alerts = [];
+  const r4 = await R.run('market_watch', { symbol: 'SOL', direction: 'above', price: 200 }, { source: 'local' });
+  assert.equal(r4.ok, true);
+  assert.equal(asked, 1, 'local nie pyta');
+});

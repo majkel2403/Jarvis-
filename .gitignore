@@ -3,3 +3,4 @@ node_modules/
 tests/reports/jev-probe-mock.md
 __pycache__/
 *.pyc
+*.bak-*
