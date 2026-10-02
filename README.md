@@ -228,12 +228,19 @@ Wynik badań programu autora na Windows 11 (polski system, 125% skalowania). Dod
 
 ```bash
 node --test "tests/unit/*.test.js"     # rejestr, silnik lokalny, NLP, kalkulator, parsery Hermesa, reduktor, kontekst, ICS
+node --test tests/unit/fx-*.test.js    # warstwa efektów: rejestr, jakość, powiązania, sprzątanie
 node tests/e2e/smoke.js http://localhost:8090   # Chromium (Playwright): boot → polecenia → zgody → pytania → trwałość
+node tools/fx-audit.mjs                # 64 efekty w prawdziwej przeglądarce: rysują, wracają do bazy, czysta konsola
 node --test integrations/tests/web-agent.test.mjs   # agent WWW: prawdziwy Chromium + atrapa Jeva (bez klucza i internetu)
 %USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe bridge\test_agents.py   # most: agenci, zadania na komputerze (atrapa), pełny łańcuch
 ```
 
 Workflow `.github/workflows/ci.yml` uruchamia oba zestawy przy każdym pushu.
+
+Warstwa efektów (`js/fx/` — 64 efekty sygnaturowe + 35 definicji silnika) jest
+portem biblioteki `jarvis-efekty`, bez bundlera i bez zależności w runtime.
+Zasady, regeneracja i ograniczenia: **[docs/FX.md](docs/FX.md)**.
+Stan przeniesienia całej biblioteki: **[docs/fx-inventory.md](docs/fx-inventory.md)** (441 pozycji).
 
 ## Struktura
 

@@ -1,0 +1,587 @@
+/* =========================================================
+   JARVIS OS — warstwa efektów (css/fx.css)
+
+   Zasada prefiksów (D6): `css/jarvis.css` ma 28 globalnych @keyframes bez
+   prefiksu (`spin`, `pulse`, `draw`, `rise`, `scan`, `breathe`) w jednym
+   pliku 98 KB bez `@layer`. Biblioteka `jarvis-efekty` ma 42 kolejne.
+   Bez prefiksu `fx-` nakładanie obu zestawów gwarantuje ciche kolizje,
+   bo CSS jest globalny i rozstrzyga ostatni wczytany.
+
+   Wszystko, co tu trafi, musi zaczynać się od `fx-` — nazwy klas
+   i nazwy @keyframes.
+   ========================================================= */
+
+/* Warstwa efektów: rodzeństwo #app, własny kontekst stosu.
+   `pointer-events:none` — efekty nigdy nie łapią kliknięć,
+   a `isolation` izoluje mieszanki addytywne od reszty strony. */
+#fxlayer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  isolation: isolate;
+  opacity: 0;
+}
+
+/* #app[data-fx="off"] wyłącza animacje CSS tylko WEWNĄTRZ #app, a warstwa
+   jest jego rodzeństwem — dzięki temu efekty JS/WAAPI nadal respektują
+   poziom jakości przez własne bramki, a CSS tutaj pozostaje wyłączony
+   na poziomie off, tak jak zakłada projekt. */
+#fxlayer[data-fxl='off'] { display: none; }
+
+/* Efekty tworzą własne korzenie (runSignature ustawia contain:strict),
+   więc tutaj tylko zabezpieczenie przed dziedziczeniem kursorów. */
+#fxlayer * { pointer-events: none; }
+
+/* Klasy narzędziowe dla przeglądarki efektów (Faza 8). */
+#fxlayer .fx-mark { position: absolute; inset: 0; }
+
+/* ---- Renderer kuli: nakładka WebGL2 (Faza 4) ----
+   Stoi ZA kulą SVG, w tym samym miejscu co #orbCanvas, i dzieli z nią
+   pozycjonowanie. `mix-blend-mode: screen` daje addytywne sumowanie
+   z kolorami kuli bez dotykania canvas 2D z js/main.js. */
+.orb-canvas-gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+.core-wrap[data-orb-renderer='webgl'] .orb-canvas-gl { opacity: 1; }
+
+/* ---- Przeglądarka efektów (Faza 8) ---- */
+.fxb-list { display: flex; flex-direction: column; gap: 3px; overflow: auto; margin-top: 6px; padding-right: 4px; }
+.fxb-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 8px; background: var(--card, rgba(255,255,255,.03)); }
+.fxb-row:hover { background: rgba(var(--accent-rgb), .09); }
+.fxb-row.off { opacity: .42; }
+.fxb-play { width: 26px; height: 26px; flex: 0 0 auto; border: 0; border-radius: 6px; background: rgba(var(--accent-rgb), .16); color: var(--accent); cursor: pointer; font-size: 10px; }
+.fxb-play:hover { background: rgba(var(--accent-rgb), .3); }
+.fxb-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.fxb-meta b { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fxb-meta small { font-size: 10px; color: var(--dim, #7d8ea3); font-family: var(--mono); }
+.fxb-btn { width: 22px; height: 22px; flex: 0 0 auto; border: 0; background: none; color: var(--dim, #7d8ea3); cursor: pointer; font-size: 12px; border-radius: 5px; }
+.fxb-btn:hover { background: rgba(255,255,255,.07); }
+.fxb-btn.on { color: var(--accent); }
+
+/* ===== GENEROWANE Z CSS ===== */
+
+/* =========================================================
+   JARVIS OS — warstwa efektów: animacje CSS (48 źródeł)
+
+   GENEROWANE z ../../Downloads/jarvis-efekty/katalog/04-css-animations przez tools/fx-css.mjs
+   — nie edytuj ręcznie. Regeneracja: node tools/fx-css.mjs
+
+   Zasada prefiksów (D6): wszystkie klasy i nazwy @keyframes mają „fx-”.
+   Zasada jakości: bramki używają [data-fxl="off|tool|standard|cinema"].
+   J.fx.apply() ustawia data-fxl na #app i na #fxlayer.
+
+   Klucze animacji: 46 · reguł: 189
+   ========================================================= */
+
+/* Bramka nadrzędna: przy jakości „off" warstwa znika w całości. */
+[data-fxl='off'] { display: none; }
+
+/* ── _quality-gates (quality.css) ── */
+/* src/styles/effects.fx-css */
+[data-fxl="tool"]
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"] .fx-animate-node-in { animation-name: fx-fade-in; }
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"] .fx-animate-pulse-glow,
+[data-fxl="tool"] .fx-animate-wave-bar,
+[data-fxl="tool"] .fx-reflection-wobble { animation: none; }
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"] .fx-glitch-text::before,
+[data-fxl="tool"] .fx-glitch-text::after,
+[data-fxl="tool"] .fx-progress-shimmer::after,
+[data-fxl="tool"] :is(.fx-caustic, .fx-beam-rise) { display: none; }
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"] .fx-border::before { animation-duration: 4s; }
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"] :is(.fx-ring-breathe, .fx-animate-float,
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"]
+
+/* src/styles/effects.fx-css */
+[data-fxl="tool"]
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"]
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"] :is(
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"] .fx-glitch-text::before,
+[data-fxl="off"] .fx-glitch-text::after,
+[data-fxl="off"] .fx-border::before,
+[data-fxl="off"] .fx-progress-shimmer::after,
+[data-fxl="off"] :is(.fx-caustic, .fx-beam-rise,
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"] :is(
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"]
+
+/* src/styles/effects.fx-css */
+[data-fxl="off"] * { transition-duration: 0s !important; }
+
+/* ── _transitions (transitions.css) ── */
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/styles/effects.fx-css */
+
+/* src/components/studio/styles/studio.fx-css */
+
+/* ── alert-blink (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-alert { animation: fx-alert-blink 1.1s ease-in-out infinite; }
+
+@keyframes fx-alert-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── aurora-drift (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-aurora-drift {
+  0% { transform: translateX(-8%) skewX(-8deg) scaleY(0.8); }
+  50% { transform: translateX(4%) skewX(6deg) scaleY(1.15); }
+  100% { transform: translateX(10%) skewX(-4deg) scaleY(0.9); }
+}
+
+/* ── badge-pop (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-badge { animation: fx-badge-pop 0.5s cubic-bezier(.2,1.6,.4,1) both; }
+
+@keyframes fx-badge-pop { 0% { transform: scale(0); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+/* ── beam-flicker (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-beam-flicker { animation: fx-beam-flicker 3.4s ease-in-out infinite; }
+
+@keyframes fx-beam-flicker {
+  0%, 100% { opacity: 0.85; }
+  45% { opacity: 1; }
+  50% { opacity: 0.55; }
+  55% { opacity: 1; }
+}
+
+/* ── beam-rise (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-beam-rise { animation: fx-beam-rise 2.6s cubic-bezier(.4,0,.6,1) infinite; }
+
+@keyframes fx-beam-rise {
+  0% { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(-50%, var(--rise, -300px)) scale(1); opacity: 0; }
+}
+
+/* ── bell-ring (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-bell-ring { transform-origin: 50% 2px; animation: fx-bell-ring 0.9s ease-in-out both; }
+
+@keyframes fx-bell-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(16deg); } 30% { transform: rotate(-14deg); }
+  45% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(3deg); }
+}
+
+/* ── boot-down (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-boot-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
+
+/* ── boot-left (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-boot-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+
+/* ── boot-right (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-boot-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+/* ── boot-up (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-boot-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+/* ── border-spin (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--border-angle), transparent 0deg 250deg, var(--fx-border-color, #7dd3fc) 320deg, #fff 350deg, transparent 360deg);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: fx-border-spin 2.2s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes fx-border-spin { to { --border-angle: 360deg; } }
+
+/* ── caret-blink (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.15em; background: rgb(125 211 252); animation: fx-caret-blink 0.9s steps(1) infinite; }
+
+@keyframes fx-caret-blink { 50% { opacity: 0; } }
+
+/* ── caustic-fade (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-caustic {
+  background: repeating-linear-gradient(90deg, transparent 0 18px, rgb(186 230 253 / 0.35) 18px 20px, transparent 20px 46px);
+  mask-image: radial-gradient(ellipse, black 0%, transparent 70%);
+  animation: fx-caustic 6s linear infinite,fx-caustic-fade 3s ease-in-out infinite alternate;
+}
+
+@keyframes fx-caustic-fade { from { opacity: 0.25; } to { opacity: 0.7; } }
+
+/* ── caustic (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-caustic {
+  background: repeating-linear-gradient(90deg, transparent 0 18px, rgb(186 230 253 / 0.35) 18px 20px, transparent 20px 46px);
+  mask-image: radial-gradient(ellipse, black 0%, transparent 70%);
+  animation: fx-caustic 6s linear infinite,fx-caustic-fade 3s ease-in-out infinite alternate;
+}
+
+@keyframes fx-caustic { to { background-position: 92px 0; } }
+
+/* ── dash-flow (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-dash-flow { animation: fx-dash-flow 1.2s linear infinite; }
+
+@keyframes fx-dash-flow { to { stroke-dashoffset: -40; } }
+
+/* ── fade-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+[data-fxl="tool"] .fx-animate-node-in { animation-name: fx-fade-in; }
+
+@keyframes fx-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── fade-up (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-fade-up { animation: fx-fade-up 0.45s ease-out both; }
+
+@keyframes fx-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── float (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-float { animation: fx-float 3.6s ease-in-out infinite; }
+
+@keyframes fx-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+/* ── glitch-a (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-glitch-text::before { color: rgb(34 211 238); animation: fx-glitch-a 7s steps(1) infinite; }
+
+@keyframes fx-glitch-a {
+  0%, 91%, 100% { opacity: 0; transform: none; clip-path: inset(0 0 0 0); }
+  92% { opacity: 0.8; transform: translate(-3px, -1px); clip-path: inset(10% 0 55% 0); }
+  94% { opacity: 0.8; transform: translate(2px, 1px); clip-path: inset(60% 0 8% 0); }
+  96% { opacity: 0.6; transform: translate(-1px, 0); clip-path: inset(30% 0 40% 0); }
+}
+
+/* ── glitch-b (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-glitch-text::after { color: rgb(244 114 182); animation: fx-glitch-b 7s steps(1) infinite; }
+
+@keyframes fx-glitch-b {
+  0%, 91%, 100% { opacity: 0; transform: none; clip-path: inset(0 0 0 0); }
+  92.5% { opacity: 0.7; transform: translate(3px, 1px); clip-path: inset(50% 0 20% 0); }
+  95% { opacity: 0.7; transform: translate(-2px, -1px); clip-path: inset(5% 0 70% 0); }
+}
+
+/* ── header-glint (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-header-glint {
+  0% { transform: translateX(-160px); }
+  60%, 100% { transform: translateX(100vw); }
+}
+
+/* ── heartbeat (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-heartbeat {
+  0% { transform: scale(0.72); opacity: 0; }
+  12% { opacity: 0.9; }
+  100% { transform: scale(1.32); opacity: 0; }
+}
+
+/* ── log-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-log-in { animation: fx-log-in 0.3s ease-out both; }
+
+@keyframes fx-log-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── msg-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-msg-in { animation: fx-msg-in 0.35s cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes fx-msg-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* ── node-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-node-in { animation: fx-node-in 0.5s ease-out both; }
+
+@keyframes fx-node-in {
+  from { opacity: 0; filter: blur(6px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+/* ── pop-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-pop { animation: fx-pop-in 0.55s cubic-bezier(.2,.8,.2,1); }
+
+@keyframes fx-pop-in {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25) rotate(-6deg); filter: brightness(1.6); }
+  100% { transform: scale(1); }
+}
+
+/* ── pulse-dot (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-pulse-dot { animation: fx-pulse-dot 2.4s ease-in-out infinite; }
+
+@keyframes fx-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(56 189 248 / 0.0); background-color: rgb(14 165 233 / 0.3); }
+  50% { box-shadow: 0 0 10px 2px rgb(56 189 248 / 0.8); background-color: rgb(56 189 248 / 0.7); }
+}
+
+/* ── pulse-glow (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-pulse-glow { animation: fx-pulse-glow 4s ease-in-out infinite; }
+
+@keyframes fx-pulse-glow {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* ── ring-breathe (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-ring-breathe { animation: fx-ring-breathe 2.8s ease-in-out infinite; }
+
+@keyframes fx-ring-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(56 189 248 / 0.0), 0 0 12px -2px rgb(56 189 248 / 0.45); }
+  50% { box-shadow: 0 0 0 3px rgb(56 189 248 / 0.18), 0 0 22px 0 rgb(56 189 248 / 0.7); }
+}
+
+/* ── ripple (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-ripple { animation: fx-ripple 4.5s ease-out infinite both; }
+
+@keyframes fx-ripple {
+  0% { transform: translate(-50%, -50%) scale(0.35); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
+
+/* ── scan-sweep (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-scan-sweep {
+  background: linear-gradient(to bottom, transparent, rgb(125 211 252 / 0.025) 70%, rgb(186 230 253 / 0.12) 98%, transparent);
+  animation: fx-scan-sweep 11s cubic-bezier(.45,0,.55,1) infinite;
+  will-change: transform;
+}
+
+@keyframes fx-scan-sweep {
+  0% { transform: translateY(-120%); opacity: 0; }
+  8% { opacity: 1; }
+  60% { transform: translateY(110vh); opacity: 0.7; }
+  61%, 100% { transform: translateY(110vh); opacity: 0; }
+}
+
+/* ── screen-glitch (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-screen-glitch { animation: fx-screen-glitch 2.8s steps(1) infinite; }
+
+@keyframes fx-screen-glitch {
+  0%, 88%, 100% { transform: none; text-shadow: none; }
+  90% { transform: translateX(-3px) skewX(-6deg); text-shadow: 3px 0 rgb(244 114 182), -3px 0 rgb(34 211 238); }
+  93% { transform: translateX(3px); text-shadow: -2px 0 rgb(244 114 182), 2px 0 rgb(34 211 238); }
+  96% { transform: translateX(-1px) skewX(4deg); }
+}
+
+/* ── send-in (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-send-in { animation: fx-send-in 0.45s cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes fx-send-in { 0% { transform: translate(-10px, 10px) scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+/* ── shimmer (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-progress-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  animation: fx-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes fx-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* ── spin-ccw (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-spin-ccw { to { transform: rotate(-360deg); } }
+
+/* ── spin-cw (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-spin-cw { to { transform: rotate(360deg); } }
+
+/* ── studio-aurora (animation.css) ── */
+/* From src/components/studio/styles/studio.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-studio-aurora-wash {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 30% at 20% 30%, rgb(56 189 248 / 0.25), transparent),
+    radial-gradient(ellipse 35% 35% at 70% 20%, rgb(168 85 247 / 0.22), transparent),
+    radial-gradient(ellipse 40% 40% at 50% 80%, rgb(45 212 191 / 0.15), transparent);
+  filter: blur(8px);
+  opacity: var(--aurora-intensity, 0.7);
+  animation: fx-studio-aurora 14s ease-in-out infinite alternate;
+}
+
+@keyframes fx-studio-aurora {
+  from { transform: translate(-2%, 1%) scale(1); }
+  to { transform: translate(3%, -2%) scale(1.05); }
+}
+
+/* ── studio-beam (animation.css) ── */
+/* From src/components/studio/styles/studio.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-studio-border-beam::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--beam-angle, 0deg), transparent 40%, var(--beam-color, #38bdf8), transparent 60%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: fx-studio-beam var(--beam-speed, 8s) linear infinite;
+  pointer-events: none;
+}
+
+@keyframes fx-studio-beam {
+  to { --beam-angle: 360deg; }
+}
+
+/* ── studio-meteor-fall (animation.css) ── */
+/* From src/components/studio/styles/studio.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-studio-meteor {
+  position: absolute;
+  width: 2px;
+  height: 80px;
+  background: linear-gradient(to bottom, #fff, transparent);
+  opacity: 0.7;
+  transform: rotate(215deg);
+  animation: fx-studio-meteor-fall linear infinite;
+}
+
+@keyframes fx-studio-meteor-fall {
+  0% { transform: translateY(-20vh) translateX(0) rotate(215deg); opacity: 0; }
+  10% { opacity: 0.8; }
+  100% { transform: translateY(110vh) translateX(-40vw) rotate(215deg); opacity: 0; }
+}
+
+/* ── studio-scan-move (animation.css) ── */
+/* From src/components/studio/styles/studio.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-studio-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgb(255 255 255 / var(--scan-opacity, 0.12)) 0 1px,
+    transparent 1px 3px
+  );
+  mix-blend-mode: overlay;
+  animation: fx-studio-scan-move var(--scan-speed, 6s) linear infinite;
+  opacity: 0.55;
+}
+
+@keyframes fx-studio-scan-move {
+  to { background-position: 0 12px; }
+}
+
+/* ── toast-timer (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-toast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ── typing-dot (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-typing-dots > span { width: 5px; height: 5px; border-radius: 9999px; background: currentColor; animation: fx-typing-dot 1.1s ease-in-out infinite; }
+
+@keyframes fx-typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+/* ── wave-bar (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-animate-wave-bar { transform-origin: bottom; animation: fx-wave-bar 1s ease-in-out infinite; }
+
+@keyframes fx-wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* ── wobble (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+.fx-reflection-wobble { animation: fx-wobble 5s ease-in-out infinite; transform-origin: center top; }
+
+@keyframes fx-wobble {
+  0%, 100% { transform: scaleY(-0.9) skewX(0deg); }
+  33% { transform: scaleY(-0.86) skewX(1.4deg); }
+  66% { transform: scaleY(-0.93) skewX(-1.2deg); }
+}
+
+/* ── wx-drift (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-wx-drift { from { transform: translateX(-2px); } to { transform: translateX(3px); } }
+
+/* ── wx-rain (animation.css) ── */
+/* From src/styles/effects.fx-css (regenerated by scripts/fx-catalog.fx-mjs). */
+
+@keyframes fx-wx-rain { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }

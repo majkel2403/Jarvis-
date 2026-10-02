@@ -1143,6 +1143,7 @@ J.apps.settings = {
       <div class="row" style="font-size:11.5px"><span style="flex:1">Skala interfejsu<small class="dim" id="usV" style="margin-left:6px"></small></span><input type="range" id="uiScale" min="80" max="130" step="5" style="width:170px"></div>
         <label class="toggle"><div>Minimapa okien<small>mały podgląd pulpitu w rogu; klik = przejście do okna</small></div><span class="switch"><input type="checkbox" data-k="minimap"><i></i></span></label>
         <div class="row" style="font-size:11.5px"><span style="flex:1">Efekty<small class="dim" id="fxNow" style="display:block;font-size:10px"></small></span><select class="input" id="fxLvl" style="width:150px"><option value="off">bez animacji</option><option value="tool">oszczędne</option><option value="standard">standardowe</option><option value="cinema">kinowe</option></select></div>
+        <div class="row" style="font-size:11.5px"><span style="flex:1">Renderer kuli<small class="dim" id="orbRendNow" style="display:block;font-size:10px"></small></span><select class="input" id="orbRend" style="width:150px"><option value="canvas">canvas</option><option value="webgl">WebGL2 + cząsteczki</option></select></div>
         <div class="row" style="font-size:11.5px"><span style="flex:1">Głośność dźwięków<small class="dim" id="volV" style="margin-left:6px"></small><small class="dim" style="display:block;font-size:10px">wyciszone w ciszy nocnej i w trybie prezentacji (poza alarmem minutnika)</small></span><input type="range" id="sVol" min="0" max="100" step="5" style="width:170px"></div>
       <div class="row" style="font-size:11.5px"><span style="flex:1">Tryb startowy przestrzeni</span><select class="input" id="startMode" style="width:170px"><option value="work">praca (okna)</option><option value="clean">czysty pulpit</option><option value="focus">skupienie</option></select></div>
       <label class="toggle"><div>Tryb bez sieci<small>Żadnych wywołań internetu (Hermes, Jev, pogoda, kursy) — działa parser i dane lokalne</small></div><span class="switch"><input type="checkbox" data-k="offlineMode"><i></i></span></label>
@@ -1255,6 +1256,19 @@ J.apps.settings = {
     const sm = $('#startMode', body); if (sm) { sm.value = s.startMode || 'work'; sm.onchange = () => { s.startMode = sm.value; J.save(); J.emit('settings'); }; }
     const fxSel = $('#fxLvl', body), fxNow = () => { const e = $('#fxNow', body); if (e) e.textContent = 'teraz: ' + ({ off: 'bez animacji', tool: 'oszczędne', standard: 'standardowe', cinema: 'kinowe' }[J.fx?.level?.() || s.fxLevel] || '') + (J.fx && J.fx.level() !== (s.fxLevel || 'standard') ? ' (ograniczone: płynność lub „ogranicz ruch” w systemie)' : ''); };
     if (fxSel) { fxSel.value = s.fxLevel || 'standard'; fxSel.onchange = () => J.uiRun('fx_level', { level: fxSel.value }); fxNow(); sub(ctx, 'fx', fxNow); }
+    const orbSel = $('#orbRend', body);
+    if (orbSel) {
+      const orbNow = () => {
+        const cur = J.fxOrb?.current?.() || s.orbRenderer || 'canvas';
+        const note = $('#orbRendNow', body);
+        if (note) note.textContent = cur === 'webgl' ? 'teraz: WebGL2' : (J.fxOrb?.available?.() ? 'teraz: canvas' : 'teraz: canvas (ta przeglądarka nie ma WebGL2)');
+      };
+      orbSel.value = s.orbRenderer || 'canvas';
+      orbSel.disabled = !J.fxOrb?.available?.();
+      orbSel.onchange = () => J.uiRun('orb_renderer', { mode: orbSel.value });
+      orbNow();
+      sub(ctx, 'settings', orbNow);
+    }
     const sv = $('#sVol', body), svV = $('#volV', body); if (sv) { sv.value = s.volume ?? 60; svV.textContent = sv.value + '%'; sv.oninput = () => { svV.textContent = sv.value + '%'; }; sv.onchange = () => { s.volume = +sv.value; J.save(); J.sfx.notify(); }; }
     const sr = $('#spRate', body); if (sr) { sr.value = s.speechRate || 1; sr.onchange = () => { s.speechRate = +sr.value; J.save(); J.voice.speak('Tak brzmi nowe tempo mowy.', { force: true, replace: true }); }; }
     const sl = $('#sttLang', body); if (sl) { sl.value = s.sttLang || 'pl-PL'; sl.onchange = () => { s.sttLang = sl.value; J.save(); }; }

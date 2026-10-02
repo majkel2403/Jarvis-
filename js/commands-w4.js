@@ -294,6 +294,39 @@ R.add({ id: 'fx_level', group: 'Interfejs', label: 'Poziom efektów', descriptio
     return ok({ level, effective: eff }, 'Efekty: ' + FXN[level] + '.' + (eff !== level ? ' (Teraz działa „' + FXN[eff] + '” — system prosi o mniej ruchu.)' : ''), null, () => { s.fxLevel = prev; J.save(); J.emit('settings'); });
   } });
 R.get('fx_level').undoable = true;
+/* =================== W5: RENDERER KULI =================== */
+/* Kula ma dwa renderery: domyślny canvas (orbDraw w js/main.js) i opcjonalną
+   nakładkę WebGL2 z cząsteczkami (js/fx/webgl-orb.js). Przełącznik, nie
+   zamiana — stare zachowanie zostaje dostępne zawsze. */
+R.add({ id: 'orb_renderer', group: 'Interfejs', label: 'Renderer kuli', description: 'Kula: canvas (wbudowany) albo webgl (dodatkowa warstwa cząsteczek; wymaga WebGL2 i poziomu efektów co najmniej standardowego).', writes: ['settings'],
+  args: { type: 'object', properties: { mode: { type: 'string', enum: ['canvas', 'webgl'] } }, required: ['mode'] },
+  examples: ['kula webgl', 'kula bez webgl', 'wróc do canvasa', 'lwiejsza kula'],
+  parse(raw, n) {
+    if (/^(kula|lwiejsza kula).*(webgl|web ?2)/.test(n)) return { args: { mode: 'webgl' }, score: 40 };
+    if (/^(kula|lwiejsza kula).*(canvas|wróc)/.test(n) || /^(cofnij|wyłącz).*(webgl|web ?2)/.test(n)) return { args: { mode: 'canvas' }, score: 40 };
+  },
+  run({ mode: m }) {
+    const s = J.state.settings, prev = s.orbRenderer || 'canvas';
+    if (m !== 'webgl' && m !== 'canvas') return J.ask('Renderer kuli: canvas albo webgl.', [{ label: 'canvas', value: 'canvas' }, { label: 'webgl', value: 'webgl' }]);
+    s.orbRenderer = m; J.save();
+    const eff = J.fxOrb?.apply?.(m) || m;
+    const label = { canvas: 'canvas (wbudowany)', webgl: 'WebGL2 (cząsteczki)' }[eff];
+    return ok({ mode: m, effective: eff }, 'Kula: ' + label + '.', null,
+      () => { s.orbRenderer = prev; J.save(); J.fxOrb?.apply?.(prev); J.emit('settings'); });
+  } });
+R.get('orb_renderer').undoable = true;
+/* =================== PRZEGLĄDARKA EFEKTÓW =================== */
+R.add({ id: 'fx_browse', group: 'Interfejs', label: 'Przeglądarka efektów', description: 'Otwiera przeglądarkę 64 efektów wizualnych: podgląd pojedynczy, pokaz wszystkich, wyłączanie i ulubione. Efekty są też odtwarzane automatycznie przy zdarzeniach.', writes: [],
+  args: { type: 'object', properties: { family: { type: 'string', enum: ['all', 'orb', 'screen', 'particles', 'hud', 'text', 'data', 'glitch', 'success', 'transition', 'pointer', 'ambient'] } } },
+  examples: ['pokaz efekty', 'przegladarka efektow', 'efekty kuli', 'pokaz wszystkie animacje'],
+  parse(raw, n) {
+    const fam = ['orb', 'screen', 'particles', 'hud', 'text', 'data', 'glitch', 'success', 'transition', 'pointer', 'ambient'].find(f => n.includes(f));
+    if (/^(pokaz|otworz|wlacz|przegladarka).*(efekt|animac)/.test(n) || /^(efekty|animacje)/.test(n)) return { args: fam ? { family: fam } : {}, score: fam ? 44 : 40 };
+  },
+  run({ family } = {}) {
+    J.wm.open('fx');
+    return ok({ family: family || 'all' }, 'Przeglądarka efektów: ' + (J.fxLayer?.list().length || 0) + ' pozycji.');
+  } });
 
 /* =================== W5: ZAŁĄCZNIKI W CZACIE (tylko tekst: notatka albo plik) =================== */
 const ATT_MAX = 8000, ATT_N = 3;

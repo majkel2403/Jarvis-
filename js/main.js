@@ -48,6 +48,9 @@ const boot = () => new Promise(resolve => {
   const finish = () => {
     J.sfx.unlock(); J.sfx.boot();
     el.classList.add('out'); $('#app').classList.add('on');
+    // Warstwa efektów: jedyny sygnał „system wstał”. Świadomie po overlayu,
+    // bo efekty kotwiczą się do widocznych elementów pulpitu.
+    J.emit('fx-boot');
     setTimeout(() => el.remove(), 1000);
     resolve();
   };
@@ -87,7 +90,7 @@ J.fx = {
   LEVELS: FX, cap: 3,   // cap = samoczynne ograniczenie po spadku płynności (3 = bez ograniczenia)
   rank() { return Math.min(Math.max(0, FX.indexOf(S.fxLevel || 'standard')), RM.matches ? 0 : 3, J.fx.cap); },
   level() { return FX[J.fx.rank()]; },
-  apply() { const lv = J.fx.level(), app = $('#app'); if (!app) return lv; app.dataset.fx = lv; app.classList.toggle('lowfx', J.fx.rank() < 2); document.documentElement.dataset.fx = lv; J.emit('fx', lv); return lv; },
+  apply() { const lv = J.fx.level(), app = $('#app'); if (!app) return lv; app.dataset.fx = lv; app.classList.toggle('lowfx', J.fx.rank() < 2); document.documentElement.dataset.fx = lv; /* bramki animacji CSS warstwy efektów (css/fx.css) — osobny atrybut, bo data-fx na #app już znaczy poziom aplikacji */ app.dataset.fxl = lv; const lay = document.getElementById('fxlayer'); if (lay) lay.dataset.fxl = lv; J.emit('fx', lv); return lv; },
   lower() { const r = J.fx.rank(); if (r <= 1) return false; J.fx.cap = r - 1; J.fx.apply(); J.log('Efekty', 'Niska płynność (FPS < 30 przez 5 s) — obniżam poziom efektów do „' + J.fx.level() + '”', 'warn'); return true; },
   orbits: () => J.fx.rank() >= 2,
   /* „duch” okna: w trybie kinowym zarys okna pojawia się, zanim agent je otworzy */
@@ -95,6 +98,10 @@ J.fx = {
 };
 RM.addEventListener?.('change', () => J.fx.apply());
 J.on('settings', () => J.fx.apply());
+/* Renderer kuli wg zapisanego ustawienia. Domyślnie canvas — WebGL2 to
+   dodatkowa nakładka, a nie zamiana. apply() sama sprawdza WebGL2 i poziom
+   jakości, więc tu nie powtarzamy tych warunków. */
+if (S.orbRenderer === 'webgl') J.fxOrb?.apply?.('webgl');
 const fx = (() => {
   const cv = $('#fx'), c = cv.getContext('2d');
   let W, H, pts = [], mouse = { x: -999, y: -999 }, frames = 0, last = performance.now();
@@ -145,6 +152,13 @@ const fx = (() => {
     }
     const tt = RM.matches ? 3000 : now;   // „ogranicz ruch”: Core i jezioro stoją w miejscu, ale nadal zmieniają kolor i jasność ze stanem
     J.hud.frame(now); orbDraw(tt); flowDraw(tt);
+    // Warstwa efektów dostaje tę samą klatkę (D4) — bez własnego rAF, żeby nie
+    // zaburzać pomiaru FPS, na którym opiera się autodetekcja jakości powyżej.
+    J.fxLayer?.frame?.(now);
+    // Silnik efektów (35 definicji) jeśli ktoś go włączył; sam się leniwie buduje.
+    J.fxEngine?.ready || J.fxEngine?.ensure();
+    // Kula WebGL2 (gdy jest włączona w Ustawieniach) — trwała scena, nie efekt.
+    if (J.fxOrb && J.fxOrb.current() !== 'canvas') { J.fxOrb.syncFromEngine(); J.fxOrb.render(now); }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

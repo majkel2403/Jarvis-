@@ -880,7 +880,7 @@
  },
  {
   "name": "market_watch",
-  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
+  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Wymaga potwierdzenia użytkownika. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -901,6 +901,10 @@
     },
     "remove": {
      "type": "boolean"
+    },
+    "silent": {
+     "type": "boolean",
+     "description": "true = bez pytania (cron, drill, signal triggers); wymaga explicit zgody w kodzie"
     }
    }
   }
@@ -1232,7 +1236,7 @@
  },
  {
   "name": "files_write",
-  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Np.: „zapisz plik name: text”.",
+  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapisz plik name: text”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -2525,6 +2529,51 @@
    "required": [
     "level"
    ]
+  }
+ },
+ {
+  "name": "orb_renderer",
+  "description": "Kula: canvas (wbudowany) albo webgl (dodatkowa warstwa cząsteczek; wymaga WebGL2 i poziomu efektów co najmniej standardowego). Np.: „kula webgl”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "mode": {
+     "type": "string",
+     "enum": [
+      "canvas",
+      "webgl"
+     ]
+    }
+   },
+   "required": [
+    "mode"
+   ]
+  }
+ },
+ {
+  "name": "fx_browse",
+  "description": "Otwiera przeglądarkę 64 efektów wizualnych: podgląd pojedynczy, pokaz wszystkich, wyłączanie i ulubione. Efekty są też odtwarzane automatycznie przy zdarzeniach. Np.: „pokaz efekty”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "family": {
+     "type": "string",
+     "enum": [
+      "all",
+      "orb",
+      "screen",
+      "particles",
+      "hud",
+      "text",
+      "data",
+      "glitch",
+      "success",
+      "transition",
+      "pointer",
+      "ambient"
+     ]
+    }
+   }
   }
  },
  {

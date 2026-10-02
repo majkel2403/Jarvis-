@@ -115,4 +115,80 @@
  * @typedef {T extends string ? never : T} _Phantom
  */
 
+/* =========================================================
+   Warstwa efektów (js/fx/*) — port biblioteki `jarvis-efekty`
+   ========================================================= */
+
+/**
+ * Poziom jakości biblioteki. Mapowany 1:1 na `J.fx.rank()`:
+ * off(0) · low(1, „tool") · high(2, „standard") · ultra(3, „cinema").
+ * @typedef {('off'|'low'|'high'|'ultra')} FxQuality
+ */
+
+/**
+ * Waga efektu. `hero` jest wyłączny (wypiera poprzednie hero),
+ * `accent` nakłada się, `micro` jest częsty i thottlowany.
+ * @typedef {('hero'|'accent'|'micro')} FxWeight
+ */
+
+/**
+ * Wpis rejestru efektów sygnaturowych.
+ * @typedef {Object} FxEntry
+ * @property {string} id          np. 'orb.supernova'
+ * @property {string} family      orb | screen | particles | hud | text | data | glitch | success | transition | pointer | ambient
+ * @property {string} title
+ * @property {string} blurb
+ * @property {number} durationMs
+ * @property {FxWeight} weight
+ */
+
+/**
+ * Publiczne API warstwy efektów (`js/fx/index.js`).
+ * UWAGA: to NIE jest `J.fx` — `J.fx` od `js/main.js:89` to system poziomów
+ * jakości aplikacji. Warstwa żyje pod `J.fxLayer`, a `window.__jarvisOsFx`
+ * wystawia to samo API dla biblioteki.
+ * @typedef {Object} FxLayerApi
+ * @property {(id: string, opts?: Object) => boolean} play
+ * @property {() => void} stopAll
+ * @property {() => FxEntry[]} list
+ * @property {number} activeCount
+ * @property {boolean} ready
+ * @property {(now: number) => void} frame  wywoływane z pętli głównej aplikacji
+ * @property {() => number} refresh          przebudowuje rejestr i zwraca liczbę efektów
+ */
+
+/**
+ * Rejestr kotwic (`js/fx/targets.js`) — rzeczy, na które efekty potrafią
+ * działać. Klucze DOM rozwiązywane są leniwie przy każdym `get()`.
+ * @typedef {Object} FxTargets
+ * @property {(key: string, value: unknown) => (() => void)} set
+ * @property {(key: string, selector: string) => void} define
+ * @property {(key: string) => (Element|Object|undefined)} get
+ * @property {(key: string) => (Element|undefined)} visible
+ * @property {() => string[]} keys
+ */
+
+/**
+ * Przełącznik renderera kuli (`js/fx/webgl-orb.js`).
+ * @typedef {Object} FxOrbApi
+ * @property {(mode: 'canvas'|'webgl') => ('canvas'|'webgl')} apply
+ * @property {() => 'canvas'|'webgl'} current
+ * @property {() => boolean} available
+ * @property {(level: number) => void} setEnergy
+ * @property {(color?: string) => void} burst
+ * @property {() => void} inhale
+ * @property {() => void} dispose
+ */
+
+/**
+ * Nuty dźwiękowe z biblioteki. Wartości dosłownie jak w `katalog/08-audio`.
+ * @typedef {Object} FxNote
+ * @property {number} freq
+ * @property {number} at
+ * @property {number} dur
+ * @property {string} [type]  typ oscylatora WebAudio
+ * @property {number} [gain]
+ * @property {number} [glideTo]
+ */
+
 export {};
