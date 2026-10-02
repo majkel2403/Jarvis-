@@ -302,8 +302,15 @@ R.add({ id: 'agents_status', group: 'Internet i komputer', label: 'Agenci: statu
     return ok(r, 'Klucz Jeva: ' + (r.key ? 'jest' : 'BRAK (integrations\\set-key.ps1)') + ' · agent WWW: ' + (r.web.up ? 'działa' : r.web.autostart ? 'uruchomi się przy pierwszym użyciu' : 'wyłączony') + ' · sterowanie komputerem: ' + (r.computer.installed ? (r.computer.running ? 'zadanie trwa' : 'gotowe') + (r.computer.writer ? '' : ', ale BEZ modelu pomocniczego — kliknie, lecz nie wpisze tekstu') : 'nie zainstalowane (integrations\\setup.ps1)') + '.');
   }) });
 
+R.add({ id: 'browser_view', group: 'Internet i komputer', label: 'Podgląd przeglądarki na żywo',
+  description: 'Otwiera okno z podglądem na żywo przeglądarki sterowanej przez agenta WWW (CDP screencast). Klatki JPEG przesyłane z Chrome\'a przez most.',
+  args: { type: 'object', properties: {} },
+  examples: ['podglad przegladarki', 'pokaz przegladarke', 'browser view', 'live view', 'co widzi przegladarka'],
+  run(_, { ok }) { J.wm.open('browser'); return ok({}, 'Otwieram podgląd przeglądarki.', { highlight: 'browser' }); }
+});
+
 /* poziomy autonomii (js/jev-policy.js): odczyty i zatrzymanie po cichu; polecenia z pytaniem/zgodą zostają na domyślnym A1/A0 */
-for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'media_play', 'media_control', 'web_task_status', 'web_task_stop']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
+for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'media_play', 'media_control', 'web_task_status', 'web_task_stop', 'browser_view']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
 
 /* Jawny prefiks („w przeglądarce…”, „na komputerze…”) to wyraźny zamiar użytkownika: wykonujemy od razu, bez sędziego Jev. Bez tego zdanie
    „w przeglądarce wróć” trafiało do sędziego, który z 129 poleceń potrafił wybrać coś innego (np. akt dialogowy „zostawiam”). Zgody i

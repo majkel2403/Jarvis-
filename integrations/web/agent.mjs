@@ -369,9 +369,41 @@ export async function createAgent(opts = {}) {
     return { page: await settle(), text: text.slice(0, n), truncated: text.length > n };
   };
 
+  /* ---------- screencast: CDP Page.startScreencast → bufor JPEG ---------- */
+  let scSession = null, scFrame = null, scOn = false;
+
+  const scStart = async (quality = 40, maxWidth = 1280, maxHeight = 900, fps = 5) => {
+    if (scOn) return { status: 'already_running' };
+    const page = await browser.ensurePage();
+    scSession = await page.context().newCDPSession(page);
+    scOn = true;
+    scSession.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
+      scFrame = Buffer.from(data, 'base64');
+      scSession.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+    });
+    await scSession.send('Page.startScreencast', {
+      format: 'jpeg',
+      quality: Math.min(Math.max(+quality || 40, 10), 80),
+      maxWidth: +maxWidth || 1280,
+      maxHeight: +maxHeight || 900,
+      everyNthFrame: Math.max(1, Math.round(60 / (+fps || 5)))
+    });
+    log('screencast started (' + fps + ' FPS, quality ' + quality + ')');
+    return { status: 'started' };
+  };
+
+  const scStop = async () => {
+    if (!scOn) return { status: 'already_stopped' };
+    try { await scSession?.send('Page.stopScreencast'); } catch {}
+    try { await scSession?.detach(); } catch {}
+    scSession = null; scFrame = null; scOn = false;
+    log('screencast stopped');
+    return { status: 'stopped' };
+  };
+
   const state = () => {
     const s = controller.uiState();
-    return { page: pageInfo(), site: s.snapshot?.site, elements: s.snapshot?.elements?.length ?? 0, tabs: s.snapshot?.tabs || browser.tabInfo(), pending: s.pending, stats: s.stats, model: s.model };
+    return { page: pageInfo(), site: s.snapshot?.site, elements: s.snapshot?.elements?.length ?? 0, tabs: s.snapshot?.tabs || browser.tabInfo(), pending: s.pending, stats: s.stats, model: s.model, screencast: scOn };
   };
 
   const server = http.createServer(async (req, res) => {
@@ -387,6 +419,12 @@ export async function createAgent(opts = {}) {
       if (route === 'GET /agent/state') return json(res, 200, state());
       if (route === 'GET /agent/read') return json(res, 200, await read(url.searchParams.get('max')));
       if (route === 'GET /agent/view') return json(res, 200, await view(url.searchParams.get('max')));
+      if (route === 'GET /agent/screen') {
+        if (!scOn || !scFrame) return json(res, 503, { error: 'screencast nie działa' });
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': scFrame.length, 'Cache-Control': 'no-store' });
+        return res.end(scFrame);
+      }
+      if (route === 'GET /agent/screen/status') return json(res, 200, { on: scOn, hasFrame: !!scFrame });
       if (req.method === 'POST') {
         const b = await readBody(req);
         if (url.pathname === '/agent/command') { const text = String(b.text || '').trim().slice(0, 400); if (!text) return json(res, 400, { error: 'brak text' }); return json(res, 200, await runCommand(text, b.timeoutMs)); }
@@ -395,6 +433,8 @@ export async function createAgent(opts = {}) {
         if (url.pathname === '/agent/pick') return json(res, 200, await pick(b.n));
         if (url.pathname === '/agent/play') return json(res, 200, await play(b.query));
         if (url.pathname === '/agent/media') return json(res, 200, await media(String(b.action || 'status')));
+        if (url.pathname === '/agent/screen/start') return json(res, 200, await scStart(b.quality, b.maxWidth, b.maxHeight, b.fps));
+        if (url.pathname === '/agent/screen/stop') return json(res, 200, await scStop());
       }
       json(res, 404, { error: 'nie ma takiej ścieżki' });
     } catch (e) { json(res, e.status || 500, { error: String(e.message || e) }); }

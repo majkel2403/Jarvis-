@@ -681,6 +681,51 @@ async def agents_status(request: Request) -> Response:
 WEB_ACTIONS = {"command": "POST", "confirm": "POST", "pick": "POST", "goto": "POST", "play": "POST", "media": "POST", "read": "GET", "state": "GET"}
 
 
+@mcp.custom_route("/agents/web/screen", methods=["GET", "OPTIONS"])
+async def agents_web_screen(request: Request) -> Response:
+    """Proxy klatki JPEG ze screencastu agenta WWW."""
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    try:
+        web = get_agents().web
+        await web.ensure()
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as s:
+            async with s.get(
+                web.url + "/agent/screen",
+                headers={"X-Bridge-Token": web.token},
+            ) as r:
+                data = await r.read()
+                if r.status != 200:
+                    return cors(request, Response(content=data, status_code=r.status,
+                                                  media_type=r.content_type or "application/json"))
+                resp = Response(content=data, status_code=200, media_type="image/jpeg")
+                resp.headers["Cache-Control"] = "no-store"
+                return cors(request, resp)
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+
+
+@mcp.custom_route("/agents/web/screen/{action}", methods=["GET", "POST", "OPTIONS"])
+async def agents_web_screen_ctl(request: Request) -> Response:
+    """Start/stop/status screencastu."""
+    if (g := await agents_guard(request)) is not None:
+        return g
+    action = request.path_params["action"]
+    try:
+        if action == "status" and request.method == "GET":
+            return cors(request, JSONResponse(await get_agents().web.call("GET", "/agent/screen/status")))
+        if action == "start" and request.method == "POST":
+            body = await read_json(request)
+            return cors(request, JSONResponse(await get_agents().web.call("POST", "/agent/screen/start", body)))
+        if action == "stop" and request.method == "POST":
+            return cors(request, JSONResponse(await get_agents().web.call("POST", "/agent/screen/stop")))
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+    return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+
+
 @mcp.custom_route("/agents/web/{action}", methods=["GET", "POST", "OPTIONS"])
 async def agents_web(request: Request) -> Response:
     if (g := await agents_guard(request)) is not None:
