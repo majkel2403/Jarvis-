@@ -116,7 +116,7 @@ J.state = (() => {
   let s = null;
   try { s = JSON.parse(raw || 'null'); } catch (e) {
     if (raw) { try { localStorage.setItem(KEY + ':broken:' + Date.now(), raw.slice(0, 8000)); } catch (e2) { } }
-    J.toast?.('⚠ Stan danych był uszkodzony — Jarvis uruchomił się z ustawieniami domyślnymi. Poprzednie dane są dostępne w Ustawieniach → Dane.', 10000);
+    J.__stateBroken = true;   // J.toast jeszcze nie istnieje w tym momencie — ostrzeżenie pokaże main.js po starcie UI
   }
   const d = DEFAULTS();
   if (!s) return d;

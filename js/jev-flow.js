@@ -67,7 +67,11 @@ const askChips = async (question, opts, o) => {
   const a = await J.ask(question, items, { timeout: 30000, speak: true });
   if (a == null || a === '__cancel') return null;
   if (opts.some(x => x.value === a)) return a;
-  const n = norm(String(a)); const hit = opts.find(x => norm(x.label).includes(n) || n.includes(norm(x.value)));   // odpowiedź wpisana słowami
+  const n = norm(String(a));
+  if (CANCEL.test(n)) return null;   // „nie”/„anuluj” wpisane słowami to odmowa, nie wybór — includes dopasowywał „nie” do „niebieski”
+  const toks = n.split(/\s+/).filter(Boolean);   // dopasowanie po całych tokenach (plus prefiks ≥3 znaki dla niedokończonych słów)
+  const tokHas = (hay, needles) => { const H = norm(hay).split(/\s+/); return needles.length && needles.every(t => H.includes(t) || (t.length >= 3 && H.some(h => h.startsWith(t)))); };
+  const hit = opts.find(x => tokHas(x.label, toks) || tokHas(n, norm(String(x.value)).split(/\s+/).filter(Boolean)));
   return hit ? hit.value : null;
 };
 const fillEnums = async (cmd, args, missing, text, th) => {

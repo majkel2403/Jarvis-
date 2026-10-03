@@ -118,10 +118,13 @@ J.market = (() => {
       return false;
     }
   };
+  let wsRetry = 0, wsT = null;
   const openWS = () => {
+    clearTimeout(wsT);
+    if (J.state?.settings?.offlineMode) { ws = null; return; }   // „tryb bez sieci” obejmuje też WebSocket, nie tylko fetch
     try {
       ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + COINS.map(c => c.pair + '@miniTicker').join('/'));
-      ws.onopen = () => { source = 'Binance · na żywo'; J.emit('market', null); };
+      ws.onopen = () => { wsRetry = 0; source = 'Binance · na żywo'; J.emit('market', null); };
       ws.onmessage = ev => {
         const m = JSON.parse(ev.data).data; if (!m) return;
         const c = COINS.find(k => k.pair === m.s.toLowerCase()); if (!c) return;
@@ -130,7 +133,13 @@ J.market = (() => {
         if (d.spark.length) { d.spark[d.spark.length - 1] = p; }
         emit(c.sym);
       };
-      ws.onclose = () => { ws = null; };
+      ws.onclose = e => {
+        if (e.target !== ws) return;   // zamknięcie celowe (setWatch/unsubscribe/hidden) — ws już wyzerowany albo podmieniony
+        ws = null;
+        COINS.forEach(c => { data[c.sym].live = false; });
+        if (loaded) { source = 'CoinGecko'; J.emit('market', null); }   // etykieta przestaje kłamać „na żywo”
+        if ((users || bg) && !document.hidden) { const d = Math.min(60e3, 2000 * 2 ** wsRetry++); wsT = setTimeout(() => { if (!ws && (users || bg)) openWS(); }, d); }
+      };
       ws.onerror = () => { try { ws.close(); } catch (e) { } };
     } catch (e) { ws = null; }
   };
@@ -139,6 +148,10 @@ J.market = (() => {
     clearTimeout(hiddenT);
     if (document.hidden) { hiddenT = setTimeout(() => { if (ws) { try { ws.close(); } catch (e) { } ws = null; } }, 60e3); }
     else if (users && !ws) openWS();
+  });
+  J.on?.('settings', () => {   // włączenie trybu bez sieci zrywa strumień od razu; wyłączenie — wznawia
+    if (J.state.settings.offlineMode) { clearTimeout(wsT); if (ws) { try { ws.close(); } catch (e) { } ws = null; source = 'tryb bez sieci'; J.emit('market', null); } }
+    else if ((users || bg) && !ws) openWS();
   });
   return {
     COINS, data, get source() { return source; },

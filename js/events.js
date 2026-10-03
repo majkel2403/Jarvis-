@@ -41,7 +41,7 @@ J.ev = {
       if (!engine.replaying) return;
       J.ev.emit(e.type, { tool: e.tool, node: e.node, title, replay: true, task_id: 'replay' }, e.source || 'jarvis');
     }, Math.max(0, (e.t - t0) * k) + 200));
-    replayTimers.push(setTimeout(() => { engine.replaying = false; J.orb.set('idle', 'koniec replay'); }, (span * k) + 4600));
+    replayTimers.push(setTimeout(() => { J.ev.stopReplay(); J.orb.set('idle', 'koniec replay'); }, (span * k) + 4600));   // pełne sprzątanie (taskId/nodes/IDLE) — UI nie zostaje „busy”
     return true;
   },
   stopReplay() { replayTimers.forEach(clearTimeout); replayTimers = []; if (engine.replaying) { engine.replaying = false; engine.taskId = null; engine.nodes = {}; setMode('IDLE'); } },

@@ -235,7 +235,9 @@ const api = J.registry = {
       for (const p of c.compiled) {
         const m = p.re.exec(n); if (!m) continue;
         const args = {}; let bad = false;
-        p.names.forEach((nm, i) => { const g = m[i + 1]; if (g == null) return; const idx = n.indexOf(g); args[nm] = idx >= 0 ? raw.slice(idx, idx + g.length).trim() : g; const prop = c.args.properties[nm]; if (prop?.enum && (g.split(' ').length > 3 || /\s(i|potem|oraz|nastepnie)\s/.test(' ' + g + ' ') || resolveEnum(prop, nm, g) === undefined)) bad = true; });
+        const rawCut = raw.replace(/[?!.]+$/, '');   // n powstało z norm(raw) bez końcowej interpunkcji
+        p.names.forEach((nm, i) => { const g = m[i + 1]; if (g == null) return; const idx = n.indexOf(g); args[nm] = (idx >= 0 && rawCut.length === n.length) ? rawCut.slice(idx, idx + g.length).trim() : g;   // offsety raw↔norm tylko przy równej długości (wzorzec z agents.js) — normalizacja usuwa np. cudzysłowy i przesuwała wycinek
+          const prop = c.args.properties[nm]; if (prop?.enum && (g.split(' ').length > 3 || /\s(i|potem|oraz|nastepnie)\s/.test(' ' + g + ' ') || resolveEnum(prop, nm, g) === undefined)) bad = true; });
         if (bad) continue;   // wartość z listy dozwolonych nie może być zdaniem — to raczej łańcuch poleceń
         const leadHit = p.lead && p.names.length && new RegExp('^' + p.lead.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(n);   // zdanie zaczyna się od czasownika szablonu → to on decyduje (np. „zanotuj: sprawdź pogodę”)
         out.push({ id: c.id, args, score: 50 + p.weight + (p.names.length ? 0 : 20) + (leadHit ? 60 : 0), cmd: c, tpl: true });
@@ -255,7 +257,7 @@ const api = J.registry = {
     if (!m || m.cmd?.spansConj) return [];
     const parts = String(text).split(/\s+(?:i potem|a potem|a nastepnie|a następnie|nastepnie|następnie|potem|oraz|i|a)\s+|\s*[;,]\s*/i).map(s => norm(s).replace(/[?!.]+$/, '').trim()).filter(Boolean);
     if (parts.length < 2) return [];
-    const inArgs = norm(Object.values(m.args || {}).filter(v => typeof v === 'string' || typeof v === 'number').join(' '));
+    const inArgs = norm(Object.values(m.args || {}).flatMap(v => Array.isArray(v) ? v : [v]).filter(v => typeof v === 'string' || typeof v === 'number').join(' '));   // argumenty-listy (items) też się liczą — „chleb, jajka” z listy zakupów nie są „niepokrytą” częścią zdania
     const words = p => p.split(/\s+/).filter(w => w.length > 2);
     /* część zaczynająca się od czasownika w trybie rozkazującym to OSOBNA czynność, nawet gdy trafiła do tekstu notatki czy etykiety
        („zanotuj coś i wyślij to szefowi” — „wyślij” to drugie polecenie, nie treść notatki) */

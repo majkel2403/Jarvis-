@@ -178,7 +178,7 @@ J.userRoutines = {
         if (g === 'stop') { stopped = true; break; }
         if (g === 'skip') { done.push('⤼ ' + stepTxt(s)); continue; }
         J.emit('routine-step', { name: r.name, i, n: r.steps.length, text: stepTxt(s) });
-        if (s.say) { await J.brain.handle(s.say, { source: 'routine', silentWindow: !!opts.silent, signal: { text: r.name + ': ' + J.cmdKit.cut(s.say, 60) } }); done.push(stepTxt(s)); continue; }
+        if (s.say) { const h = await J.brain.handle(s.say, { source: 'routine', silentWindow: !!opts.silent, signal: { text: r.name + ': ' + J.cmdKit.cut(s.say, 60) } }); done.push(h === 'busy' ? '⤼ ' + stepTxt(s) + ' (pominięte — Jarvis był zajęty)' : stepTxt(s)); continue; }
         const res = await R.run(s.command, s.args || {}, { source: 'routine' });
         J.proc?.step?.('tool', 'Rutyna „' + r.name + '” — krok ' + (i + 1) + ': ' + s.command, [['Wynik', res.text]], { status: res.ok ? 'ok' : 'err' });
         if (res.undoEntry) undos.push(res.undoEntry);

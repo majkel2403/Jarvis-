@@ -11,9 +11,9 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1600, height: 900 } });
-  const errs = []; p.on('pageerror', e => errs.push('PAGE: ' + String(e))); p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource/.test(m.text())) errs.push('console: ' + m.text()); });
+  const errs = []; p.on('pageerror', e => errs.push('PAGE: ' + String(e))); p.on('console', m => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|blocked by CORS policy/.test(m.text())) errs.push('console: ' + m.text()); });   // CORS: strona testowa (:8090) to obcy origin dla żywego mostu/gatewaya — odmowa jest poprawna, nie jest błędem aplikacji
   await p.goto(URL + '/index.html?' + Date.now());
-  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('jarvis-os:v2', JSON.stringify({ settings: { hermesOn: false, skipBoot: true, speech: false, sound: false }, ui: { onboarded: true, tourDone: true } })); });
+  await p.evaluate(() => { if (window.J) { const noop = () => { }; Object.defineProperty(J, 'save', { get: () => noop, set: () => { } }); Object.defineProperty(J, 'saveNow', { get: () => noop, set: () => { } }); } localStorage.clear(); localStorage.setItem('jarvis-os:v2', JSON.stringify({ settings: { hermesOn: false, skipBoot: true, speech: false, sound: false }, ui: { onboarded: true, tourDone: true } })); });   // zapis umierającej strony wyłączony NIEODWRACALNIE (defineProperty): flush w pagehide ani tabChannel.claim nie nadpiszą podmienionego stanu
   await p.reload(); await p.waitForTimeout(1000);
   /* ekran startowy: czekamy na przycisk (animacja bywa dłuższa na wolnej maszynie), potem na aktywny pulpit */
   try { await p.waitForSelector('#bootEnter.show', { timeout: 15000 }); await p.click('#bootEnter', { timeout: 5000 }); } catch (e) { await p.keyboard.press('Enter'); }

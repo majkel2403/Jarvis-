@@ -164,31 +164,40 @@ const streamChat = async (messages, o = {}) => {
   const reader = r.body.getReader(), dec = new TextDecoder();
   let buf = '', content = '', scanned = 0;
   const re = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) >= 0) {
-      const block = buf.slice(0, i); buf = buf.slice(i + 2);
-      let ev = 'message', data = '';
-      for (const line of block.split('\n')) { if (!line || line.startsWith(':')) continue; if (line.startsWith('event:')) ev = line.slice(6).trim(); else if (line.startsWith('data:')) data += line.slice(5).trim(); }
-      if (!data || data === '[DONE]') continue;
-      let j; try { j = JSON.parse(data); } catch (e) { continue; }
-      if (ev === 'hermes.tool.progress' || j.type === 'hermes.tool.progress') { on.tool?.(j); continue; }
-      if (j.error) throw new Error('Hermes: ' + (j.error.message || JSON.stringify(j.error)));
-      if (j.usage) noteUsage(j.usage);
-      const d = j.choices?.[0]?.delta || {};
-      if (d.reasoning_content || d.reasoning) on.reason?.(d.reasoning_content || d.reasoning);
-      if (d.tool_calls) for (const tc of d.tool_calls) { const k = tc.index ?? native.size; const cur = native.get(k) || { id: tc.id || ('call_' + k), name: '', args: '' }; if (tc.id) cur.id = tc.id; if (tc.function?.name) cur.name += tc.function.name; if (tc.function?.arguments) cur.args += tc.function.arguments; native.set(k, cur); }
-      if (d.content) {
-        content += d.content; on.delta?.(content);
-        // wywołania domknięte w strumieniu — zgłaszaj od razu (odczyty mogą ruszyć równolegle z generowaniem)
-        re.lastIndex = scanned; let m;
-        while ((m = re.exec(content))) { scanned = re.lastIndex; try { const jj = JSON.parse(m[1]); let args = jj.arguments ?? jj.parameters ?? {}; if (typeof args === 'string') args = JSON.parse(args); on.call?.({ name: jj.name, args, ok: true, idx: m.index }); } catch (e) { } }
+  /* watchdog: serwer wiszący w pół strumienia (SSE bez danych) nie blokuje zadania w nieskończoność */
+  const IDLE_MS = 90000; let idleHit = false, idleT = null;
+  const armIdle = () => { clearTimeout(idleT); idleT = setTimeout(() => { idleHit = true; try { controller.abort(); } catch (e) { } }, IDLE_MS); };
+  armIdle();
+  try {
+    for (;;) {
+      let value, done;
+      try { ({ value, done } = await reader.read()); }
+      catch (e) { if (idleHit) { const er = new Error('Hermes przestał odpowiadać w trakcie odpowiedzi (' + IDLE_MS / 1000 + ' s bez danych).'); er.net = true; throw er; } throw e; }
+      armIdle();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        let ev = 'message', data = '';
+        for (const line of block.split('\n')) { if (!line || line.startsWith(':')) continue; if (line.startsWith('event:')) ev = line.slice(6).trim(); else if (line.startsWith('data:')) data += (data ? '\n' : '') + line.slice(5).replace(/^ /, ''); }   // wieloliniowe data: sklejane przez \n (spec SSE)
+        if (!data || data === '[DONE]') continue;
+        let j; try { j = JSON.parse(data); } catch (e) { continue; }
+        if (ev === 'hermes.tool.progress' || j.type === 'hermes.tool.progress') { on.tool?.(j); continue; }
+        if (j.error) throw new Error('Hermes: ' + (j.error.message || JSON.stringify(j.error)));
+        if (j.usage) noteUsage(j.usage);
+        const d = j.choices?.[0]?.delta || {};
+        if (d.reasoning_content || d.reasoning) on.reason?.(d.reasoning_content || d.reasoning);
+        if (d.tool_calls) for (const tc of d.tool_calls) { const k = tc.index ?? 0; const cur = native.get(k) || { id: tc.id || ('call_' + k), name: '', args: '' }; if (tc.id) cur.id = tc.id; if (tc.function?.name) cur.name += tc.function.name; if (tc.function?.arguments) cur.args += tc.function.arguments; native.set(k, cur); }   // bez index: deltas jednego wywołania sklejają się pod 0, zamiast rozpadać na osobne wpisy
+        if (d.content) {
+          content += d.content; on.delta?.(content);
+          // wywołania domknięte w strumieniu — zgłaszaj od razu (odczyty mogą ruszyć równolegle z generowaniem)
+          re.lastIndex = scanned; let m;
+          while ((m = re.exec(content))) { scanned = re.lastIndex; try { const jj = JSON.parse(m[1]); let args = jj.arguments ?? jj.parameters ?? {}; if (typeof args === 'string') args = JSON.parse(args); on.call?.({ name: jj.name, args, ok: true, idx: m.index }); } catch (e) { } }
+        }
       }
     }
-  }
+  } finally { clearTimeout(idleT); }
   return { content, calls: finishNative(), raw: content };
 };
 
@@ -470,7 +479,7 @@ J.brain = {
     if (J.ask?.pending && !opts.source?.match(/signal|routine/)) { J.ask.answer(text); return; }   // trwa pytanie Jarvisa — to jest odpowiedź
     J.brain.lastSource = opts.source || (opts.voice ? 'voice' : 'user');
     if (!loaded) await loadHistory();
-    if (busy) { if (opts.source === 'signal' || opts.source === 'routine') return; if (pending.length >= 3) { J.toast('Jarvis ma już kolejkę poleceń — poczekaj chwilę'); return; } pending.push([text, opts]); J.toast('Dodano do kolejki: „' + text.slice(0, 40) + '”'); return; }
+    if (busy) { if (opts.source === 'signal' || opts.source === 'routine') return 'busy'; if (pending.length >= 3) { J.toast('Jarvis ma już kolejkę poleceń — poczekaj chwilę'); return; } pending.push([text, opts]); J.toast('Dodano do kolejki: „' + text.slice(0, 40) + '”'); return; }   // 'busy' → rutyna raportuje pominięty krok zamiast udawać, że wykonany
     busy = true; taskAbort = new AbortController();
     const fromSignal = opts.source === 'signal' || opts.source === 'routine';
     const silent = opts.silentWindow || (opts.voice && J.state.settings.silentVoice);

@@ -2,13 +2,23 @@
    JARVIS OS — start, pulpit, efekty, paleta, skróty
    ========================================================= */
 'use strict';
-/* BroadcastChannel — dwie karty: druga przechodzi w tryb „tylko podgląd" z przyciskiem „Przejmij" */
+/* BroadcastChannel — dwie karty: druga przechodzi w tryb „tylko podgląd" z przyciskiem „Przejmij".
+   JEDYNY mechanizm ochrony dwóch kart (D-14): karta-podgląd ma od razu wyłączony zapis (J.save/J.saveNow),
+   więc nie nadpisuje localStorage karty głównej nawet przez chwilę. */
 J.tabChannel = (() => {
   if (typeof BroadcastChannel === 'undefined') return J.tabChannel;
   const CH = 'jarvis-os', id = J.uid();
   let primary = false, ch = null, heartT = null, missT = null;
+  const saves = { save: J.save, saveNow: J.saveNow };
+  delete J.state.__primary;   // historyczna flaga trwała w localStorage i na zawsze wyłączała ochronę dwóch kart
+  const setReadonly = on => {
+    document.body?.classList.toggle('readonly-tab', on);
+    J.save = on ? () => { } : saves.save;
+    J.saveNow = on ? () => false : saves.saveNow;
+  };
   const claim = () => {
     primary = true;
+    setReadonly(false);
     document.getElementById('tab-viewer')?.remove();
     ch?.postMessage({ type: 'claim', id });
     clearInterval(heartT);
@@ -16,9 +26,10 @@ J.tabChannel = (() => {
   };
   const release = () => { primary = false; clearInterval(heartT); };
   const showViewer = () => {
+    setReadonly(true);   // najpierw stop zapisu, potem UI — żadnego okna, w którym dwie karty piszą naraz
     if (document.getElementById('tab-viewer')) return;
     const d = document.createElement('div'); d.id = 'tab-viewer';
-    d.innerHTML = '<span>Ta karta jest w trybie podglądu — Jarvis działa w innej karcie.</span><button id="tab-takeover">Przejmij</button>';
+    d.innerHTML = '<span>Ta karta jest w trybie podglądu — Jarvis działa w innej karcie. Zmiany nie są zapisywane.</span><button id="tab-takeover">Przejmij</button>';
     document.body.appendChild(d);
     document.getElementById('tab-takeover').onclick = () => { claim(); d.remove(); };
   };
@@ -1077,7 +1088,10 @@ J.notifs.render();
 if (J.state.alerts?.length) J.market.subscribeBackground();
 J.files?.load?.();
 /* okna otwarte przy zamykaniu strony (układ startowy „last”) */
-addEventListener('pagehide', () => { try { localStorage.setItem('jarvis-os:openAtExit', JSON.stringify(J.wm.list().filter(k => !k.startsWith('w:') && !J.wm.isMin(k)))); } catch (e) { } });   // osobny klucz: pełny zapis stanu tutaj nadpisałby zmiany z innej karty
+addEventListener('pagehide', () => {
+  try { localStorage.setItem('jarvis-os:openAtExit', JSON.stringify(J.wm.list().filter(k => !k.startsWith('w:') && !J.wm.isMin(k)))); } catch (e) { }
+  J.saveNow();   // flush debounce (250–600 ms): zamknięcie karty tuż po edycji gubiło ostatnie zmiany; w karcie-podglądzie to no-op
+});
 /* link do miejsca w Jarvisie: index.html#go=app/widok/cel (docs/spec/03-nawigacja.md §5) */
 J.openGo = () => {
   try {
@@ -1089,18 +1103,9 @@ J.openGo = () => {
   } catch (e) { return false; }
 };
 addEventListener('hashchange', () => J.openGo());
-/* druga karta z Jarvisem: dane w tej samej przeglądarce nadpisywałyby się — jedna karta jest „główna” (D-14) */
-try {
-  const bc = new BroadcastChannel('jarvis-os'), me = J.uid(); let yielded = false;
-  bc.onmessage = ev => {
-    const m = ev.data || {};
-    if (m.t === 'hello' && m.id !== me && !yielded) bc.postMessage({ t: 'here', id: me });
-    if (m.t === 'here' && m.id !== me && !yielded && !J.state.__primary) { yielded = true; J.ask('Jarvis działa już w innej karcie. Praca w dwóch kartach naraz nadpisuje dane. Przejąć tutaj?', [{ label: 'Przejmij tutaj', value: 'take', primary: true }, { label: 'Tylko podgląd', value: 'view' }], { speak: false, timeout: 600000 }).then(v => { if (v === 'take') { yielded = false; J.state.__primary = true; bc.postMessage({ t: 'take', id: me }); } else { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.toast('Tryb podglądu — zmiany nie zostaną zapisane'); } }); }
-    if (m.t === 'take' && m.id !== me) { document.body.classList.add('readonly-tab'); J.save = () => { }; J.saveNow = () => { }; J.notice({ title: 'Jarvis przejęty w innej karcie', body: 'Ta karta działa teraz tylko do podglądu (zmiany nie są zapisywane). Odśwież, aby wrócić.', kind: 'info' }); }
-  };
-  bc.postMessage({ t: 'hello', id: me });
-} catch (e) { /* brak BroadcastChannel — bez ochrony dwóch kart */ }
+/* ochrona dwóch kart: jeden mechanizm — J.tabChannel na górze pliku (heartbeat + wyłączony zapis w karcie-podglądzie) */
 boot().then(() => {
+  if (J.__stateBroken) J.toast('⚠ Stan danych był uszkodzony — Jarvis uruchomił się z ustawieniami domyślnymi. Poprzednie dane są dostępne w Ustawieniach → Dane.', 10000);
   J.widgets.restore(); setTimeout(() => J.userRoutines?.fire('startup'), 4000); J.fx.apply(); J.on('agent-ui', id => J.fx.ghost(id));
   /* tryb przestrzeni i układ startowy */
   { const m = J.state.ui.mode === 'present' ? 'work' : (J.state.ui.mode || S.startMode || 'work'); if (m !== 'work') J.uiMode.set(m); else J.state.ui.mode = 'work'; }
