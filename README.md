@@ -12,7 +12,7 @@ Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, s
 | **Animacja startowa** | reaktor łukowy, siatka HUD, log rozruchu z procentem, syntezowany dźwięk, powitanie głosowe |
 | **Core** | żywa kula z orbitami, wiązką i odbiciem w jeziorze; pierścienie HUD reagujące na stan (czuwam / słucham / analizuję / działam / czekam na zgodę / pauza / błąd); wokół Core **10 kart** zasilanych wyłącznie zdarzeniami Event Busa |
 | **Dashboard agenta** | pasek górny: segmentowy wskaźnik trybu wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS, zegar; **Telemetria** (zwijana, `Alt+3`): pogoda, zegar, wykres aktywności agenta, FPS, pamięć, sieć, bateria, zadania, akcje, czas pracy, okna |
-| **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **58 narzędzi** z Command Registry; wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
+| **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **ponad 130 narzędzi** z Command Registry (aktualna liczba: `bridge/tools.json`); wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
 | **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, środek = pytanie „Chodzi o…?”, reszta = Hermes z podpowiedzią `<judge>`. Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, poziomy prywatności, autonomia z przyciskiem „Cofnij”, budżet, tryb cienia; bez klucza wszystko działa jak dotąd |
 | **Command Registry** | jedno źródło prawdy: każde polecenie ma schemat, poziom ryzyka, przykłady PL i z tego samego wpisu powstają narzędzie dla modelu, wzorce silnika lokalnego, pozycja palety `Ctrl+K` i opis „co potrafisz” |
 | **Silnik lokalny** | działa bez modelu: dopasowanie do przykładów z rejestru z rozumieniem czasu („za 20 minut”, „w piątek o 9”, „o osiemnastej trzydzieści”), łańcuchy („otwórz notatnik i ustaw minutnik 5 minut”), procenty, jednostki |
@@ -237,7 +237,9 @@ node --test integrations/tests/web-agent.test.mjs   # agent WWW: prawdziwy Chrom
 %USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe bridge\test_agents.py   # most: agenci, zadania na komputerze (atrapa), pełny łańcuch
 ```
 
-Workflow `.github/workflows/ci.yml` uruchamia oba zestawy przy każdym pushu.
+Workflow `.github/workflows/ci.yml` uruchamia przy każdym pushu **składnię JS, testy jednostkowe i test dymny** (pierwsze dwa zestawy z listy).
+Testy agenta WWW i mostu są **tylko lokalne**: wymagają vendora `jev-voice-browser` (agent WWW) oraz venv Hermesa i Windows (most) — CI ich nie uruchamia.
+Skróty npm: `npm test` (jednostkowe), `npm run test:e2e`, `npm run test:web-agent`, `npm run test:bridge`, `npm run typecheck`.
 
 ## Struktura
 

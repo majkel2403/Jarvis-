@@ -35,7 +35,7 @@ Rozważaliśmy trzy ścieżki. Tabela:
 2. **Zero builda, zero bundlera od początku.** Projekt z definicji jest vanilla JS PWA (`<script src="...">` w `index.html`, klasyczne IIFE, globalny `J`). Wdrożenie webpacka zmieniłoby kontrakt PWA (musi działać z GitHub Pages bez Node).
 3. **Testy Node ładują pliki przez `vm.runInContext`** — `tests/harness.js` używa `fs.readFileSync` na konkretne nazwy. Migracja wymagałaby aktualizacji harness i każdego testu.
 4. **Hermes/most MCP czyta `registry.tools()` i publikuje schema** — ten pipeline już działa. Type safety można dorzucić tam, gdzie ryzyko jest największe (nowe narzędzia, walidacja), nie wszędzie.
-5. **CI nie istnieje.** Dodanie CI jest oddzielnym zadaniem; `tsc --noEmit` może być w `npm run typecheck` uruchamianym lokalnie i z dowolnego crona.
+5. **CI istnieje** (`.github/workflows/ci.yml`: składnia, testy jednostkowe, test dymny). `tsc --noEmit` jest dostępne jako `npm run typecheck` (lokalnie; można dodać do CI osobnym krokiem).
 
 ---
 

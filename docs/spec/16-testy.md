@@ -4,7 +4,7 @@
 
 | rodzaj | gdzie | co sprawdza | uruchomienie |
 |---|---|---|---|
-| jednostkowe | `tests/unit/*.test.js` (10 plików, 188 przypadków) | rejestr, parser PL, NLP czasu, pętla Hermesa na atrapie SSE, Jev (atrapa), router R1–R14, szybka ścieżka, cofanie, nawigacja, ochrona D9–D15, zbiór 447 zdań | `node --test "tests/unit/*.test.js"` |
+| jednostkowe | `tests/unit/*.test.js` (20 plików, ~300 przypadków — aktualną liczbę podaje `node --test`) | rejestr, parser PL, NLP czasu, pętla Hermesa na atrapie SSE, Jev (atrapa), router R1–R14, szybka ścieżka, cofanie, nawigacja, ochrona D9–D15, zbiór 447 zdań | `node --test "tests/unit/*.test.js"` |
 | przeglądarka | `tests/e2e/smoke.js` (Playwright, Chromium) | start, 16 poleceń lokalnych, zgoda, trwałość w IndexedDB, brak wycieku kluczy, wygląd (białe przyciski, kolizje HUD przy 3 rozdzielczościach), Jev na atrapie (szybka ścieżka, wybór z listy, „Cofnij”, „no dobra”, panel ustawień) | `python3 -m http.server 8090 & node tests/e2e/smoke.js` |
 | sonda Jeva | `tests/jev-probe.js` | trafność prawdziwego Jeva, krzywa zaufania, E1/E3, test kontraktowy | `OPENROUTER_API_KEY=… node tests/jev-probe.js` |
 | CI | `.github/workflows/ci.yml`, `pages.yml`, `jev-contract.yml` | składnia, jednostkowe, e2e; publikacja tylko po testach; nocny kontrakt Jeva | automatycznie |

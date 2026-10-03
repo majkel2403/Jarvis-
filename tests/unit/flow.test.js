@@ -125,5 +125,7 @@ test('tryb „zawsze pytaj”: Jev nie wykonuje niczego sam', async () => {
 test('Jev niedostępny → polecenia działają jak dotąd (parser), bez czekania', async () => {
   const { J, mock, say } = await setup([], {}, { fail: 'network' });
   const t0 = Date.now(); const r = await say('minutnik 2 minuty');
-  assert.match(r, /Minutnik ustawiony/); assert.ok(Date.now() - t0 < 1500); J.timer.stop();
+  /* błąd sieci jest natychmiastowy; próg 1,2 s ODRÓŻNIA brak czekania od odczekania limitu Jeva (1,5 s) —
+     poprzedni próg 1,5 s nie odróżniał niczego */
+  assert.match(r, /Minutnik ustawiony/); assert.ok(Date.now() - t0 < 1200, 'bez czekania na limit Jeva: ' + (Date.now() - t0) + ' ms'); J.timer.stop();
 });

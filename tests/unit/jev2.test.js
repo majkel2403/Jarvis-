@@ -21,8 +21,10 @@ test('bezpiecznik: 401/403 → długa pauza z powodem; 429 → krótka', async (
   const b = mk([], {}, { status: 429 }); b.J.notice = () => { }; await b.J.judge.decide('x'); assert.ok(b.J.judge.breaker.until - Date.now() < 100e3); assert.match(b.J.judge.breaker.reason, /429/);
 });
 test('limit czasu: wolny Jev nie blokuje polecenia dłużej niż limit', async () => {
-  const { J } = mk([{ re: /./, intent: 'open_app' }], {}, { delay: 1900 });
-  const t0 = Date.now(); const v = await J.judge.decide('otwórz notatnik'); assert.equal(v, null); assert.ok(Date.now() - t0 < 1800, 'przerwano po ~1,5 s: ' + (Date.now() - t0));
+  /* atrapa odpowiada po 5 s, limit decide() to 1,5 s — próg 4 s odróżnia abort od czekania na odpowiedź
+     i nie flakuje na obciążonym runnerze (poprzednio margines wynosił 300 ms) */
+  const { J } = mk([{ re: /./, intent: 'open_app' }], {}, { delay: 5000 });
+  const t0 = Date.now(); const v = await J.judge.decide('otwórz notatnik'); assert.equal(v, null); assert.ok(Date.now() - t0 < 4000, 'przerwano po ~1,5 s: ' + (Date.now() - t0));
 });
 test('walidacja: wybór spoza listy jest odrzucany; poprawne pola przy błędnych zostają', async () => {
   const g = mk([], {}, { fail: 'garbage' }); g.J.notice = () => { };
