@@ -21,8 +21,15 @@ from pathlib import Path
 
 import yaml
 
+for _s in (sys.stdout, sys.stderr):   # konsola Windows bywa w cp1250 — bez tego polskie znaki to krzaczki
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 HERE = Path(__file__).resolve().parent
-ENABLED = ["memory", "web", "session_search", "jarvis_desktop"]   # ostatni = nazwa serwera MCP (allowlista)
+# Pełny zestaw jak na Telegramie (SOUL §2.9 obiecuje terminal/pliki/kod/skille także z pulpitu — decyzja z 2026-10-03),
+# bez stt/tts (kanały głosowe; pulpit ma własną mowę). jarvis_desktop = nazwa serwera MCP (allowlista).
+ENABLED = ["browser", "clarify", "code_execution", "computer_use", "connections", "cronjob", "delegation",
+           "file", "memory", "session_search", "skills", "terminal", "todo", "vision", "web", "jarvis_desktop"]
 ORIGINS = "http://localhost:4000,http://127.0.0.1:4000,https://majkel2403.github.io"
 
 

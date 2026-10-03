@@ -3,7 +3,7 @@
   Uruchamia jedną usługę Jarvis OS (używane przez autostart z install-autostart.ps1; można też ręcznie).
 
 .DESCRIPTION
-  -Service site     strona Jarvis OS: python -m http.server 4000 (katalog repozytorium)
+  -Service site     strona Jarvis OS: python bridge\serve_site.py 4000 (katalog repozytorium, Host walidowany)
   -Service bridge   most MCP + agenci: bridge\jarvis_bridge.py (port 8651)
   -Service gateway  Hermes, profil jarvis-desktop (port 8643); czeka, aż most wystartuje
   -Service tab      jednorazowe: czeka na most, i TYLKO gdy żadna karta nie jest połączona (clients==0),
@@ -41,7 +41,7 @@ $port = @{ site = 4000; bridge = 8651; gateway = 8643 }[$Service]
 if (Listening $port) { exit 0 }
 
 switch ($Service) {
-  'site'    { $exe = $py; $argv = @('-m', 'http.server', '4000', '--bind', '127.0.0.1'); $cwd = $repo }
+  'site'    { $exe = $py; $argv = @("`"$(Join-Path $repo 'bridge\serve_site.py')`"", '4000'); $cwd = $repo }   # walidacja Host — patrz bridge\serve_site.py
   'bridge'  { $exe = $py; $argv = @("`"$(Join-Path $repo 'bridge\jarvis_bridge.py')`""); $cwd = $repo }
   'gateway' {
     for ($i = 0; $i -lt 60 -and -not (Listening 8651); $i++) { Start-Sleep 2 }   # gateway łączy się z mostem przy starcie (narzędzia MCP)

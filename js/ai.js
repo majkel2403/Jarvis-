@@ -323,7 +323,7 @@ const guardCall = async (call, cmd, utterance, opts, injected) => {
 };
 /* D10: treść zwrócona z notatek, plików, schowka może zawierać instrukcje podszywające się pod polecenia */
 const externalFlagged = async (name, r) => {
-  const text = JSON.stringify(r.data ?? r.text).slice(0, 4000);
+  const text = JSON.stringify(r.data ?? r.text);   // heurystyka lokalna jest tania — skanuje całość, nie tylko początek
   const local = J.policy.injection(text); let flagged = local.flagged, why = local.reasons.join(', ');
   if (!flagged && J.judge?.available() && J.judge.allowed('injection')) { const p = await J.judge.injection(text); if (p != null && p >= J.judge.thresholds().injection) { flagged = true; why = 'Jev ' + Math.round(p * 100) + '%'; } }
   if (flagged) { J.chat.add('action', '🛡 Podejrzane instrukcje w treści z ' + name + ' (' + why + ') — kolejne działania wymagają zgody.'); J.proc.step('system', 'Wykryto podejrzane instrukcje w treści zewnętrznej', [['Narzędzie', name], ['Powód', why]], { status: 'err', preview: why }); J.ev.emit('security.injection', { tool: name, why }); }

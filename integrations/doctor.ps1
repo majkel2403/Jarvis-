@@ -59,7 +59,7 @@ $token = if (Test-Path (Join-Path $root 'bridge-token')) { (Get-Content (Join-Pa
 foreach ($p in @(@(8651, 'most Jarvisa (MCP)'), @(8643, 'gateway Hermesa (profil jarvis-desktop)'), @(8788, 'agent WWW (Chromium + Jev)'), @(4000, 'strona Jarvis OS'))) {
   if (Get-NetTCPConnection -LocalPort $p[0] -State Listen -ErrorAction SilentlyContinue) { Ok "$($p[1]) — port $($p[0])" }
   elseif ($p[0] -eq 8788) { Warn "$($p[1]) — jeszcze nie działa (most uruchomi go przy pierwszym użyciu)" }
-  else { No "$($p[1]) — port $($p[0]) nie nasłuchuje" $(if ($p[0] -eq 8651) { 'bridge\start-bridge.bat' } elseif ($p[0] -eq 8643) { 'hermes\start-desktop-gateway.bat' } else { 'python -m http.server 4000 w katalogu Jarvisa' }) }
+  else { No "$($p[1]) — port $($p[0]) nie nasłuchuje" $(if ($p[0] -eq 8651) { 'bridge\start-bridge.bat' } elseif ($p[0] -eq 8643) { 'hermes\start-desktop-gateway.bat' } else { 'python bridge\serve_site.py 4000 w katalogu Jarvisa' }) }
 }
 if ($token) {
   try { $s = Invoke-RestMethod 'http://127.0.0.1:8651/agents/status' -Headers @{ 'X-Bridge-Token' = $token } -TimeoutSec 5; Ok "most → agenci: klucz=$($s.key), WWW=$(if ($s.web.up) { 'działa' } else { 'śpi' }), komputer=$(if ($s.computer.installed) { 'gotowy' } else { 'brak' })" }

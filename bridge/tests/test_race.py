@@ -245,9 +245,10 @@ class RaceFixTest(unittest.TestCase):
         text = next((c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"), "")
         self.assertIn("nie jest połączony", text.lower(), f"tekst: {text[:200]}")
 
-        # Czekał ~WAKE_WAIT (4 s od t_93ab5e70), nie natychmiast (jak B) i nie dłużej niż 5 s
-        self.assertGreater(elapsed, 3.5, f"OFFLINE powinien przyjść po ~WAKE_WAIT (4 s), trwało {elapsed:.2f}s")
-        self.assertLess(elapsed, 5.0, f"OFFLINE nie powinien czekać dłużej niż WAKE_WAIT+1s, trwało {elapsed:.2f}s")
+        # Czekał ~WAKE_WAIT (wartość z kodu mostu, nie na sztywno), nie natychmiast (jak B) i nie dłużej niż WAKE_WAIT+1s
+        import jarvis_bridge as jb  # type: ignore
+        self.assertGreater(elapsed, jb.WAKE_WAIT - 0.5, f"OFFLINE powinien przyjść po ~WAKE_WAIT ({jb.WAKE_WAIT}s), trwało {elapsed:.2f}s")
+        self.assertLess(elapsed, jb.WAKE_WAIT + 1.0, f"OFFLINE nie powinien czekać dłużej niż WAKE_WAIT+1s, trwało {elapsed:.2f}s")
 
 
 if __name__ == "__main__":

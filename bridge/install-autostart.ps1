@@ -5,7 +5,7 @@
 .DESCRIPTION
   Tworzy cztery zadania w Harmonogramie zadań bieżącego użytkownika (bez uprawnień administratora), każde przez
   bridge\run-service.ps1 w ukrytym oknie, z logami w %USERPROFILE%\.jarvis-os\logs:
-    JarvisOS-Site            - strona Jarvis OS (python -m http.server 4000)
+    JarvisOS-Site            - strona Jarvis OS (python bridge\serve_site.py 4000, Host walidowany)
     JarvisOS-Bridge          - most MCP + agenci (bridge\jarvis_bridge.py, :8651)
     JarvisOS-DesktopGateway  - Hermes, profil jarvis-desktop (:8643), po starcie mostu
     JarvisOS-OpenTab         - jednorazowo otwiera kartę :4000, TYLKO gdy żadna nie jest połączona z mostem

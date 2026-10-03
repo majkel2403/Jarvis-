@@ -177,6 +177,14 @@ class WebAgent:
                     return r.status, {}
 
     async def up(self) -> bool:
+        # Windows ponawia SYN ~2 s zanim zgłosi „odmowa” — szybki probe portu, żeby /bridge/status nie mulił, gdy agent śpi
+        from urllib.parse import urlsplit
+        u = urlsplit(self.url)
+        try:
+            _, w = await asyncio.wait_for(asyncio.open_connection(u.hostname or "127.0.0.1", u.port or 80), 0.4)
+            w.close()
+        except Exception:
+            return False
         try:
             st, _ = await self._http("GET", "/agent/health", timeout=2)
             return st == 200

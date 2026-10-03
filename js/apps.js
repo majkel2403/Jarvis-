@@ -91,7 +91,8 @@ J.market = (() => {
   const mkCoin = sym => { const k = KNOWN[sym] || [null, sym, 1]; return { id: k[0], sym, name: k[1], pair: sym.toLowerCase() + 'usdt', seed: k[2] }; };
   const COINS = [];
   const data = {};
-  const buildCoins = () => { const want = (J.state.settings.watchlist && J.state.settings.watchlist.length ? J.state.settings.watchlist : ['BTC', 'ETH', 'SOL', 'BNB']).slice(0, 12); COINS.length = 0; want.forEach(sym => { const c = mkCoin(sym); COINS.push(c); if (!data[sym]) data[sym] = { ...c, price: c.seed, chg: 0, spark: [], live: false }; }); };
+  const buildCoins = () => { let want = (J.state.settings.watchlist || []).filter(s => /^[A-Z0-9]{2,10}$/.test(String(s)));   // watchlista bywa z importu kopii — tylko kształt tickera
+    if (!want.length) want = ['BTC', 'ETH', 'SOL', 'BNB']; want = want.slice(0, 12); COINS.length = 0; want.forEach(sym => { const c = mkCoin(sym); COINS.push(c); if (!data[sym]) data[sym] = { ...c, price: c.seed, chg: 0, spark: [], live: false }; }); };
   buildCoins();
   let ws = null, users = 0, poll = null, tick = null, sim = null, source = '—', loaded = false;
   const emit = sym => J.emit('market', sym);
@@ -640,7 +641,7 @@ J.apps.market = {
     body.innerHTML = `<div class="market" id="mk"></div><div class="src"><span id="mkSrc">Łączenie…</span><span class="dim">aktualizacja na żywo</span></div>`;
     const grid = $('#mk', body), cards = {};
     const build = () => { grid.innerHTML = ''; Object.keys(cards).forEach(k => delete cards[k]); J.market.COINS.forEach(c => {
-      const el = h('div', { class: 'coin' }, `<div class="h"><div><b>${c.name}</b><span class="sym">${c.sym}</span></div><span class="chg"></span></div><div class="price">—</div><canvas></canvas>`);
+      const el = h('div', { class: 'coin' }, `<div class="h"><div><b>${esc(c.name)}</b><span class="sym">${esc(c.sym)}</span></div><span class="chg"></span></div><div class="price">—</div><canvas></canvas>`);
       grid.appendChild(el); cards[c.sym] = el;
     }); };
     build(); sub(ctx, 'market-list', () => { build(); draw(); });

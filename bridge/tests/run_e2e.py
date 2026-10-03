@@ -19,6 +19,10 @@ import time
 import unittest
 from pathlib import Path
 
+for _s in (sys.stdout, sys.stderr):   # konsola Windows bywa w cp1250 — strzałki/polskie znaki wywalały raport
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
@@ -65,7 +69,9 @@ class ColoredTextTestResult(unittest.TextTestResult):
             self.records.append((name, status, msg, dt))
 
     def _full_name(self, test) -> str:
-        return f"{test.__class__.__name__}.{test._testMethodName}"
+        # błąd w setUpClass/setUpModule przychodzi jako _ErrorHolder bez _testMethodName
+        m = getattr(test, "_testMethodName", None)
+        return f"{test.__class__.__name__}.{m}" if m else str(test.id() if hasattr(test, "id") else test)
 
     def addSuccess(self, test):  # noqa: N802
         name = self._full_name(test)

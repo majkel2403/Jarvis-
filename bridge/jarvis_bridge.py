@@ -499,6 +499,9 @@ async def pair(request: Request) -> Response:
     Origin publiczny (GitHub Pages) jest w ORIGINS dla CORS, ale tokenu tą drogą nie dostanie — patrz PAIR_ORIGINS."""
     if request.method == "OPTIONS":
         return cors(request, Response(status_code=204))
+    # Host sprawdzamy przed Origin: Origin da się podrobić spoza przeglądarki, Host przy DNS rebinding — nie
+    if ALLOWED_HOSTS and request.headers.get("host", "") not in ALLOWED_HOSTS:
+        return JSONResponse({"error": "host not allowed"}, status_code=403)
     if request.headers.get("origin", "") not in PAIR_ORIGINS:
         return JSONResponse({"error": "origin not allowed"}, status_code=403)
     return cors(request, JSONResponse({"token": TOKEN}))
@@ -526,7 +529,9 @@ async def hermes_pair(request: Request) -> Response:
     po cichu nie rozmawiała z Hermesem i złożone zadania trafiały do prostego silnika lokalnego."""
     if request.method == "OPTIONS":
         return cors(request, Response(status_code=204))
-    if request.headers.get("origin", "") not in ORIGINS or not authorized(request):
+    # tylko lokalne originy (PAIR_ORIGINS): klucz gatewaya daje od 2026-10-03 pełne narzędzia (terminal, pliki),
+    # więc nie wydajemy go stronie z github.io, nawet z tokenem mostu
+    if request.headers.get("origin", "") not in PAIR_ORIGINS or not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     t = writer_proxy.hermes_target()
     if not t:
@@ -817,6 +822,10 @@ def main() -> None:
     load_tools()
     ORIGINS = DEFAULT_ORIGINS + [o.strip() for o in os.environ.get("JARVIS_BRIDGE_ORIGINS", "").split(",") if o.strip()]
     ALLOWED_HOSTS = {f"127.0.0.1:{args.port}", f"localhost:{args.port}"}
+    if args.host not in ("127.0.0.1", "localhost", "::1") and os.environ.get("JARVIS_BRIDGE_ALLOW_LAN") != "1":
+        print("[jarvis-bridge] ODMOWA STARTU: host " + args.host + " wystawia most (sterowanie komputerem) poza ten komputer.\n"
+              "Jeśli na pewno tego chcesz, ustaw JARVIS_BRIDGE_ALLOW_LAN=1 i dopisz pełny host:port do JARVIS_BRIDGE_ORIGINS.", file=sys.stderr)
+        sys.exit(2)
     if args.show_token:
         print(TOKEN)
         return

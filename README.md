@@ -34,10 +34,14 @@ Wszystkie dane (notatki, zadania, ustawienia, pamięć, rozmowa) są zapisywane 
 ## Uruchomienie
 
 ```bash
-# dowolny statyczny serwer, np.:
-python3 -m http.server 8080
+# zalecany serwer (odrzuca żądania z podrobionym Host — chroni klucz w config.local.js):
+python bridge/serve_site.py 8080
 # → http://localhost:8080
 ```
+
+Zadziała też dowolny statyczny serwer (np. `python3 -m http.server 8080`), ale jeśli w `config.local.js`
+trzymasz klucz API, używaj `bridge/serve_site.py` — zwykły `http.server` odda ten plik każdemu, kto
+trafi na port (atak DNS rebinding).
 
 Plik `index.html` działa też otwarty bezpośrednio z dysku (bez PWA i trybu offline).
 
