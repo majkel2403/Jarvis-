@@ -122,6 +122,15 @@ class CircuitBreaker:
                 self._state[name] = "OPEN"
                 self._opened_at[name] = now
 
+    def release(self, name: str) -> None:
+        """Wywołanie skończyło się bez werdyktu (CancelledError, nieprzewidziany wyjątek): zwolnij probe HALF_OPEN.
+        Bez tego narzędzie zostawało THROTTLED na zawsze (flaga in-flight nigdy nie schodziła). Po record() to no-op."""
+        with self._lock:
+            self._half_open_in_flight.discard(name)
+            if self._state.get(name) == "HALF_OPEN":
+                self._state[name] = "OPEN"
+                self._opened_at[name] = self._now() - CB_COOLDOWN   # następny check od razu dopuści nowy probe
+
     def snapshot(self) -> dict:
         """Stan do diagnostyki: ile narzędzi jest OPEN/HALF_OPEN i których."""
         with self._lock:
@@ -282,7 +291,13 @@ async def _bridge_handle_media(name, args, cb):
     if not allow:
         return _envelope("THROTTLED", False, {"retry_after_s": round(retry_after, 3)},
                          f"Circuit breaker dla '{name}' otwarty po {CB_FAIL_THRESHOLD} failed w {CB_FAIL_WINDOW:g}s. Ponów za {retry_after:.2f}s.")
+    try:
+        return await _bridge_handle_media_inner(name, args, cb, _envelope)
+    finally:
+        cb.release(name)   # ścieżki fallbacku i przerwania nie wołają record() — bez tego probe HALF_OPEN wisiał
 
+
+async def _bridge_handle_media_inner(name, args, cb, _envelope):
     if name == "media_play":
         query = (args.get("query") or "").strip()
         if not query:
@@ -294,14 +309,14 @@ async def _bridge_handle_media(name, args, cb):
             await web.ensure()
             data = await web.call("POST", MEDIA_PLAY_PATH, {"query": query})
         except agents_mod.AgentError as e:
-            cb.record(name, ok=False, code=str(e.code) if hasattr(e, "code") else "INTERNAL")
+            # kontrolowany fallback (ok=True z URL) to dla użytkownika sukces — NIE liczymy go do CB,
+            # inaczej po kilku „sukcesach” narzędzie przechodziło w OPEN i user dostawał THROTTLED zamiast URL
             url = YT_SEARCH_URL + quote(query, safe="")
             return _envelope("OK", True,
                              {"query": query, "url": url, "title": query,
                               "playing": False, "fallback": "youtube_search"},
                              f"Agent WWW niedostępny ({e}); otwieram wyniki YouTube dla „{query}”.")
-        except (asyncio.TimeoutError, RuntimeError) as e:
-            cb.record(name, ok=False, code="TIMEOUT" if isinstance(e, asyncio.TimeoutError) else "INTERNAL")
+        except (asyncio.TimeoutError, RuntimeError):
             url = YT_SEARCH_URL + quote(query, safe="")
             return _envelope("OK", True,
                              {"query": query, "url": url, "title": query,
@@ -435,16 +450,19 @@ class DesktopMCP(MCPServer):
                        "data": {"retry_after_s": round(retry_after, 3)}}
             return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))], is_error=True)
         try:
-            res = await relay(name, args)
-        except ToolError as e:
-            # ToolError to awaria mostu (brak karty, timeout) → traktuj jak failure
-            CB.record(name, ok=False, code="INTERNAL")
-            return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
-        ok = bool(res.get("ok"))
-        code = res.get("code")
-        CB.record(name, ok=ok, code=code)
-        payload = {k: res.get(k) for k in ("ok", "code", "data", "text")}
-        return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, default=str))], is_error=not ok)
+            try:
+                res = await relay(name, args)
+            except ToolError as e:
+                # ToolError to awaria mostu (brak karty, timeout) → traktuj jak failure
+                CB.record(name, ok=False, code="INTERNAL")
+                return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
+            ok = bool(res.get("ok"))
+            code = res.get("code")
+            CB.record(name, ok=ok, code=code)
+            payload = {k: res.get(k) for k in ("ok", "code", "data", "text")}
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, default=str))], is_error=not ok)
+        finally:
+            CB.release(name)   # no-op po record(); ratuje probe HALF_OPEN przy CancelledError (Hermes zrywa wywołanie)
 
 
 mcp = DesktopMCP("jarvis-desktop", instructions=INSTRUCTIONS, version="2.0.0")

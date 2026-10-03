@@ -191,10 +191,12 @@ class WebTask:
                     c["state"], c["pending"] = "waiting_confirm", (r.get("pending") or {}).get("label") or r.get("summary") or step["value"]
                     loop = asyncio.get_running_loop()
                     self._decision = loop.create_future()
+                    t_wait = time.time()
                     try:
                         accept = await asyncio.wait_for(self._decision, 180)
                     except asyncio.TimeoutError:
                         accept = False
+                    c["started"] += time.time() - t_wait   # czekanie na zgodę użytkownika nie zjada budżetu maxSeconds zadania
                     r = await self.call("POST", "/agent/confirm", {"accept": accept}, 40)
                     c["state"], c["pending"] = "running", None
                     if not accept:

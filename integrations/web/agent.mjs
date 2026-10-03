@@ -193,31 +193,36 @@ export async function createAgent(opts = {}) {
     controller.handleCommand(text);
   }));
 
+  /* czeka na jedno zdarzenie „action” z limitem czasu i kanałem „error”.
+     Wcześniej confirm()/pick() czekały bez limitu — wyjątek w _runAction zostawiał Promise nierozstrzygnięty,
+     a przez serial() wieszał CAŁEGO agenta aż do restartu procesu. */
+  const awaitAction = (run, ms = 30000) => new Promise(resolve => {
+    let done = false;
+    const hA = a => finish(a);
+    const hE = e => finish({ ok: false, action: null, detail: String(e?.message || e) });
+    const finish = v => { if (done) return; done = true; clearTimeout(t); controller.off('action', hA); controller.off('error', hE); resolve(v); };
+    const t = setTimeout(() => finish({ ok: false, action: null, detail: 'timeout (30 s bez zdarzenia action)' }), ms);
+    controller.on('action', hA); controller.on('error', hE);
+    try { run(); } catch (e) { hE(e); }
+  });
+
   const confirm = accept => serial(async () => {
     const p = controller.pending;
     if (!p) return { status: 'none', summary: 'Nic nie czeka na potwierdzenie.', page: await settle() };
     controller.pending = null; controller.emit('pending', null);
     if (!accept) return { status: 'cancelled', summary: 'Anulowano: ' + policy.describe(p), page: await settle() };
-    const out = await new Promise(resolve => {
-      const h = a => { controller.off('action', h); resolve(a); };
-      controller.on('action', h);
-      controller._runAction({ ...p, confirmed: true }, { via: 'jarvis-confirm' });
-    });
-    return { status: out.ok ? 'done' : 'failed', summary: policy.describe(out.action), detail: out.detail || '', page: await settle() };
+    const out = await awaitAction(() => controller._runAction({ ...p, confirmed: true }, { via: 'jarvis-confirm' }));
+    return { status: out.ok ? 'done' : 'failed', summary: out.action ? policy.describe(out.action) : (out.detail || 'błąd'), detail: out.detail || '', page: await settle() };
   });
 
-  /* wybór jednego z kandydatów po numerze (kontroler robi to tylko przez 8 s po pytaniu; tu bez limitu czasu) */
+  /* wybór jednego z kandydatów po numerze (kontroler robi to tylko przez 8 s po pytaniu; tu z własnym limitem) */
   const pick = n => serial(async () => {
     const c = controller.candidates, cand = c?.list?.[(+n || 0) - 1];
     if (!cand) return { status: 'none', summary: 'Nie ma takiego kandydata.', page: await settle() };
     const action = { ...c.intent, targetId: cand.id, label: cand.label };
     controller.candidates = null; await browser.overlay('clearCandidates');
-    const out = await new Promise(resolve => {
-      const h = a => { controller.off('action', h); resolve(a); };
-      controller.on('action', h);
-      controller._runAction(action, { via: 'jarvis-pick' });
-    });
-    return { status: out.ok ? 'done' : 'failed', summary: policy.describe(out.action), detail: out.detail || '', page: await settle() };
+    const out = await awaitAction(() => controller._runAction(action, { via: 'jarvis-pick' }));
+    return { status: out.ok ? 'done' : 'failed', summary: out.action ? policy.describe(out.action) : (out.detail || 'błąd'), detail: out.detail || '', page: await settle() };
   });
 
   const goto = url => serial(async () => {
@@ -362,12 +367,12 @@ export async function createAgent(opts = {}) {
     };
   });
 
-  const read = async (maxChars = 4000) => {
+  const read = (maxChars = 4000) => serial(async () => {   // w serial(): refreshSnapshot w settle() równolegle z trwającym poleceniem = wyścig na migawce
     const page = await browser.ensurePage();
     const text = await page.evaluate(() => (document.body?.innerText || '').replace(/\n{3,}/g, '\n\n').trim()).catch(() => '');
     const n = Math.min(Math.max(+maxChars || 4000, 200), 20000);
     return { page: await settle(), text: text.slice(0, n), truncated: text.length > n };
-  };
+  });
 
   const state = () => {
     const s = controller.uiState();

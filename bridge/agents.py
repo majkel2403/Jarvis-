@@ -336,28 +336,41 @@ class ComputerAgent:
             async for raw in proc.stdout:  # type: ignore[union-attr]
                 self._log.append(raw.decode("utf-8", errors="replace").rstrip())
         try:
-            await asyncio.wait_for(read(), limit)
-            await proc.wait()
-        except asyncio.TimeoutError:
-            kill_tree(proc.pid)
-            self._log.append(f"[jarvis] przekroczono limit czasu {int(limit)} s — zatrzymano")
-            r["state"] = "stopped"
-        rc = proc.returncode
-        r["exitCode"], r["endedAt"] = rc, time.time()
-        summary = out / "run.json"
-        if summary.exists():
             try:
-                j = json.loads(summary.read_text(encoding="utf-8"))
-                r.update(outcome=j.get("outcome"), answer=j.get("answer"), achieved=j.get("goal_achieved"), stepsTaken=j.get("steps_taken"))
-            except (OSError, ValueError):
+                await asyncio.wait_for(read(), limit)
+                await proc.wait()
+            except asyncio.TimeoutError:
+                kill_tree(proc.pid)
+                self._log.append(f"[jarvis] przekroczono limit czasu {int(limit)} s — zatrzymano")
+                r["state"] = "stopped"
+                try:
+                    await asyncio.wait_for(proc.wait(), 5)   # dożnij proces po kill_tree (bez tego zombie na POSIX)
+                except asyncio.TimeoutError:
+                    pass
+            rc = proc.returncode
+            r["exitCode"], r["endedAt"] = rc, time.time()
+            summary = out / "run.json"
+            if summary.exists():
+                try:
+                    j = json.loads(summary.read_text(encoding="utf-8"))
+                    r.update(outcome=j.get("outcome"), answer=j.get("answer"), achieved=j.get("goal_achieved"), stepsTaken=j.get("steps_taken"))
+                except (OSError, ValueError):
+                    pass
+            if r["state"] == "running":   # „stopped” (limit czasu, stop) zostaje; reszta wynika z kodu wyjścia
+                if rc == 130 or str(r.get("outcome") or "").startswith("aborted"):
+                    r["state"] = "aborted"
+                elif rc == 0:
+                    r["state"] = "done"
+                else:
+                    r["state"] = "failed"
+        except Exception as e:  # noqa: BLE001 — watcher nie może umrzeć po cichu: stan „running” dawał 409 każdemu kolejnemu zadaniu aż do restartu mostu
+            try:
+                kill_tree(proc.pid)
+            except Exception:  # noqa: BLE001
                 pass
-        if r["state"] == "running":   # „stopped” (limit czasu, stop) zostaje; reszta wynika z kodu wyjścia
-            if rc == 130 or str(r.get("outcome") or "").startswith("aborted"):
-                r["state"] = "aborted"
-            elif rc == 0:
-                r["state"] = "done"
-            else:
-                r["state"] = "failed"
+            self._log.append(f"[jarvis] watcher zadania padł: {e!r} — zadanie oznaczone jako failed")
+            r.update(state="failed", endedAt=r.get("endedAt") or time.time(),
+                     outcome=r.get("outcome") or f"watcher: {e!r}")
 
     def snapshot(self, tail: int = 25) -> dict:
         if not self.run:
