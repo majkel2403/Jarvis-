@@ -147,6 +147,11 @@ const compile = (tpl) => {
   return { re: new RegExp('^' + re + '$'), names, weight, lead };
 };
 
+const CHAT_FLAG = 'user_confirmed_in_chat';
+const CHAT_NEVER = new Set(['settings_reset', 'chat_clear']);   // cofalne, ale zbyt rozległe, by zatwierdzać je jednym „tak” z telefonu
+/* karta, na którą użytkownik faktycznie patrzy: widoczna i z fokusem (inaczej okno zgody wisi na drugim monitorze lub pod oknami) */
+const userAtScreen = () => typeof document === 'undefined' || (document.visibilityState !== 'hidden' && (typeof document.hasFocus !== 'function' || document.hasFocus()));
+
 const api = J.registry = {
   ok, fail, norm,
   alias(prop, value, re) { (aliases[prop] = aliases[prop] || []).push([value, re]); },
@@ -165,10 +170,15 @@ const api = J.registry = {
   groups() { const g = {}; cmds.forEach(c => { (g[c.group] = g[c.group] || []).push(c); }); return g; },
   /* definicje funkcji dla modelu (format OpenAI / Hermes) */
   tools(opts = {}) {
-    return api.list(c => c.hermes !== false && (!opts.filter || opts.filter(c))).map(c => ({
-      type: 'function', function: { name: c.id, description: c.description + (c.risk === 'confirm' ? ' Wymaga potwierdzenia użytkownika.' : '') + (c.examples.length ? ' Np.: „' + c.examples[0].replace(/[{}[\]]/g, '') + '”.' : ''), parameters: c.args }
-    }));
+    return api.list(c => c.hermes !== false && (!opts.filter || opts.filter(c))).map(c => {
+      const chat = api.chatConfirmable(c);
+      const parameters = chat ? { ...c.args, properties: { ...(c.args.properties || {}), [CHAT_FLAG]: { type: 'boolean', description: 'true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION.' } } } : c.args;
+      return { type: 'function', function: { name: c.id, description: c.description + (c.risk === 'confirm' ? (chat ? ' Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (' + CHAT_FLAG + ').' : ' Wymaga potwierdzenia użytkownika na pulpicie.') : '') + (c.examples.length ? ' Np.: „' + c.examples[0].replace(/[{}[\]]/g, '') + '”.' : ''), parameters } };
+    });
   },
+  /* zgoda z rozmowy (Telegram/API przez Hermesa): tylko działania z „Cofnij” — nieodwracalne i wrażliwe (computer_use, files_write,
+     clipboard_read, open_url, terminal_run, notes_empty_trash…) zostają przy jawnej zgodzie na ekranie */
+  chatConfirmable: c => !!c && c.risk === 'confirm' && c.undoable === true && !CHAT_NEVER.has(c.id),
   coerce: (id, input) => { const c = cmds.get(id); return c ? coerce(c, input) : fail('NOT_FOUND', 'Nieznane narzędzie: ' + id); },
   /* opis możliwości z rejestru (do „co potrafisz” i README) */
   describe(lang = 'pl') {
@@ -182,6 +192,8 @@ const api = J.registry = {
   /* ---------- wykonanie z walidacją, koercją i uprawnieniami ---------- */
   async run(id, input, ctx = {}) {
     const c = cmds.get(id); if (!c) return fail('NOT_FOUND', 'Nieznane narzędzie: ' + id + '. Dostępne: ' + [...cmds.keys()].slice(0, 12).join(', ') + '…');
+    let chatOk = false;
+    if (input && typeof input === 'object' && CHAT_FLAG in input) { chatOk = input[CHAT_FLAG] === true; input = { ...input }; delete input[CHAT_FLAG]; }   // flaga nie należy do argumentów polecenia
     const v = coerce(c, input); if (!v.ok) return v;
     const args = v.args;
     if (c.risk === 'blocked' && ctx.source !== 'ui') return fail('DENIED', 'To działanie jest dostępne tylko ręcznie w interfejsie.');
@@ -193,11 +205,21 @@ const api = J.registry = {
     /* forceConfirm (strażnik D9, wykryta wstrzyknięta treść): pytamy zawsze, także gdy narzędzie ma „Zawsze zezwalaj” */
     const forced = !!ctx.forceConfirm && ctx.source !== 'ui' && ctx.confirmed !== true;
     if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && (ctx.source === 'routine' || !api.allowed(id)) && !pre.trusted)) {   // rutyna: „zawsze zezwalaj” z czatu nie obowiązuje (11-agent.md §4)
+      /* Zgoda z rozmowy (Hermes z Telegrama): tylko działania z „Cofnij”, nigdy przy wykrytej manipulacji (forced).
+         Użytkownik nie przy ekranie → od razu NEEDS_CONFIRMATION (zamiast 60 s czekania na okno, którego nikt nie widzi). */
+      const viaChat = ctx.source === 'hermes' && !forced && !dynRisk && api.chatConfirmable(c);
+      if (viaChat && chatOk) {
+        J.notice?.({ title: 'Wykonano na podstawie zgody z rozmowy', body: c.label + (Object.keys(args).length ? ': ' + Object.values(args).filter(x => typeof x !== 'object').join(', ').slice(0, 80) : '') + ' — można cofnąć („cofnij”).', kind: 'agent' });
+        J.ev?.emit('approval.resolved', { answer: 'chat', tool: id });
+      } else if (viaChat && ctx.bridge && !userAtScreen()) {
+        return fail('NEEDS_CONFIRMATION', 'Użytkownika nie ma przy pulpicie, więc okno zgody nic nie da. Zapytaj go w rozmowie (np. clarify) o dokładnie to działanie: „' + (typeof c.confirmText === 'function' ? c.confirmText(args) : c.label) + '”. Po wyraźnym „tak” wywołaj ' + id + ' ponownie z tymi samymi argumentami i ' + CHAT_FLAG + '=true. Działanie da się cofnąć.');
+      } else {
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
       const q = forced ? String(ctx.forceConfirm) : typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
       const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
       if (dec === 'always' && !forced) api.allowAlways(id);
-      else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' : 'Użytkownik odmówił.');
+      else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' + (viaChat ? ' Jeśli rozmawiasz z nim zdalnie: zapytaj w rozmowie i wywołaj ponownie z ' + CHAT_FLAG + '=true.' : '') : 'Użytkownik odmówił.');
+      }
     }
     /* proaktywność (docs/spec/11-agent.md §6): Jarvis sam z siebie (źródło „signal”) niczego nie zmienia ani nie przełącza okien —
        tylko proponuje; kliknięcie propozycji = polecenie użytkownika (źródło „ui”) */

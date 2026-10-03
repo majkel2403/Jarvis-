@@ -2,7 +2,7 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **137** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **138** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
@@ -10,7 +10,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|
 | A3 sam, po cichu | 64 |
 | A2 sam + Cofnij | 44 |
-| A1 pyta „Chodzi o…?” | 12 |
+| A1 pyta „Chodzi o…?” | 13 |
 | A0 zawsze zgoda | 17 |
 
 ## Aplikacje i okna
@@ -112,6 +112,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `widgets_list` | Lista widgetów — Zwraca widgety na pulpicie z id, typem, tytułem i skrótem treści. | — | safe | A3 | — | „jakie mam widgety”, „lista widgetow” |
 | `widgets_update` | Zmień widget — Zmienia tytuł, treść (note/result) lub dodaje/odhacza pozycje listy (add_items, check_item). | **widget**: string; title: string; content: string; add_items: string[]; check_item: string; uncheck_item: string | safe | A2 | tak | „dodaj do listy {widget} {add_items}”, „odhacz na liscie {widget} {check_item}” |
 | `widgets_remove` | Usuń widget — Usuwa widget z pulpitu (wymaga potwierdzenia). | **widget**: string | confirm | A0 | tak | „usun widget {widget}”, „zamknij widget {widget}” |
+| `e2e_cleanup` | Sprzątanie po testach — Usuwa wyłącznie artefakty automatycznych testów mostu (widgety i notatki o nazwach „__E2E_LEFTOVER_…”, „E2E drill widget <liczba>”, „E2E test note <liczba>”). N | — | safe | A1 | — | — |
 | `add_shortcut` | Skrót na pulpicie — Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). | **name**: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; url: string | safe | A2 | tak | „dodaj skrot {name}”, „utworz skrot do {name}”, „nowa ikona {name}” |
 | `shortcut_remove` | Usuń skrót — Usuwa skrót z pulpitu (wymaga potwierdzenia). | **name**: string | confirm | A0 | tak | „usun skrot {name}”, „usun ikone {name}” |
 | `set_theme` | Motyw kolorystyczny — Zmienia kolor akcentu interfejsu. | **color**: jarvis\|cyjan\|niebieski\|fiolet\|zielony\|złoty\|czerwony\|różowy | safe | A3 | tak | „motyw {color}”, „ustaw motyw {color}”, „zmien motyw na {color}” |

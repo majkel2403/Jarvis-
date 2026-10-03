@@ -89,7 +89,8 @@ const busyNow = () => !!document.querySelector('.orb.thinking, #orb.thinking') |
 const safe = v => { try { return JSON.parse(JSON.stringify(v ?? null)); } catch (e) { return null; } };
 async function handle(cmd) {
   let r;
-  try { r = await J.brain.run(cmd.name, cmd.args || {}, { source: 'hermes' }); }
+  J.bootEnter?.();   // karta stoi na ekranie „Kliknij, aby wejść” — wejdź, inaczej okno zgody jest niewidoczne pod zasłoną
+  try { r = await J.brain.run(cmd.name, cmd.args || {}, { source: 'hermes', bridge: true }); }   // bridge: polecenie przyszło z mostu (Telegram/API), nie z czatu w tej karcie
   catch (e) { r = { ok: false, code: 'INTERNAL', text: 'Błąd pulpitu: ' + e.message, data: null }; }
   if (!J.brain.busy) J.chat?.add('action', (r.ok ? '⚙ ' : '⚠ ') + 'Hermes (most): ' + cmd.name + ' → ' + r.text);
   try {

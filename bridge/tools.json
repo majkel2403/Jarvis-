@@ -30,7 +30,7 @@
  },
  {
   "name": "close_app",
-  "description": "Zamyka okno aplikacji (da się cofnąć: wm_reopen). app=\"all\" zamyka wszystkie okna (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „zamknij app”.",
+  "description": "Zamyka okno aplikacji (da się cofnąć: wm_reopen). app=\"all\" zamyka wszystkie okna (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „zamknij app”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -52,6 +52,10 @@
       "all",
       "current"
      ]
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -421,12 +425,16 @@
  },
  {
   "name": "notes_delete",
-  "description": "Przenosi notatkę do kosza (30 dni, można przywrócić: notes_restore). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „usun notatke note”.",
+  "description": "Przenosi notatkę do kosza (30 dni, można przywrócić: notes_restore). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun notatke note”.",
   "parameters": {
    "type": "object",
    "properties": {
     "note": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -566,12 +574,16 @@
  },
  {
   "name": "tasks_remove",
-  "description": "Usuwa zadanie z Harmonogramu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun zadanie task”.",
+  "description": "Usuwa zadanie z Harmonogramu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun zadanie task”.",
   "parameters": {
    "type": "object",
    "properties": {
     "task": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -721,17 +733,29 @@
  },
  {
   "name": "widgets_remove",
-  "description": "Usuwa widget z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun widget widget”.",
+  "description": "Usuwa widget z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun widget widget”.",
   "parameters": {
    "type": "object",
    "properties": {
     "widget": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
     "widget"
    ]
+  }
+ },
+ {
+  "name": "e2e_cleanup",
+  "description": "Usuwa wyłącznie artefakty automatycznych testów mostu (widgety i notatki o nazwach „__E2E_LEFTOVER_…”, „E2E drill widget <liczba>”, „E2E test note <liczba>”). Niczego innego nie dotyka, dlatego nie pyta o zgodę.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
   }
  },
  {
@@ -772,12 +796,16 @@
  },
  {
   "name": "shortcut_remove",
-  "description": "Usuwa skrót z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika. Np.: „usun skrot name”.",
+  "description": "Usuwa skrót z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun skrot name”.",
   "parameters": {
    "type": "object",
    "properties": {
     "name": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -880,7 +908,7 @@
  },
  {
   "name": "market_watch",
-  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Wymaga potwierdzenia użytkownika. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
+  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -905,6 +933,10 @@
     "silent": {
      "type": "boolean",
      "description": "true = bez pytania (cron, drill, signal triggers); wymaga explicit zgody w kodzie"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    }
   }
@@ -926,7 +958,7 @@
  },
  {
   "name": "open_url",
-  "description": "Otwiera stronę WWW w nowej karcie. Znane serwisy: youtube, google, github, gmail, spotify, netflix, facebook, twitter, wikipedia, mapy, linkedin, reddit, allegro, nous, hermes, chatgpt, wp, onet. Adresy spoza listy zaufanych wymagają potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „otworz strone url”.",
+  "description": "Otwiera stronę WWW w nowej karcie. Znane serwisy: youtube, google, github, gmail, spotify, netflix, facebook, twitter, wikipedia, mapy, linkedin, reddit, allegro, nous, hermes, chatgpt, wp, onet. Adresy spoza listy zaufanych wymagają potwierdzenia. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „otworz strone url”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -971,7 +1003,7 @@
  },
  {
   "name": "clipboard_read",
-  "description": "Zwraca tekst ze schowka (wymaga zgody przeglądarki). Wymaga potwierdzenia użytkownika. Np.: „co mam w schowku”.",
+  "description": "Zwraca tekst ze schowka (wymaga zgody przeglądarki). Wymaga potwierdzenia użytkownika na pulpicie. Np.: „co mam w schowku”.",
   "parameters": {
    "type": "object",
    "properties": {}
@@ -1104,7 +1136,7 @@
  },
  {
   "name": "settings_set",
-  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice. Wymaga potwierdzenia użytkownika. Np.: „ustaw miasto na value”.",
+  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „ustaw miasto na value”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1138,7 +1170,7 @@
  },
  {
   "name": "terminal_run",
-  "description": "Wykonuje wbudowane polecenie Terminala Jarvis OS i zwraca tekstowy wynik. Bez pytania działają tylko polecenia niezmieniające danych (help, ls, apps, calc, weather, crypto, date, whoami, echo, neofetch, open, say, theme); pozostałe (close, note, task, timer, ask, matrix, reboot) wymagają potwierdzenia użytkownika — do tego używaj dedykowanych narzędzi. Wymaga potwierdzenia użytkownika. Np.: „wykonaj w terminalu command”.",
+  "description": "Wykonuje wbudowane polecenie Terminala Jarvis OS i zwraca tekstowy wynik. Bez pytania działają tylko polecenia niezmieniające danych (help, ls, apps, calc, weather, crypto, date, whoami, echo, neofetch, open, say, theme); pozostałe (close, note, task, timer, ask, matrix, reboot) wymagają potwierdzenia użytkownika — do tego używaj dedykowanych narzędzi. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „wykonaj w terminalu command”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1198,12 +1230,16 @@
  },
  {
   "name": "memory_forget",
-  "description": "Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapomnij ze fact”.",
+  "description": "Usuwa zapamiętany fakt (po id lub fragmencie). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „zapomnij ze fact”.",
   "parameters": {
    "type": "object",
    "properties": {
     "fact": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -1236,7 +1272,7 @@
  },
  {
   "name": "files_write",
-  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapisz plik name: text”.",
+  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „zapisz plik name: text”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1574,12 +1610,16 @@
  },
  {
   "name": "layout_remove",
-  "description": "Usuwa zapisany układ okien (presetów nie można usunąć). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „usun uklad name”.",
+  "description": "Usuwa zapisany układ okien (presetów nie można usunąć). Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun uklad name”.",
   "parameters": {
    "type": "object",
    "properties": {
     "name": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -1680,7 +1720,7 @@
  },
  {
   "name": "settings_reset",
-  "description": "Przywraca domyślne wartości jednej sekcji ustawień: wyglad, glos, agent, jev, hermes, skroty, powiadomienia. Klucze API zostają. Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „przywroc domyslny wyglad”.",
+  "description": "Przywraca domyślne wartości jednej sekcji ustawień: wyglad, glos, agent, jev, hermes, skroty, powiadomienia. Klucze API zostają. Wymaga potwierdzenia. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „przywroc domyslny wyglad”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1739,7 +1779,7 @@
  },
  {
   "name": "chat_clear",
-  "description": "Usuwa historię bieżącego wątku (i streszczenie). Wymaga potwierdzenia; „Cofnij” działa przez 10 minut. Wymaga potwierdzenia użytkownika. Np.: „wyczysc (czat|rozmowe|historie czatu)”.",
+  "description": "Usuwa historię bieżącego wątku (i streszczenie). Wymaga potwierdzenia; „Cofnij” działa przez 10 minut. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „wyczysc (czat|rozmowe|historie czatu)”.",
   "parameters": {
    "type": "object",
    "properties": {}
@@ -1864,7 +1904,7 @@
  },
  {
   "name": "notes_empty_trash",
-  "description": "Trwale usuwa wszystkie notatki z kosza. Nieodwracalne — wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „oproznij kosz”.",
+  "description": "Trwale usuwa wszystkie notatki z kosza. Nieodwracalne — wymaga potwierdzenia. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „oproznij kosz”.",
   "parameters": {
    "type": "object",
    "properties": {}
@@ -2088,7 +2128,7 @@
  },
  {
   "name": "tasks_clear_done",
-  "description": "Usuwa zrobione zadania z zakresu (today, week, all). Zbiorowe usuwanie — wymaga zgody; „Cofnij” przez 10 minut. Wymaga potwierdzenia użytkownika. Np.: „usun zrobione zadania”.",
+  "description": "Usuwa zrobione zadania z zakresu (today, week, all). Zbiorowe usuwanie — wymaga zgody; „Cofnij” przez 10 minut. Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun zrobione zadania”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -2099,6 +2139,10 @@
       "week",
       "all"
      ]
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -2497,12 +2541,16 @@
  },
  {
   "name": "routine_remove",
-  "description": "Usuwa rutynę (wymaga zgody; „Cofnij” przez 10 minut). Wymaga potwierdzenia użytkownika. Np.: „usun rutyne name”.",
+  "description": "Usuwa rutynę (wymaga zgody; „Cofnij” przez 10 minut). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun rutyne name”.",
   "parameters": {
    "type": "object",
    "properties": {
     "name": {
      "type": "string"
+    },
+    "user_confirmed_in_chat": {
+     "type": "boolean",
+     "description": "true WYŁĄCZNIE gdy użytkownik w tej rozmowie wyraźnie zgodził się na dokładnie to działanie (np. odpowiedź „tak” na clarify). Użyj po kodzie NEEDS_CONFIRMATION."
     }
    },
    "required": [
@@ -2676,7 +2724,7 @@
  },
  {
   "name": "computer_use",
-  "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko (po polsku lub angielsku), np. \"open Notepad and type hello\". Potrafi: uruchomić program z listy (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia), kliknąć WIDOCZNY element, wpisać tekst w pole, przewinąć. Nie potrafi: skrótów klawiszowych, menu Start ani paska zadań, elementów niewidocznych na ekranie; nie nadpisze cudzego tekstu w edytorze. Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund (pisanie tekstu ~8 s); przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika. Np.: „na komputerze goal”.",
+  "description": "Steruje PRAWDZIWYM komputerem z Windows (mysz i klawiatura, poza Jarvis OS): Jev czyta ekran i wybiera kliknięcia oraz wpisywanie, aż cel będzie osiągnięty. Używaj tylko, gdy użytkownik chce działać w prawdziwym systemie (nie w oknach Jarvis OS ani w przeglądarce agenta). Cel podaj krótko (po polsku lub angielsku), np. \"open Notepad and type hello\". Potrafi: uruchomić program z listy (Notatnik, Kalkulator, Eksplorator plików, Paint, Ustawienia), kliknąć WIDOCZNY element, wpisać tekst w pole, przewinąć. Nie potrafi: skrótów klawiszowych, menu Start ani paska zadań, elementów niewidocznych na ekranie; nie nadpisze cudzego tekstu w edytorze. Zawsze wymaga zgody użytkownika. Trwa od kilku do kilkudziesięciu sekund (pisanie tekstu ~8 s); przerwanie: Esc albo mysz do lewego górnego rogu ekranu. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „na komputerze goal”.",
   "parameters": {
    "type": "object",
    "properties": {

@@ -74,7 +74,9 @@ const engine = J.engine = {
   wave: new Array(56).fill(0), _pend: 0,
   plan: null, hold: null,   // plan z <plan>; hold = tryb wstrzymany (APPROVAL_REQUIRED/PAUSED) do czasu wznowienia
   log: [],                  // ostatnie zdarzenia (wszystkie zadania) do Context Packet
-  recent(n = 5) { return this.log.slice(-n).map(e => ({ t: Math.round((Date.now() - e.timestamp) / 1000) + 's', type: e.type, tool: e.payload.tool || e.payload.title || undefined })); },
+  /* code przy zakończeniu narzędzia: DENIED liczy się jako „completed” (to nie awaria), ale bez kodu model brał odmowę za sukces;
+     answer przy approval.resolved: null = nikt nie odpowiedział (limit czasu), nie „zgoda” */
+  recent(n = 5) { return this.log.slice(-n).map(e => ({ t: Math.round((Date.now() - e.timestamp) / 1000) + 's', type: e.type, tool: e.payload.tool || e.payload.title || undefined, ...(e.payload.code && e.payload.code !== 'OK' ? { code: e.payload.code } : {}), ...(e.type === 'approval.resolved' ? { answer: e.payload.answer ?? 'timeout' } : {}) })); },
   /* realny przepływ znaków ze strumienia modelu → fala w karcie Model AI */
   feed(n) { this._pend += n; },
   last: null,           // podsumowanie ostatniego zadania {task_id,title,tools,nodes,dur,status,result}

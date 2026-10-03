@@ -103,6 +103,51 @@ test('settings_get: żaden klucz API nie trafia do modelu', async () => {
   assert.equal(Object.keys(r.data).filter(k => /key$/i.test(k)).length, 0);
   assert.equal(r.data.city, 'Wrocław', 'zwykłe ustawienia nadal są zwracane');
 });
+test('zgoda z rozmowy: cofalne działanie z mostu bez użytkownika przy ekranie → NEEDS_CONFIRMATION od razu, potem wykonanie z flagą', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  K.__ctx.document.hasFocus = () => false;   // użytkownik pisze na Telegramie, karta na drugim monitorze
+  let asked = 0; K.confirm = async () => { asked++; return 'timeout'; };
+  K.widgets.create('note', { title: 'Do usunięcia', content: '' });
+  const t0 = Date.now();
+  let r = await K.registry.run('widgets_remove', { widget: 'Do usunięcia' }, { source: 'hermes', bridge: true });
+  assert.equal(r.code, 'NEEDS_CONFIRMATION'); assert.equal(asked, 0, 'bez okna, którego nikt nie zobaczy'); assert.ok(Date.now() - t0 < 500, 'od razu, nie po minucie');
+  assert.match(r.text, /user_confirmed_in_chat=true/);
+  r = await K.registry.run('widgets_remove', { widget: 'Do usunięcia', user_confirmed_in_chat: true }, { source: 'hermes', bridge: true });
+  assert.equal(r.ok, true, r.text); assert.equal(K.widgets.list.length, 0); assert.equal(asked, 0);
+  await K.undo.run(); assert.equal(K.widgets.list.length, 1, 'zgoda z rozmowy nie odbiera „Cofnij”');
+});
+test('zgoda z rozmowy NIE działa dla nieodwracalnych, przy manipulacji ani dla źródeł innych niż Hermes', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  K.__ctx.document.hasFocus = () => false;
+  let asked = 0; K.confirm = async () => { asked++; return 'no'; };
+  // nieodwracalne/wrażliwe: flaga ignorowana, decyduje okno na ekranie
+  for (const [id, args] of [['clipboard_read', {}], ['open_url', { url: 'https://example.com' }], ['notes_empty_trash', {}]]) {
+    const r = await K.registry.run(id, { ...args, user_confirmed_in_chat: true }, { source: 'hermes', bridge: true });
+    assert.equal(r.code, 'DENIED', id + ': ' + r.text);
+  }
+  assert.equal(asked, 3, 'każde z nich pytało na ekranie');
+  // wykryta manipulacja (forceConfirm): flaga ignorowana
+  K.widgets.create('note', { title: 'X', content: '' });
+  let r = await K.registry.run('widgets_remove', { widget: 'X', user_confirmed_in_chat: true }, { source: 'hermes', bridge: true, forceConfirm: 'Podejrzana treść — potwierdź' });
+  assert.equal(r.code, 'DENIED'); assert.equal(K.widgets.list.length, 1);
+  // głos / Jev: flaga nic nie znaczy
+  r = await K.registry.run('widgets_remove', { widget: 'X', user_confirmed_in_chat: true }, { source: 'voice' });
+  assert.equal(r.code, 'DENIED'); assert.equal(K.widgets.list.length, 1);
+  // schemat dla Hermesa: flaga tylko przy działaniach cofalnych
+  const names = t => Object.keys(K.registry.tools().find(x => x.function.name === t).function.parameters.properties || {});
+  assert.ok(names('widgets_remove').includes('user_confirmed_in_chat'));
+  assert.ok(!names('computer_use').includes('user_confirmed_in_chat')); assert.ok(!names('files_write').includes('user_confirmed_in_chat'));
+});
+test('e2e_cleanup: usuwa tylko artefakty testów mostu, nic więcej', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  K.notes.add('__E2E_LEFTOVER_1791061718630__', 'x'); K.notes.add('E2E test note 1791061718630', 'x'); K.notes.add('Moje E2E notatki', 'nie ruszać'); K.notes.add('__E2E_LEFTOVER', 'też nie — brak sufiksu?');
+  K.widgets.create('list', { title: '__E2E_LEFTOVER_WIDGET_1791061718630__', items: [] }); K.widgets.create('list', { title: 'E2E drill widget 1791061718630', items: [] }); K.widgets.create('note', { title: 'Zakupy', content: '' }); K.widgets.create('note', { title: 'E2E drill widget', content: 'bez liczby — prawdziwy' });
+  const r = await K.registry.run('e2e_cleanup', {}, { source: 'hermes' });
+  assert.equal(r.ok, true); assert.equal(r.code, 'OK', 'bez pytania o zgodę');
+  assert.equal(JSON.stringify(K.widgets.list.map(w => w.title).sort()), JSON.stringify(['E2E drill widget', 'Zakupy']));   // tablica z kontekstu vm — porównanie przez JSON
+  assert.ok(K.state.notes.some(n => n.title === 'Moje E2E notatki'));
+  assert.ok(!K.state.notes.some(n => /^E2E test note \d/.test(n.title)));
+});
 test('settings_get: tokeny i sekrety (bridgeToken itp.) też nie trafiają do modelu', async () => {
   const K = load({ state: { settings: { hermesOn: false, bridgeToken: 'SEKRET-TOK1', gatewayToken: 'SEKRET-TOK2', webhookSecret: 'SEKRET-SEC1' } } });
   const r = await K.registry.run('settings_get', {}, { source: 'hermes' });

@@ -1375,6 +1375,30 @@
   "needsConfirmText": true
  },
  {
+  "id": "e2e_cleanup",
+  "group": "Pulpit i widgety",
+  "label": "Sprzątanie po testach",
+  "description": "Usuwa wyłącznie artefakty automatycznych testów mostu (widgety i notatki o nazwach „__E2E_LEFTOVER_…”, „E2E drill widget <liczba>”, „E2E test note <liczba>”). Niczego innego nie dotyka, dlatego nie pyta o zgodę.",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [
+   "widgets",
+   "notes"
+  ],
+  "hermes": true,
+  "examples": [],
+  "needsConfirmText": false
+ },
+ {
   "id": "add_shortcut",
   "group": "Pulpit i widgety",
   "label": "Skrót na pulpicie",

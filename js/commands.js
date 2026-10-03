@@ -284,6 +284,18 @@ R.add({ id: 'widgets_remove', group: 'Pulpit i widgety', label: 'Usuń widget', 
   args: { type: 'object', properties: { widget: { type: 'string' } }, required: ['widget'] },
   examples: ['usun widget {widget}', 'zamknij widget {widget}'],
   run({ widget }) { const q = norm(widget), w = J.widgets.list.find(x => x.id === widget) || J.widgets.list.find(x => norm(x.title).includes(q)); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”.'); const copy = JSON.parse(JSON.stringify(w)), pos = J.state.winPos['w:' + w.id] ? { ...J.state.winPos['w:' + w.id] } : null; J.widgets.remove(w.id, { silent: true }); return ok({ id: w.id }, 'Usunąłem widget „' + w.title + '”.', null, () => J.widgets.restoreOne(copy, pos)); } });
+/* Artefakty testów E2E mostu (bridge/tests) mają zastrzeżone nazwy. Testy działają na żywej karcie i nie mogą kliknąć „Tak”,
+   więc bez tego polecenia zostawiały na pulpicie użytkownika widgety i notatki „__E2E_LEFTOVER_*”. Usuwa WYŁĄCZNIE takie nazwy. */
+const E2E_ARTIFACT = /^(__E2E_LEFTOVER_|E2E drill widget \d{10,}$|E2E test note \d{10,}$)/;
+R.add({ id: 'e2e_cleanup', group: 'Pulpit i widgety', label: 'Sprzątanie po testach', description: 'Usuwa wyłącznie artefakty automatycznych testów mostu (widgety i notatki o nazwach „__E2E_LEFTOVER_…”, „E2E drill widget <liczba>”, „E2E test note <liczba>”). Niczego innego nie dotyka, dlatego nie pyta o zgodę.', idempotent: true, writes: ['widgets', 'notes'], voice: false, palette: false,
+  args: { type: 'object', properties: {} },
+  run() {
+    const ws = J.widgets.list.filter(w => E2E_ARTIFACT.test(String(w.title || '')));
+    ws.forEach(w => J.widgets.remove(w.id, { silent: true }));
+    const ns = J.state.notes.filter(n => E2E_ARTIFACT.test(String(n.title || '')));
+    ns.forEach(n => J.notes.remove(n.id));
+    return ok({ widgets: ws.length, notes: ns.length }, ws.length + ns.length ? 'Usunąłem artefakty testów: ' + ws.length + ' widgetów, ' + ns.length + ' notatek.' : 'Brak artefaktów testów.');
+  } });
 R.add({ id: 'add_shortcut', group: 'Pulpit i widgety', label: 'Skrót na pulpicie', description: 'Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url).', writes: ['shortcuts'],
   args: { type: 'object', properties: { name: { type: 'string', maxLength: 40 }, app: { type: 'string', enum: APP_IDS }, url: { type: 'string' } }, required: ['name'] },
   examples: ['dodaj skrot {name}', 'utworz skrot do {name}', 'nowa ikona {name}'],

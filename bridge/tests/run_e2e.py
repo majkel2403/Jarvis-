@@ -156,6 +156,16 @@ def main(argv=None) -> int:
     result = runner.run(suite)
     total_s = time.time() - t0
 
+    # Sprzątanie: testy działają na żywej karcie użytkownika i zostawiają artefakty z zastrzeżonymi nazwami
+    # (usuwanie zwykłymi narzędziami wymaga kliknięcia „Tak”). e2e_cleanup usuwa wyłącznie te nazwy.
+    if bridge_alive:
+        try:
+            from e2e_client import MCPClient  # noqa: E402
+            cr = MCPClient(timeout=20).call("e2e_cleanup", {})
+            print(f"Sprzątanie po testach: {cr.text if cr.ok else 'nie udało się (' + str(cr.code) + ')'}")
+        except Exception as e:  # noqa: BLE001 — sprzątanie nie zmienia wyniku testów
+            print(f"Sprzątanie po testach: pominięte ({e})")
+
     # Podsumowanie
     print()
     print("=" * 72)
