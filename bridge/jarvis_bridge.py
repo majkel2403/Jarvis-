@@ -184,13 +184,29 @@ WAKE_TTL = 3.0
 WAKE_WAIT = 2.0   # ile relay() czeka na klienta gdy wake świeży
 
 
+_WAKE_EVENT: Optional[asyncio.Event] = None
+_WAKE_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
+
 def _wake_event() -> asyncio.Event:
-    """Event tworzony leniwie w bieżącym event loopie.
+    """Wspólny Event „pojawił się klient”, tworzony leniwie w bieżącym event loopie.
 
     Stały globalny Event w module jest powiązany z pętlą, w której go utworzono — w testach
     izolowany most działa na własnej pętli i `await event.wait()` rzuca `bound to different event loop`.
+    Dlatego Event jest odtwarzany, gdy zmieni się pętla; w obrębie jednej pętli set()/wait() dzielą ten sam obiekt.
     """
-    return asyncio.Event()
+    global _WAKE_EVENT, _WAKE_LOOP
+    loop = asyncio.get_running_loop()
+    if _WAKE_EVENT is None or _WAKE_LOOP is not loop:
+        _WAKE_EVENT, _WAKE_LOOP = asyncio.Event(), loop
+    return _WAKE_EVENT
+
+
+def _reset_wake_for_tests() -> None:
+    """Czysty stan handshake'u wake między testami (izolowany most w bridge/tests/test_race.py)."""
+    global _WAKE_EVENT, _WAKE_LOOP
+    WAKE.clear()
+    _WAKE_EVENT = _WAKE_LOOP = None
 
 
 def newest() -> Optional[Browser]:
@@ -217,10 +233,10 @@ async def relay(name: str, args: dict) -> dict:
                 if client is not None:
                     break
                 try:
-                    await asyncio.wait_for(WAKE_EVENT.wait(), min(0.1, deadline - time.time()))
+                    await asyncio.wait_for(_wake_event().wait(), min(0.1, deadline - time.time()))
                 except asyncio.TimeoutError:
                     pass
-                WAKE_EVENT.clear()
+                _wake_event().clear()
             client = newest()
         if client is None:
             raise ToolError("Jarvis OS nie jest połączony z mostem — użytkownik musi mieć otwartą kartę Jarvis OS (np. http://localhost:4000) z włączonym mostem w Ustawieniach.")
@@ -499,7 +515,7 @@ async def wake(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     WAKE[TOKEN] = time.time()
-    WAKE_EVENT.set()   # obudź też czekające relay() — karta zgłosiła się
+    _wake_event().set()   # obudź też czekające relay() — karta zgłosiła się
     return cors(request, JSONResponse({"ok": True, "ttl_s": WAKE_TTL, "wait_s": WAKE_WAIT}))
 
 
@@ -557,11 +573,13 @@ async def events(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     client = Browser()
-    CLIENTS[client.id] = client
-    WAKE_EVENT.set()   # obudź czekające relay(), pojawił się klient
 
     async def stream():
+        # Rejestracja dopiero przy starcie strumienia: jeśli odpowiedź nie dojdzie do skutku,
+        # generator się nie uruchomi i nie zostanie „martwy” klient w CLIENTS (finally sprząta tylko uruchomione).
         try:
+            CLIENTS[client.id] = client
+            _wake_event().set()   # obudź czekające relay(), pojawił się klient
             yield f"retry: 3000\nevent: hello\ndata: {json.dumps({'client': client.id, 'tools': sorted(TOOLS)})}\n\n"
             while True:
                 try:
