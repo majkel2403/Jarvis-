@@ -3,7 +3,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 
 const enc = new TextEncoder();
 const sse = parts => new Response(new ReadableStream({ start(c) { parts.forEach(p => c.enqueue(enc.encode(p))); c.close(); } }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
@@ -22,7 +22,7 @@ const setup = async (settings, responses) => {
     return r();
   };
   const J = load({ dom: true, fetch, state: { settings: { hermesOn: true, hermesProvider: 'custom', hermesUrl: 'http://serwer.test/v1', hermesModel: 'm', sound: false, speech: false, ...settings } } });
-  J.__ctx.setTimeout = setTimeout; J.HERMES_RETRY_MS = 5;   // ponowienie po błędzie sieci bez czekania 2 s
+  J.__ctx.setTimeout = refShort; J.HERMES_RETRY_MS = 5;   // ponowienie po błędzie sieci bez czekania 2 s
   const seen = []; const add = J.chat.add; J.chat.add = (role, text, silent) => { const h = add(role, text, silent); seen.push({ role, h }); return h; };
   await wait(30);   // ai.js wczytuje historię asynchronicznie
   return { J, requests, seen, jarvisText: () => seen.filter(x => x.role === 'jarvis').map(x => x.h.text).pop() };

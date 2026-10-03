@@ -3,9 +3,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const mk = (settings = {}) => { const J = load({ dom: true, state: { settings: { hermesOn: false, sound: false, speech: false, ...settings } } }); J.__ctx.setTimeout = setTimeout; return J; };
+const mk = (settings = {}) => { const J = load({ dom: true, state: { settings: { hermesOn: false, sound: false, speech: false, ...settings } } }); J.__ctx.setTimeout = refShort; return J; };
 const run = (J, id, args, source = 'ui') => J.registry.run(id, args, { source });
 const st = (J, app) => J.apps[app].state(J.wm.ctx(app));
 

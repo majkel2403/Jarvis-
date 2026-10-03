@@ -3,9 +3,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const mk = (settings = {}, extra = {}) => { const J = load({ dom: true, ...extra, state: { settings: { hermesOn: false, sound: false, speech: false, ...settings } } }); J.__ctx.setTimeout = setTimeout; return J; };
+const mk = (settings = {}, extra = {}) => { const J = load({ dom: true, ...extra, state: { settings: { hermesOn: false, sound: false, speech: false, ...settings } } }); J.__ctx.setTimeout = refShort; return J; };
 const run = (J, id, args, source = 'ui') => J.registry.run(id, args, { source });
 
 test('fx_level: ustawia poziom, parser rozumie zdania, Cofnij przywraca', async () => {
@@ -46,7 +46,7 @@ test('załączniki: notatka dołączona do następnej wiadomości dla modelu, oz
   const requests = [];
   const fetch = async (url, init) => { if (/\/models$/.test(url)) return { ok: true, status: 200, json: async () => ({ data: [] }) }; requests.push(JSON.parse(init.body)); return sse(['data: ' + JSON.stringify({ choices: [{ delta: { content: 'Przeczytałem.' } }] }) + '\n\n']); };
   const J = load({ dom: true, fetch, state: { settings: { hermesOn: true, hermesProvider: 'custom', hermesUrl: 'http://serwer.test/v1', hermesModel: 'm', sound: false, speech: false, toolFormat: 'hermes' } } });
-  J.__ctx.setTimeout = setTimeout; await wait(30);
+  J.__ctx.setTimeout = refShort; await wait(30);
   J.notes.add('Lista zakupów', 'mleko, chleb');
   let r = await run(J, 'chat_attach', { note: 'lista zakupów' }); assert.equal(r.ok, true, r.text); assert.equal(J.attach.list.length, 1);
   await J.undo.run(); assert.equal(J.attach.list.length, 0, 'Cofnij usuwa załącznik');

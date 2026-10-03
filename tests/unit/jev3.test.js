@@ -2,7 +2,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 const { makeJev } = require('../jevmock.js');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const enc = new TextEncoder();
@@ -19,7 +19,7 @@ const setup = async (turns, rules, mockOpts = {}, settings = {}) => {
     hermes.push(JSON.parse(init.body)); const t = turns[Math.min(n++, turns.length - 1)]; return sse([chunk({ content: t })]);
   };
   const J = load({ dom: true, fetch, state: { settings: { hermesOn: true, hermesProvider: 'custom', hermesUrl: 'http://serwer.test/v1', hermesModel: 'glowny', toolFormat: 'hermes', jevOn: true, jevKey: 'k', sound: false, speech: false, jevFast: true, ...settings } } });
-  J.__ctx.setTimeout = setTimeout;
+  J.__ctx.setTimeout = refShort;
   const st = { confirmed: [], confirms: [] }; J.confirm = async req => { st.confirmed.push(req.question + (req.forced ? ' [wymuszone]' : '')); return st.confirms.shift() ?? 'no'; };
   J.ask = Object.assign(async () => null, { pending: false });
   const seen = []; const add = J.chat.add; J.chat.add = (role, text, silent) => { const h = add(role, text, silent); seen.push({ role, h }); return h; };

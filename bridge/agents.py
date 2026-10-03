@@ -205,8 +205,13 @@ class WebAgent:
         logs.mkdir(parents=True, exist_ok=True)
         port = self.url.rsplit(":", 1)[-1]
         env = dict(os.environ, JARVIS_BRIDGE_TOKEN=self.token, JARVIS_WEB_PORT=port)
-        log = open(logs / "web-agent.log", "ab")
-        self.proc = subprocess.Popen([node, str(script)], cwd=str(REPO), env=env, stdout=log, stderr=log, creationflags=NO_WINDOW)
+        if getattr(self, "_log_f", None):   # crash-loop agenta otwierał nowy uchwyt przy każdym respawnie i nigdy nie zamykał starego
+            try:
+                self._log_f.close()
+            except OSError:
+                pass
+        self._log_f = open(logs / "web-agent.log", "ab")
+        self.proc = subprocess.Popen([node, str(script)], cwd=str(REPO), env=env, stdout=self._log_f, stderr=self._log_f, creationflags=NO_WINDOW)
         bind_to_bridge(self.proc.pid)
 
     async def ensure(self) -> None:
@@ -417,11 +422,21 @@ class Agents:
         self.webtask = WebTask(lambda m, p, b, t: self.web.call(m, p, b, t), plan_step, log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr))
 
     def shutdown(self) -> None:
-        if self.webtask._task and not self.webtask._task.done():
-            self.webtask._task.cancel()
-        self.web.stop()
-        if self.computer._proc and self.computer._proc.returncode is None:
-            kill_tree(self.computer._proc.pid)
+        # wołane z atexit: pętla zdarzeń już nie żyje — każdy krok osobno, żeby jeden wyjątek nie zostawił sieroty ruszającej myszą
+        try:
+            if self.webtask._task and not self.webtask._task.done():
+                self.webtask._task.cancel()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self.web.stop()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if self.computer._proc and self.computer._proc.returncode is None:
+                kill_tree(self.computer._proc.pid)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def status(self) -> dict:
         web = self.web.status()

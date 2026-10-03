@@ -8,7 +8,7 @@
      'none'        nic lokalnie → rozmowa / Jev / Hermes */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 
 const CORPUS = {
   // okna, notatki, zadania, czas
@@ -90,7 +90,7 @@ test('korpus zdań: decyzja silnika lokalnego dla każdego typowego polecenia', 
 
 const withChat = () => {
   const J = load({ dom: true, state: { settings: { hermesOn: false, jevOn: false, sound: false, speech: false } } });
-  J.__ctx.setTimeout = setTimeout;
+  J.__ctx.setTimeout = refShort;
   return J;
 };
 
@@ -129,7 +129,7 @@ test('łańcuch znanych poleceń przy włączonym Hermesie: wykonany lokalnie, b
   const hits = [];
   const fetch = async (url) => { hits.push(url); return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ choices: [{ message: { content: 'x' } }], data: [] }) }; };
   const J = load({ dom: true, fetch, state: { settings: { hermesOn: true, hermesProvider: 'desktop', hermesUrl: 'http://localhost:8643/v1', hermesKey: 'k', hermesModel: 'jarvis-desktop', jevOn: false, sound: false, speech: false } } });
-  J.__ctx.setTimeout = setTimeout;
+  J.__ctx.setTimeout = refShort;
   await J.brain.handle('otwórz notatnik i zanotuj że jutro dentysta o 10');
   const e = J.tasklog.list().at(-1);
   assert.equal(e.route, 'chain', JSON.stringify(e));

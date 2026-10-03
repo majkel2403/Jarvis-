@@ -253,6 +253,8 @@ async def relay(name: str, args: dict) -> dict:
     fut: asyncio.Future = asyncio.get_running_loop().create_future()
     PENDING[cid] = (fut, client.id)
     await client.queue.put({"id": cid, "name": name, "args": {k: v for k, v in args.items() if v is not None}})
+    if client.id not in CLIENTS and not fut.done():   # karta rozłączyła się między newest() a put — sprzątanie SSE już przeleciało, nikt by nie rozstrzygnął fut (czekanie pełne 90 s)
+        fut.set_result({"ok": False, "code": "OFFLINE", "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})
     try:
         res = await asyncio.wait_for(fut, CALL_TIMEOUT)
     except asyncio.TimeoutError:
@@ -411,9 +413,11 @@ def stale_names(tools: list) -> list[str]:
 
 def update_tools(tools: list) -> bool:
     """Przeglądarka zgłasza aktualny rejestr. Zmiana trafia do pliku — Hermes zobaczy ją po restarcie gatewaya.
-    Rejestr bez narzędzi z aktualnego kodu (stara karta) jest odrzucany: inaczej wypierał nowe narzędzia i nadpisywał migawkę."""
-    fresh = {t["name"]: {"name": t["name"], "description": str(t.get("description") or ""), "parameters": t.get("parameters") or {"type": "object", "properties": {}}}
-             for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", t["name"])}
+    Rejestr bez narzędzi z aktualnego kodu (stara karta) jest odrzucany: inaczej wypierał nowe narzędzia i nadpisywał migawkę.
+    Tylko nazwy z BASELINE (migawka = node bridge/export-tools.js, pilnowana testem) i opisy z limitem długości —
+    karta z tokenem nie może dopisać NOWEGO narzędzia ani wstrzyknąć elaboratu do kontekstu Hermesa (kanał prompt-injection przy XSS)."""
+    fresh = {t["name"]: {"name": t["name"], "description": str(t.get("description") or "")[:600], "parameters": t.get("parameters") or {"type": "object", "properties": {}}}
+             for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", t["name"]) and t["name"] in BASELINE}
     if not fresh or fresh == TOOLS or stale_names(list(fresh.values())):
         return False
     TOOLS.clear()
@@ -485,7 +489,9 @@ def cors(request: Request, resp: Response) -> Response:
 def authorized(request: Request) -> bool:
     if ALLOWED_HOSTS and request.headers.get("host", "") not in ALLOWED_HOSTS:
         return False
-    tok = request.headers.get("x-bridge-token") or request.query_params.get("token") or ""
+    tok = request.headers.get("x-bridge-token") or ""
+    if not tok and request.url.path == "/bridge/events":   # EventSource nie może ustawić nagłówka — TYLKO tu token w query (adresy trafiają do logów/historii)
+        tok = request.query_params.get("token") or ""
     return secrets.compare_digest(tok, TOKEN)
 
 
@@ -577,13 +583,17 @@ async def tasklog(request: Request) -> Response:
     keep = ("ts", "text", "route", "status", "ms", "tools", "partial", "hermes", "reply", "source", "fail")
     rec = {k: e.get(k) for k in keep if k in e}
     p = tasklog_path()
-    try:
+
+    def _append() -> None:   # rotacja do 2 MB czyta/pisze cały plik — poza pętlą zdarzeń, żeby nie zamrażać mostu
         p.parent.mkdir(parents=True, exist_ok=True)
         if p.exists() and p.stat().st_size > 2_000_000:   # rotacja: zostaje ostatnia połowa
             lines = p.read_text(encoding="utf-8").splitlines()
             p.write_text("\n".join(lines[len(lines) // 2:]) + "\n", encoding="utf-8")
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    try:
+        await asyncio.to_thread(_append)
     except OSError as er:
         return cors(request, JSONResponse({"error": str(er)}, status_code=500))
     return cors(request, JSONResponse({"ok": True}))
@@ -614,7 +624,7 @@ async def events(request: Request) -> Response:
             CLIENTS.pop(client.id, None)
             for cid, (fut, owner) in list(PENDING.items()):
                 if owner == client.id and not fut.done():
-                    fut.set_result({"ok": False, "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})
+                    fut.set_result({"ok": False, "code": "OFFLINE", "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})   # jawny kod: Hermes i CB wiedzą, co się stało
 
     return cors(request, StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}))
 
@@ -626,9 +636,9 @@ async def focus(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     try:
-        body = await request.json()
-    except Exception:
-        return cors(request, JSONResponse({"error": "bad json"}, status_code=400))
+        body = await read_json(request)
+    except agents_mod.AgentError as er:
+        return cors(request, JSONResponse({"error": str(er)}, status_code=er.status))
     c = CLIENTS.get(str(body.get("client", "")))
     if c:
         c.visible = bool(body.get("visible"))
@@ -644,9 +654,9 @@ async def result(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     try:
-        body = await request.json()
-    except Exception:
-        return cors(request, JSONResponse({"error": "bad json"}, status_code=400))
+        body = await read_json(request, limit=512 * 1024)   # wyniki narzędzi bywają większe (np. files_read)
+    except agents_mod.AgentError as er:
+        return cors(request, JSONResponse({"error": str(er)}, status_code=er.status))
     entry = PENDING.get(str(body.get("id", "")))
     if entry and not entry[0].done():
         entry[0].set_result({"ok": bool(body.get("ok")), "code": body.get("code") or ("OK" if body.get("ok") else "INTERNAL"), "data": body.get("data"), "text": body.get("text")})
@@ -660,9 +670,9 @@ async def tools_route(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     try:
-        body = await request.json()
-    except Exception:
-        return cors(request, JSONResponse({"error": "bad json"}, status_code=400))
+        body = await read_json(request, limit=1024 * 1024)   # pełny rejestr ~135 narzędzi ze schematami
+    except agents_mod.AgentError as er:
+        return cors(request, JSONResponse({"error": str(er)}, status_code=er.status))
     tools = body.get("tools") or []
     missing = stale_names(tools)
     if missing:
@@ -696,12 +706,16 @@ async def agents_guard(request: Request) -> Response | None:
     return None
 
 
-async def read_json(request: Request) -> dict:
-    if int(request.headers.get("content-length") or 0) > 65536:
-        raise agents_mod.AgentError("za duże żądanie", 413)
+async def read_json(request: Request, limit: int = 65536) -> dict:
+    """Twardy limit na strumieniu — sam Content-Length da się ominąć (transfer chunked)."""
+    raw = b""
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > limit:
+            raise agents_mod.AgentError("za duże żądanie", 413)
     try:
-        body = await request.json()
-    except Exception:
+        body = json.loads(raw or b"{}")
+    except ValueError:
         raise agents_mod.AgentError("bad json", 400)
     return body if isinstance(body, dict) else {}
 
@@ -793,10 +807,12 @@ async def writer_completions(request: Request) -> Response:
     if not (auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], TOKEN)) and not authorized(request):
         return JSONResponse({"error": {"message": "unauthorized"}}, status_code=401)
     try:
-        body = await request.json()
-        if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+        body = await read_json(request, limit=512 * 1024)   # kontekst planisty bywa spory, ale nie nieograniczony
+        if not isinstance(body.get("messages"), list):
             raise ValueError("brak messages")
-    except Exception:  # noqa: BLE001
+    except agents_mod.AgentError as er:
+        return JSONResponse({"error": {"message": str(er)}}, status_code=er.status)
+    except ValueError:
         return JSONResponse({"error": {"message": "bad json"}}, status_code=400)
     try:
         reply, used = await writer_proxy.complete(body, agents_mod.openrouter_key(), log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr))

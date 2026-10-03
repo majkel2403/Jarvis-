@@ -19,7 +19,8 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 18644
 BRIDGE = "http://127.0.0.1:8651"
 TOKEN = (Path.home() / ".jarvis-os" / "bridge-token").read_text().strip()
 LAST = {}
-CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Hermes-Session-Id", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Expose-Headers": "X-Hermes-Session-Id"}
+# tylko lokalne originy — atrapa woła prawdziwy most z tokenem, ACAO:* dawałby KAŻDEJ stronie wykonywanie narzędzi, gdyby została po teście
+CORS = {"Access-Control-Allow-Origin": "http://localhost:4000", "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Hermes-Session-Id", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Expose-Headers": "X-Hermes-Session-Id"}
 
 
 async def mcp_call(name, args):

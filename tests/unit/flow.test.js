@@ -2,7 +2,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 const { makeJev } = require('../jevmock.js');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -10,7 +10,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const setup = async (rules, settings = {}, mockOpts = {}) => {
   const mock = makeJev(rules, mockOpts);
   const J = load({ dom: true, fetch: mock.fetch, state: { settings: { hermesOn: false, jevOn: true, jevKey: 'k', sound: false, speech: false, ...settings } } });
-  J.__ctx.setTimeout = setTimeout;   // zwykłe liczniki (harness robi je „nieblokującymi”, a kod czeka chwilę przed odpowiedzią lokalną)
+  J.__ctx.setTimeout = refShort;   // zwykłe liczniki (harness robi je „nieblokującymi”, a kod czeka chwilę przed odpowiedzią lokalną)
   const st = { asks: [], asked: [], confirms: [], confirmed: [] };
   J.ask = Object.assign(async (q, items) => { st.asked.push({ q, items }); const a = st.asks.shift(); return typeof a === 'function' ? a(items) : a; }, { pending: false });
   J.confirm = async req => { st.confirmed.push(req.question); return st.confirms.shift() ?? 'no'; };

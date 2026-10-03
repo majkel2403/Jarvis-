@@ -57,4 +57,8 @@ function load(opts = {}) {
   ctx.J.__ctx = ctx;
   return ctx.J;
 }
-module.exports = { load, mkEl };
+/* Zegar dla testów, które potrzebują „blokujących” liczników (kod czeka chwilę przed odpowiedzią): krótkie zostają
+   blokujące, długie (przypomnienia zadań za wiele godzin) nie — inaczej wynik zależał od pory dnia: „zadanie na 18:00”
+   uruchomione w nocy trzymało proces testu przy życiu do wieczora. */
+const refShort = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); if (+ms > 10000) t.unref?.(); return t; };
+module.exports = { load, mkEl, refShort };

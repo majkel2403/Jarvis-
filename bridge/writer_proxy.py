@@ -24,6 +24,7 @@ DEFAULT_CHAIN = [
     "poolside/laguna-xs-2.1:free",
 ]
 PER_MODEL_TIMEOUT = float(os.environ.get("JARVIS_WRITER_TIMEOUT", "9"))
+TOTAL_TIMEOUT = float(os.environ.get("JARVIS_WRITER_TOTAL_TIMEOUT", "35"))   # budżet łączny: pełen łańcuch potrafił zjeść ~140 s na jeden krok przy budżecie zadania 150 s
 COOLDOWN = float(os.environ.get("JARVIS_WRITER_COOLDOWN", "90"))
 _failed: dict[str, float] = {}   # model -> do kiedy pomijany
 
@@ -83,14 +84,19 @@ async def complete(body: dict, openrouter_key: str, *, log=lambda *a: None, mode
     """Pierwsza poprawna odpowiedź z łańcucha (domyślnie chain(); planista zadań w internecie podaje własny, mocniejszy).
     Zwraca (odpowiedź, użyty model); rzuca RuntimeError, gdy wszystko zawiodło."""
     errors: list[str] = []
+    deadline = time.monotonic() + TOTAL_TIMEOUT
     async with aiohttp.ClientSession() as s:
         now = time.monotonic()
         if openrouter_key:
             for model in (models or chain()):
                 if _failed.get(model, 0) > now:
                     continue
+                left = deadline - time.monotonic()
+                if left < 2:   # budżet łączny wyczerpany — od razu do Hermesa, zamiast ciągnąć łańcuch
+                    errors.append("budżet łączny wyczerpany")
+                    break
                 try:
-                    status, reply = await ask(s, OPENROUTER_URL, openrouter_key, prepare(body, model), timeout or PER_MODEL_TIMEOUT)
+                    status, reply = await ask(s, OPENROUTER_URL, openrouter_key, prepare(body, model), min(timeout or PER_MODEL_TIMEOUT, left))
                 except Exception as e:  # noqa: BLE001 — limit czasu, brak sieci
                     status, reply = 0, {"error": type(e).__name__}
                 if status == 200 and valid_json_reply(reply):
@@ -103,7 +109,8 @@ async def complete(body: dict, openrouter_key: str, *, log=lambda *a: None, mode
             url, key, model = target
             hbody = {k: v for k, v in body.items() if k not in ("response_format", "stream")} | {"model": model}
             try:
-                status, reply = await ask(s, url, key, hbody, 60)
+                # ostatnia deska ratunku: dostaje resztę budżetu, ale minimum 15 s (Hermes odpowiada 4–11 s)
+                status, reply = await ask(s, url, key, hbody, max(15.0, min(60.0, deadline - time.monotonic())))
                 if status == 200 and valid_json_reply(reply):
                     return reply, "hermes"
                 errors.append(f"hermes: {status}")
