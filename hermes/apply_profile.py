@@ -1,9 +1,13 @@
-"""Konfiguruje profil Hermesa dla Jarvis OS (lekki profil bez skilli/terminala + narzÄ™dzia pulpitu przez most MCP).
+"""Konfiguruje profil Hermesa dla Jarvis OS: most MCP pulpitu + ograniczony kanał API pulpitu.
+
+Od 2026-10-03 jarvis-desktop to JEDYNY profil (Telegram z pełnym zestawem narzędzi + API pulpitu).
+Skrypt NIE wyłącza narzędzi globalnie, NIE usuwa sekretów Telegrama i NIE nadpisuje reasoning_effort —
+ogranicza tylko kanał api_server (platform_toolsets.api_server).
 
 Uruchamiaj Pythonem z venv Hermesa (ma PyYAML):
   %USERPROFILE%\\.hermes\\hermes-agent\\venv\\Scripts\\python.exe hermes\\apply_profile.py --home %USERPROFILE%\\.hermes --name jarvis-desktop
 
-Zmienia WYĹÄ„CZNIE profil docelowy: config.yaml (z kopiÄ… zapasowÄ…), .env, SOUL.md.
+Zmienia WYŁĄCZNIE profil docelowy: config.yaml (z kopią zapasową), .env, SOUL.md.
 """
 from __future__ import annotations
 
@@ -18,8 +22,6 @@ from pathlib import Path
 import yaml
 
 HERE = Path(__file__).resolve().parent
-# NarzÄ™dzia serwera, ktĂłrych ten profil NIE ma: nie da siÄ™ nimi â€žzepsuÄ‡â€ť pulpitu ani wpaĹ›Ä‡ w pÄ™tlÄ™ skilli.
-DISABLED = ["skills", "terminal", "file", "browser", "code_execution", "computer_use", "delegation", "cronjob", "kanban"]
 ENABLED = ["memory", "web", "session_search", "jarvis_desktop"]   # ostatni = nazwa serwera MCP (allowlista)
 ORIGINS = "http://localhost:4000,http://127.0.0.1:4000,https://majkel2403.github.io"
 
@@ -51,14 +53,13 @@ def main() -> int:
 
     pdir = Path(a.home) / "profiles" / a.name
     if not pdir.is_dir():
-        print(f"BĹÄ„D: brak profilu {pdir} (najpierw: hermes profile create {a.name} --clone-from <profil>)", file=sys.stderr)
+        print(f"BŁĄD: brak profilu {pdir} (najpierw: hermes profile create {a.name} --clone-from <profil>)", file=sys.stderr)
         return 2
     cfg_path, env_path, soul_path = pdir / "config.yaml", pdir / ".env", pdir / "SOUL.md"
     cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
     cfg = cfg or {}
 
-    cfg["mcp_servers"] = {
-        "jarvis_desktop": {
+    cfg.setdefault("mcp_servers", {})["jarvis_desktop"] = {
             "url": a.bridge_url.rstrip("/") + "/mcp",
             "headers": {"Authorization": "Bearer ${JARVIS_BRIDGE_TOKEN}", "X-Jarvis-Profile": a.name},
             "enabled": True,
@@ -67,17 +68,13 @@ def main() -> int:
             "keepalive_interval": 60,
             "trust": "full",
             "tools": {"resources": False, "prompts": False},
-        }
     }
     pt = cfg.setdefault("platform_toolsets", {})
     pt["api_server"] = list(ENABLED)
-    agent = cfg.setdefault("agent", {})
-    agent["disabled_toolsets"] = sorted(set(agent.get("disabled_toolsets") or []) | set(DISABLED))
-    agent["reasoning_effort"] = "low"   # proste polecenia pulpitu nie potrzebujÄ… dĹ‚ugiego rozumowania â€” odpowiedĹş kilka razy szybsza
 
     env = read_env(env_path)
-    # Najmniejsze uprawnienia: profil pulpitu nie potrzebuje sekretĂłw kanaĹ‚Ăłw, Notion, dashboardu ani Browserbase (klucze dostawcĂłw modeli zostajÄ…).
-    drop = re.compile(r"^\s*(TELEGRAM|WHATSAPP|DISCORD|SLACK|MATRIX|MATTERMOST|SIGNAL|EMAIL|NOTION|HERMES_DASHBOARD|BROWSERBASE|OBSIDIAN|TERMINAL_MODAL)_\w*\s*=")
+    # Najmniejsze uprawnienia: usuń sekrety kanałów, których ten profil nie obsługuje (Telegram ZOSTAJE — to kanał tego profilu).
+    drop = re.compile(r"^\s*(WHATSAPP|DISCORD|SLACK|MATRIX|MATTERMOST|SIGNAL|EMAIL|NOTION|HERMES_DASHBOARD|BROWSERBASE|OBSIDIAN|TERMINAL_MODAL)_\w*\s*=")
     scrubbed = sorted({ln.split("=")[0].strip() for ln in env if drop.match(ln)})
     env = [ln for ln in env if not drop.match(ln)]
     have_key = any(re.match(r"^\s*API_SERVER_KEY\s*=\s*\S", ln) for ln in env)
@@ -93,10 +90,8 @@ def main() -> int:
     print(f"Profil: {pdir}")
     print(f"  mcp_servers -> jarvis_desktop ({a.bridge_url.rstrip('/')}/mcp)")
     print(f"  platform_toolsets.api_server -> {ENABLED}")
-    print(f"  agent.disabled_toolsets -> {agent['disabled_toolsets']}")
-    print("  agent.reasoning_effort -> low")
     print(f"  API: http://127.0.0.1:{a.port}/v1  (model: {a.name})")
-    print(f"  .env: usuniÄ™to zbÄ™dne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or 'â€”'}")
+    print(f"  .env: usunięto zbędne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or '—'}")
     if a.dry_run:
         print("(dry-run: nic nie zapisano)")
         return 0
@@ -117,9 +112,9 @@ def main() -> int:
         old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
     if key:
-        print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS â†’ Ustawienia â†’ klucz API): {key}")
+        print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS → Ustawienia → klucz API): {key}")
     else:
-        print("\nAPI_SERVER_KEY: zachowano istniejÄ…cy z .env profilu")
+        print("\nAPI_SERVER_KEY: zachowano istniejący z .env profilu")
     return 0
 
 

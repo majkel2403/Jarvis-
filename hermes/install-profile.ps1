@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   1. hermes profile create <Name> --clone-from <Source>   (kanały Telegrama NIE są klonowane)
-  2. hermes\apply_profile.py: mcp_servers.jarvis_desktop, platform_toolsets.api_server, disabled_toolsets, .env, SOUL.md
+  2. hermes\apply_profile.py: mcp_servers.jarvis_desktop, platform_toolsets.api_server, .env, SOUL.md
   3. (opcjonalnie) -LoginXai: logowanie xAI (Grok) — kod urządzenia zatwierdzasz w przeglądarce. Zapisuje się w katalogu głównym
      (hermes -p default), z którego profile bez własnych wpisów xAI korzystają wspólnie (Hermes 0.21: 'hermes -p <profil> auth add xai-oauth'
      dla profilu bez własnych wierszy po cichu gubi wpis). Nie kopiujemy auth.json: refresh tokeny xAI są jednorazowe.
