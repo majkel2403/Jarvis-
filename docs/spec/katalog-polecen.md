@@ -2,16 +2,16 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **137** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 18 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **137** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
 | A3 sam, po cichu | 64 |
-| A2 sam + Cofnij | 45 |
+| A2 sam + Cofnij | 44 |
 | A1 pyta „Chodzi o…?” | 12 |
-| A0 zawsze zgoda | 16 |
+| A0 zawsze zgoda | 17 |
 
 ## Aplikacje i okna
 
@@ -68,7 +68,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `ui_ask` | Zapytaj użytkownika — Zadaje użytkownikowi pytanie z opcjami (szybkie odpowiedzi w czacie i głosem) i zwraca wybraną odpowiedź. Używaj przy dwuznaczności zamiast zgadywać. | **question**: string; options: string[] | safe | A3 | — | — |
 | `speak` | Powiedz na głos — Wypowiada tekst syntezatorem mowy. | **text**: string | safe | A3 | — | „powiedz {text}”, „przeczytaj {text}”, „wypowiedz {text}” |
 | `sound_toggle` | Dźwięki — Włącza/wyłącza dźwięki interfejsu i/lub mowę Jarvisa. | sound: boolean; speech: boolean | safe | A3 | tak | „(wylacz\|wycisz) dzwieki”, „wlacz dzwieki”, „(nie mow\|badz cicho\|wylacz mowe\|przestan mowic)” |
-| `settings_get` | Ustawienia — Zwraca bieżące ustawienia (bez kluczy API). | — | safe | A3 | — | „jakie mam ustawienia”, „pokaz ustawienia” |
+| `settings_get` | Ustawienia — Zwraca bieżące ustawienia (bez kluczy API, tokenów i sekretów). | — | safe | A3 | — | „jakie mam ustawienia”, „pokaz ustawienia” |
 | `settings_set` | Zmień ustawienie — Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet\|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (H | **key**: city\|user\|particles\|sound\|speech\|skipBoot\|proactive\|wakeWord\|quietFrom\|quietTo\|briefingTime\|summaryTime\|…; **value**: string | confirm | A1 (zależy od arg.) | — | „ustaw miasto [na] {value}”, „zmien miasto na {value}”, „wlacz slowo wybudzajace” |
 | `terminal_run` | Polecenie terminala — Wykonuje wbudowane polecenie Terminala Jarvis OS i zwraca tekstowy wynik. Bez pytania działają tylko polecenia niezmieniające danych (help, ls, apps, calc, weat | **command**: string | confirm | A0 (zależy od arg.) | — | „wykonaj w terminalu {command}”, „terminal {command}” |
 | `palette_open` | Paleta poleceń — Otwiera paletę poleceń, opcjonalnie z wpisanym zapytaniem. | query: string | safe | A3 | — | „[otworz] palete [polecen]”, „szukaj polecen” |
@@ -132,7 +132,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `get_weather` | Pogoda — Aktualna pogoda i prognoza (Open-Meteo). Bez miasta — lokalizacja użytkownika. show=false nie otwiera okna. | city: string; days: integer; show: boolean | safe | A3 | — | „[jaka jest] pogoda”, „pogoda w {city}”, „jaka [jest] pogoda w {city}” |
 | `get_crypto_prices` | Kursy krypto — Aktualne kursy walut z listy obserwowanych (domyślnie BTC, ETH, SOL, BNB) w USD ze zmianą 24h i krótkim wykresem (spark, 24 punkty) — CoinGecko / Binance. | symbol: string; show: boolean | safe | A3 | — | „kurs (bitcoina\|btc\|ethereum\|eth\|solany\|sol\|bnb)”, „ile kosztuje (bitcoin\|ethereum\|solana\|bnb)”, „kursy krypto” |
-| `market_watch` | Alert kursu — Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. | symbol: string; direction: above\|below; price: number; remove: boolean | safe | A2 | tak | „powiadom gdy (bitcoin\|btc\|eth\|ethereum\|sol\|solana\|bnb) (przekroczy\|spadnie ponizej) {price}”, „alert (bitcoin\|btc\|eth\|sol\|bnb) {price}”, „jakie mam alerty” |
+| `market_watch` | Alert kursu — Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. | symbol: string; direction: above\|below; price: number; remove: boolean; silent: boolean | confirm | A0 | tak | „powiadom gdy (bitcoin\|btc\|eth\|ethereum\|sol\|solana\|bnb) (przekroczy\|spadnie ponizej) {price}”, „alert (bitcoin\|btc\|eth\|sol\|bnb) {price}”, „jakie mam alerty” |
 | `calculate` | Oblicz — Dokładnie liczy wyrażenie (+ - * / ^ % nawiasy sqrt sin cos log ln pi) i procenty. | **expression**: string | safe | A3 | — | „oblicz {expression}”, „policz {expression}”, „ile to {expression}” |
 | `open_url` | Otwórz stronę — Otwiera stronę WWW w nowej karcie. Znane serwisy: youtube, google, github, gmail, spotify, netflix, facebook, twitter, wikipedia, mapy, linkedin, reddit, allegr | **url**: string | confirm | A0 | — | „otworz strone {url}”, „wejdz na {url}”, „otworz (youtube\|google\|github\|gmail\|spotify\|netflix\|wikipedia\|mapy\|reddit\|allegro\|linkedin)” |
 | `web_search` | Szukaj w Google — Otwiera wyszukiwanie Google z zapytaniem w nowej karcie. | **query**: string | safe | A1 | — | „wyszukaj {query}”, „szukaj {query}”, „wygoogluj {query}” |

@@ -255,7 +255,7 @@ R.add({ id: 'chat_thread', group: 'Czat', label: 'Wątki rozmów', description: 
 
 /* =================== W2 · KOPIA DANYCH v2 (docs/spec/10-ustawienia.md §5) =================== */
 (() => {
-const SECRET = /(key|token)$/i;
+const SECRET = /(key|token|secret)$/i;
 const IDB_KEYS = ['chat.history', 'chat.items', 'chat.summary', 'memory.facts', 'proc.history', 'jev.log', 'consent.log', 'signals.log', 'widgets.cache'];
 const ID_ARRAYS = ['notes', 'tasks', 'widgets', 'shortcuts', 'alerts', 'notifs'];
 J.backup = {

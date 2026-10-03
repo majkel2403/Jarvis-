@@ -880,7 +880,7 @@
  },
  {
   "name": "market_watch",
-  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
+  "description": "Ustawia alert: gdy kurs symbolu przekroczy (above) lub spadnie poniżej (below) progu USD, Jarvis powiadomi. Bez progu — lista alertów. Wymaga potwierdzenia użytkownika. Np.: „powiadom gdy (bitcoin|btc|eth|ethereum|sol|solana|bnb) (przekroczy|spadnie ponizej) price”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -901,6 +901,10 @@
     },
     "remove": {
      "type": "boolean"
+    },
+    "silent": {
+     "type": "boolean",
+     "description": "true = bez pytania (cron, drill, signal triggers); wymaga explicit zgody w kodzie"
     }
    }
   }
@@ -1092,7 +1096,7 @@
  },
  {
   "name": "settings_get",
-  "description": "Zwraca bieżące ustawienia (bez kluczy API). Np.: „jakie mam ustawienia”.",
+  "description": "Zwraca bieżące ustawienia (bez kluczy API, tokenów i sekretów). Np.: „jakie mam ustawienia”.",
   "parameters": {
    "type": "object",
    "properties": {}
@@ -1232,7 +1236,7 @@
  },
  {
   "name": "files_write",
-  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Np.: „zapisz plik name: text”.",
+  "description": "Zapisuje (lub dopisuje, append=true) tekst do pliku w folderze roboczym. Nadpisanie istniejącego pliku wymaga potwierdzenia. Wymaga potwierdzenia użytkownika. Np.: „zapisz plik name: text”.",
   "parameters": {
    "type": "object",
    "properties": {

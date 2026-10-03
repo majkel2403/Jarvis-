@@ -1691,12 +1691,16 @@
     },
     "remove": {
      "type": "boolean"
+    },
+    "silent": {
+     "type": "boolean",
+     "description": "true = bez pytania (cron, drill, signal triggers); wymaga explicit zgody w kodzie"
     }
    }
   },
   "required": [],
-  "risk": "safe",
-  "level": "A2",
+  "risk": "confirm",
+  "level": "A0",
   "levelDependsOnArgs": false,
   "undoable": true,
   "external": false,
@@ -1710,7 +1714,7 @@
    "alert (bitcoin|btc|eth|sol|bnb) {price}",
    "jakie mam alerty"
   ],
-  "needsConfirmText": false
+  "needsConfirmText": true
  },
  {
   "id": "calculate",
@@ -2120,7 +2124,7 @@
   "id": "settings_get",
   "group": "Interfejs",
   "label": "Ustawienia",
-  "description": "Zwraca bieżące ustawienia (bez kluczy API).",
+  "description": "Zwraca bieżące ustawienia (bez kluczy API, tokenów i sekretów).",
   "args": {
    "type": "object",
    "properties": {}
@@ -2493,7 +2497,8 @@
      "type": "string"
     },
     "text": {
-     "type": "string"
+     "type": "string",
+     "maxLength": 500000
     },
     "append": {
      "type": "boolean"

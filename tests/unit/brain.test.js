@@ -103,6 +103,14 @@ test('settings_get: żaden klucz API nie trafia do modelu', async () => {
   assert.equal(Object.keys(r.data).filter(k => /key$/i.test(k)).length, 0);
   assert.equal(r.data.city, 'Wrocław', 'zwykłe ustawienia nadal są zwracane');
 });
+test('settings_get: tokeny i sekrety (bridgeToken itp.) też nie trafiają do modelu', async () => {
+  const K = load({ state: { settings: { hermesOn: false, bridgeToken: 'SEKRET-TOK1', gatewayToken: 'SEKRET-TOK2', webhookSecret: 'SEKRET-SEC1' } } });
+  const r = await K.registry.run('settings_get', {}, { source: 'hermes' });
+  assert.equal(r.ok, true);
+  const txt = JSON.stringify(r);
+  for (const s of ['SEKRET-TOK1', 'SEKRET-TOK2', 'SEKRET-SEC1']) assert.ok(!txt.includes(s), 'wyciek: ' + s);
+  assert.equal(Object.keys(r.data).filter(k => /(key|token|secret)$/i.test(k)).length, 0);
+});
 test('głos: ryzykowne polecenia pytają o zgodę, wpisane ręcznie — nie', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   let asked = 0, answer = 'no'; K.confirm = async () => { asked++; return answer; };
