@@ -9,12 +9,12 @@
 
   Model pomocniczy do wpisywania tekstu (writer): domyślnie most (bridge) sam kieruje go przez pośrednika bridge\writer_proxy.py —
   łańcuch szybkich DARMOWYCH modeli z OpenRouter (tym samym kluczem), a gdy żaden nie odpowie w 9 s, awaryjnie Twój Hermes.
-  Dzięki temu wpisywanie nie zależy od limitów Groka. Wpisy CLICKER_WRITER_* poniżej to tylko tryb bez mostu.
+  Dzięki temu wpisywanie nie zależy od limitów modelu Hermesa. Wpisy CLICKER_WRITER_* poniżej to tylko tryb bez mostu.
 
   -Provider openrouter  (domyślnie) klucz z openrouter.ai/keys — Jev (agent WWW, sterowanie komputerem, sędzia w Jarvisie)
   -Provider typesafe    klucz z console.typesafe.ai/keys — Jev bezpośrednio
 
-  -Writer hermes        (domyślnie, dotyczy uruchomień bez mostu) model pomocniczy = Twój Hermes (profil jarvis-desktop, Grok z subskrypcji xAI, gateway :8643).
+  -Writer hermes        (domyślnie, dotyczy uruchomień bez mostu) model pomocniczy = Twój Hermes (profil jarvis-desktop, MiniMax-M3, gateway :8643).
                         Sprawdzone: poprawny JSON i polskie teksty, ale 4–11 s na wywołanie — używany tylko do wpisywania tekstu
                         i odpowiedzi końcowej, nie w każdym kroku. Zrzuty ekranu NIE są do niego wysyłane (tylko tekst ekranu).
   -Writer anthropic     klucz Anthropic wpisany w ukrytym polu (bezpośrednio, nie OpenRouter)
@@ -46,7 +46,7 @@ switch ($Writer) {
   'hermes' {
     $penv = Join-Path $env:USERPROFILE '.hermes\profiles\jarvis-desktop\.env'
     $hk = if (Test-Path $penv) { (Get-Content $penv -Encoding UTF8 | Where-Object { $_ -match '^\s*API_SERVER_KEY\s*=\s*\S' } | Select-Object -First 1) -replace '^\s*API_SERVER_KEY\s*=\s*', '' } else { '' }
-    if ($hk) { $lines += @('# model pomocniczy (wpisywanie tekstu, odpowiedź końcowa): Twój Hermes, profil jarvis-desktop (Grok z subskrypcji xAI) — NIE OpenRouter',
+    if ($hk) { $lines += @('# model pomocniczy (wpisywanie tekstu, odpowiedź końcowa): Twój Hermes, profil jarvis-desktop (MiniMax-M3) — NIE OpenRouter',
         'CLICKER_WRITER_API=openai', 'CLICKER_WRITER_BASE_URL=http://127.0.0.1:8643/v1', "CLICKER_WRITER_API_KEY=$($hk.Trim())", 'CLICKER_WRITER_MODEL=jarvis-desktop', 'CLICKER_ANSWER_MODEL=jarvis-desktop', 'CLICKER_WRITER_VISION=false') }
     else { Write-Warning "Nie znalazłem API_SERVER_KEY w $penv — model pomocniczy pominięty (uruchom ponownie po zainstalowaniu profilu jarvis-desktop)."; $lines += '# brak modelu pomocniczego (nie znaleziono profilu jarvis-desktop)' }
   }

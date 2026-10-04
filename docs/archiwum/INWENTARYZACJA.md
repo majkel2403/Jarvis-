@@ -1,8 +1,11 @@
 # Jarvis OS — inwentaryzacja: co rozpisać, uwzględnić i przemyśleć
 
+> **Dokument historyczny** (inwentaryzacja z 2026-09-29/30, punkt wyjścia specyfikacji). Liczby poleceń i stany poniżej są
+> nieaktualne — aktualny stan: [specyfikacja](../spec/README.md), [katalog poleceń](../spec/katalog-polecen.md), [decyzje (ADR)](../adr/README.md).
+
 Data: 29.09.2026. Stan sprawdzony w kodzie (branch `claude/jev-wdrozenie`, PR #2). Dokument służy do planowania; kodu jeszcze nie piszemy.
 
-> **Pełna specyfikacja** (każdy obszar do najmniejszego szczegółu, decyzje, katalogi z kodu, plan wdrożenia W1–W5): [docs/spec/README.md](spec/README.md).
+> **Pełna specyfikacja** (każdy obszar do najmniejszego szczegółu, decyzje, katalogi z kodu, plan wdrożenia W1–W5): [docs/spec/README.md](../spec/README.md).
 
 Legenda: `[jest]` działa · `[część]` działa częściowo · `[brak]` do zaprojektowania · `[decyzja]` wymaga decyzji właściciela.
 

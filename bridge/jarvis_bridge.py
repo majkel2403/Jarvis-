@@ -938,7 +938,7 @@ async def tools_route(request: Request) -> Response:
     if not authorized(request):
         return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
     try:
-        body = await read_json(request, limit=1024 * 1024)   # pełny rejestr ~135 narzędzi ze schematami
+        body = await read_json(request, limit=1024 * 1024)   # pełny rejestr ~140 narzędzi ze schematami
     except agents_mod.AgentError as er:
         return cors(request, JSONResponse({"error": str(er)}, status_code=er.status))
     tools = body.get("tools") or []

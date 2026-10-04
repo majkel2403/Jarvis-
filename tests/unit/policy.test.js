@@ -1,4 +1,4 @@
-/* Czysta logika Jeva: tabela routingu R1–R14 (docs/JEV-PLAN.md, sekcja 7.2), poziomy autonomii, heurystyki, forma odpowiedzi. Bez sieci. */
+/* Czysta logika Jeva: tabela routingu R1–R14 (docs/JEV-PLAN.md, sekcja 7.2; R15/R16 — tests/unit/live-fixes.test.js), poziomy autonomii, heurystyki, forma odpowiedzi. Bez sieci. */
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');

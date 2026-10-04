@@ -125,8 +125,8 @@ Plan zakładał migrację istniejących plików na TS. **Odradzamy.** Powody:
 
 1. `npx tsc --noEmit` jako `npm run typecheck` — szybka walidacja lokalna.
 2. Hook pre-commit (opcjonalnie): `tsc --noEmit` przed commitem w `js/`.
-3. Drugi plik z typami — kandydat: `js/coach.js` (parser motywacyjny / refleksyjny) lub nowy util do walidacji `notes`.
-4. `tools/export-tools.js` (ten, który generuje `bridge/tools.json`) powinien czytać typy z `js/global.d.ts` zamiast pisać schema ręcznie — ale to wymaga, żeby więcej rejestru było otagowane.
+3. Drugi plik z typami — kandydat: `js/widget-spec.js` (walidator opisu widgetu) lub nowy util do walidacji `notes`.
+4. `bridge/export-tools.js` (ten, który generuje `bridge/tools.json`) powinien czytać typy z `js/global.d.ts` zamiast pisać schema ręcznie — ale to wymaga, żeby więcej rejestru było otagowane.
 5. Dzień później: rozważyć `checkJs:true` w jednym, wybranym module (np. `js/mcp-tool-schema.js` najpierw — sprawdzić, czy narzędzie daje wartościowe ostrzeżenia).
 
 ---

@@ -56,7 +56,7 @@ Dlaczego pierwsza: bez tego nowe funkcje nie będą miały cofania, logu i zgód
 
 | # | zadanie | pliki | dotyczy |
 |---|---|---|---|
-| W4.1 | Walidator (`tools/schema-lite.js` → `js/schema.js` w aplikacji), render bloków bez `innerHTML`, wiązanie `$src.path`, formaty | nowy `js/widget-spec.js`, `js/widgets.js` | [05](05-widgety.md) §3 |
+| W4.1 | Walidator (`tools/schema-lite.js` → walidacja w `js/widget-spec.js`), render bloków bez `innerHTML`, wiązanie `$src.path`, formaty | nowy `js/widget-spec.js`, `js/widgets.js` | [05](05-widgety.md) §3 |
 | W4.2 | Źródła danych: tylko A3, wspólna pamięć podręczna, odświeżanie z pauzą, stany building/live/stale/error | `js/widget-spec.js` | [05](05-widgety.md) §3.4, §3.8 |
 | W4.3 | `widget_build` / `widget_edit` / `widget_refresh` dla Hermesa (+ jedna poprawka po błędzie walidacji), opis narzędzia z listą bloków | `js/commands.js`, `js/ai.js` (prompt) | D-11, D-12 |
 | W4.4 | `J.chart` (line/area/bar), `chart_show` | nowy `js/chart.js` | [09](09-wyglad-stany.md) §6 |

@@ -1,5 +1,8 @@
 # Jarvis OS — plan rozwoju, poprawek i ulepszeń
 
+> **Dokument historyczny** (plan z 2026-09-29, gałąź `claude/neon-dashboard`, scalona do main). Liczby, nazwy gałęzi i stany
+> poniżej są nieaktualne — aktualny stan: [README](../../README.md), [specyfikacja](../spec/README.md), [decyzje (ADR)](../adr/README.md).
+
 Dokument opisuje stan projektu po przebudowie wyglądu (gałąź `claude/neon-dashboard`), diagnozę braków na podstawie kodu oraz plan zmian w kolejności, która buduje fundament pod resztę. Odniesienia do plików wskazują, gdzie dana rzecz dziś jest (lub jej nie ma).
 
 ## Stan realizacji (gałąź `claude/neon-dashboard`)

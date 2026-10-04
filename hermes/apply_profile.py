@@ -145,7 +145,7 @@ def cheatsheet() -> str:
     """Najczęstsze narzędzia z DOKŁADNYMI nazwami pól — modele myliły id/widget, theme/color, selector/target."""
     tools = {t["name"]: t for t in json.loads((HERE.parent / "bridge" / "tools.json").read_text(encoding="utf-8"))}
     lines = [CHEAT_BEGIN, "## Najczęstsze narzędzia — dokładne pola (`*` = wymagane)", "",
-             "Wołaj przez `tool_call` **jedno narzędzie na wywołanie** (kilka naraz → błąd „mixed and multi-local batches”).", ""]
+             "Wołaj wprost (`mcp__jarvis_desktop__<nazwa>`), **jedno narzędzie pulpitu na wywołanie**; sukces potwierdzaj dopiero po `ok=true`.", ""]
     for n in CHEAT_TOOLS:
         t = tools.get(n)
         if not t:

@@ -1,6 +1,6 @@
 # Specyfikacja Jarvis OS — pełny pakiet
 
-Ten folder opisuje **wszystko**, co Jarvis OS robi i ma robić: każde okno, przycisk, polecenie, stan, ustawienie, błąd i test. Punkt wyjścia to [inwentaryzacja](../INWENTARYZACJA.md); plan sędziego Jev jest osobno w [JEV-PLAN.md](../JEV-PLAN.md).
+Ten folder opisuje **wszystko**, co Jarvis OS robi i ma robić: każde okno, przycisk, polecenie, stan, ustawienie, błąd i test. Punkt wyjścia była [inwentaryzacja](../archiwum/INWENTARYZACJA.md) (archiwum); plan sędziego Jev jest osobno w [JEV-PLAN.md](../JEV-PLAN.md).
 
 Pisane prostym językiem. Tam, gdzie trzeba było coś zdecydować, a decyzji właściciela jeszcze nie ma, wpisałem **decyzję domyślną** (oznaczenie „⚑ domyślnie”) — każdą da się zmienić w [01-decyzje.md](01-decyzje.md) bez przepisywania reszty.
 

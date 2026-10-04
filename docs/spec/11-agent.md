@@ -1,6 +1,7 @@
 # 11 · Agent — przebieg polecenia, plany, rutyny, cofanie, pamięć, proaktywność
 
-Decyzje sędziego Jev (router R1–R14, progi, prywatność) są opisane w [JEV-PLAN.md](../JEV-PLAN.md) — tu tylko to, co go otacza.
+Decyzje sędziego Jev (router R1–R16, progi, prywatność) są opisane w [JEV-PLAN.md](../JEV-PLAN.md) — tu tylko to, co go otacza.
+Niepewne polecenia przy osiągalnym Hermesie trafiają do niego zamiast pytania „Chodzi o…?” ([ADR 0005](../adr/0005-niepewny-jev-oddaje-hermesowi.md)).
 
 ## 1. Przebieg jednego polecenia (stan obecny, ✅)
 
@@ -13,9 +14,9 @@ wejście (tekst / głos / sygnał / rutyna)
  ├─ J.flow.fast:
  │    parser pewny + A3 → wykonaj od razu (bez Jeva)                         [outcome: fast]
  │    inaczej Jev decide (intencja, ryzyko, dwuznaczność, „to/tu”, akt dialogowy)
- │      → J.policy.route (R1–R14) → exec / ask_intent / ask_alternatives / fill_enum / ask_slots / hermes
+ │      → J.policy.route (R1–R16) → exec / ask_intent / ask_alternatives / fill_enum / ask_slots / hermes
  │
- ├─ Hermes (pętla narzędzi, plan, budżety 10 tur / 25 narzędzi / 90 s, streszczenia)
+ ├─ Hermes (pętla narzędzi, plan, budżety 10 tur / 25 narzędzi / 90 s, streszczenia; odpowiedź bez narzędzia na prośbę o czynność → jedno przypomnienie, ADR 0006)
  │    każde wywołanie: strażnik D9, wstrzyknięcia D10, pamięć D12 → rejestr (zgody)
  │    po odpowiedzi: weryfikacja D6 (P2)
  │

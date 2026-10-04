@@ -6,7 +6,8 @@ Każda usługa ma opisane: **po co**, **adres**, **podłączenie**, **test**, **
 
 | usługa | po co | adres | klucz | dane wychodzące | awaria / offline | stan |
 |---|---|---|---|---|---|---|
-| **Hermes Agent** (lokalny) | mózg: rozmowa, plan, narzędzia | `http://localhost:8642/v1` (OpenAI-compat, SSE) | opcjonalny (`hermesKey`) | historia rozmowy, kontekst pulpitu, wyniki narzędzi | ✅ parser lokalny; 🆕 1 ponowienie | ✅ |
+| **Hermes Desktop** (profil `jarvis-desktop`, domyślnie) | mózg: rozmowa, plan, narzędzia MCP pulpitu | przez most: `http://127.0.0.1:8651/bridge/v1` → gateway `:8643` | token mostu (klucz gatewaya zostaje w moście, ADR 0003) | historia rozmowy, kontekst pulpitu, wyniki narzędzi | ✅ parser lokalny; 🆕 1 ponowienie | ✅ |
+| **Hermes Agent** (bez mostu) | mózg: rozmowa, plan, narzędzia | `http://localhost:8642/v1` (OpenAI-compat, SSE) | opcjonalny (`hermesKey`) | historia rozmowy, kontekst pulpitu, wyniki narzędzi | ✅ parser lokalny; 🆕 1 ponowienie | ✅ |
 | **Nous Portal** | Hermes w chmurze | `inference-api.nousresearch.com` | `hermesKey` | jw. | jw. | ✅ |
 | **OpenRouter — Hermes** | Hermes 4 w chmurze | `openrouter.ai/api/v1` | `openrouterKey` | jw. | jw. | ✅ |
 | **OpenRouter — Jev** | sędzia decyzji | `openrouter.ai/api/v1/systemone` | `jevKey` / `openrouterKey` | zdanie + stan wg poziomu P0–P2 | ✅ bezpiecznik, budżet | ✅ |

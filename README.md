@@ -13,7 +13,7 @@ Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, s
 | **Core** | żywa kula z orbitami, wiązką i odbiciem w jeziorze; pierścienie HUD reagujące na stan (czuwam / słucham / analizuję / działam / czekam na zgodę / pauza / błąd); wokół Core **10 kart** zasilanych wyłącznie zdarzeniami Event Busa |
 | **Dashboard agenta** | pasek górny: segmentowy wskaźnik trybu wprost z maszyny stanów, status Hermesa, licznik narzędzi, FPS, zegar; **Telemetria** (zwijana, `Alt+3`): pogoda, zegar, wykres aktywności agenta, FPS, pamięć, sieć, bateria, zadania, akcje, czas pracy, okna |
 | **Jarvis ↔ Hermes** | mózgiem jest **Hermes Agent** (Nous Research) albo dowolny serwer OpenAI-compatible z modelem Hermes. Model dostaje w każdej turze **Context Packet** (stan pulpitu, aktywna aplikacja, widgety, notatki, zadania, minutnik, sygnały, profil) i steruje systemem przez **ponad 130 narzędzi** z Command Registry (aktualna liczba: `bridge/tools.json`); wywołania w formacie `<tool_call>` **albo** natywnym `tool_calls` (autodetekcja) |
-| **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, środek = pytanie „Chodzi o…?”, reszta = Hermes z podpowiedzią `<judge>`. Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, poziomy prywatności, autonomia z przyciskiem „Cofnij”, budżet, tryb cienia; bez klucza wszystko działa jak dotąd |
+| **Sędzia Jev** | opcjonalny model decyzyjny **Jev** (TypeSafe AI, „System One”) przez OpenRouter: w ~200 ms ocenia intencję wypowiedzi z kalibrowaną pewnością, ryzyko działania, dwuznaczność i to, czy chodzi o aktywne okno. Wysoka pewność = wykonanie z rejestru bez czekania na Hermesa, reszta = Hermes z podpowiedzią `<judge>` (bez Hermesa albo w trybie „zawsze pytaj” — pytanie „Chodzi o…?”). Rozstrzyga też, którą notatkę lub zadanie masz na myśli, weryfikuje odpowiedzi Hermesa względem wyników narzędzi (stan WERYFIKACJA) i ocenia pilność sygnałów w trybie aktywnym. Klucz OpenRouter w Ustawieniach, poziomy prywatności, autonomia z przyciskiem „Cofnij”, budżet, tryb cienia; bez klucza wszystko działa jak dotąd |
 | **Command Registry** | jedno źródło prawdy: każde polecenie ma schemat, poziom ryzyka, przykłady PL i z tego samego wpisu powstają narzędzie dla modelu, wzorce silnika lokalnego, pozycja palety `Ctrl+K` i opis „co potrafisz” |
 | **Silnik lokalny** | działa bez modelu: dopasowanie do przykładów z rejestru z rozumieniem czasu („za 20 minut”, „w piątek o 9”, „o osiemnastej trzydzieści”), łańcuchy („otwórz notatnik i ustaw minutnik 5 minut”), procenty, jednostki |
 | **Narzędzia** | notatki (lista/odczyt/szukaj/dopisz/zmień/usuń), zadania (lista/dodaj/odhacz/przełóż/odłóż/usuń), okna (lista/aktywuj/minimalizuj/przyciągnij/kafelkuj/układy), widgety (lista/zmień/usuń), minutnik (start/stop/przedłuż/status), pogoda, kursy krypto i **alerty kursów**, kalkulator, strony WWW, schowek, ustawienia, terminal, pamięć, pliki, wskazywanie elementów, pytania do użytkownika |
@@ -62,7 +62,7 @@ Telegram / cron ──► Hermes Agent (profil jarvis-desktop, :8643) ──MCP�
 - **Most** (`bridge/`) — wystawia polecenia rejestru Hermesowi jako narzędzia MCP, przekazuje je do karty, pośredniczy w czacie z Hermesem i uruchamia agentów Jeva.
 - **Hermes** (`hermes/`) — profil `jarvis-desktop` budowany z repo przez `hermes/apply_profile.py` (konfiguracja, `SOUL.md`, `HERMES.md`, wtyczki, hak blokad, strażnik konfiguracji).
 
-Szczegóły: [Hermes i most MCP](docs/guide/hermes-i-most.md) · [Decyzje architektoniczne](docs/adr/README.md) · [Agenci Jeva — internet i prawdziwy komputer](docs/guide/agenci-jeva.md) · [Sędzia Jev](docs/guide/jev.md) · [Specyfikacja](docs/spec/README.md) · [Plan rozwoju](docs/ROADMAP.md).
+Szczegóły: [Hermes i most MCP](docs/guide/hermes-i-most.md) · [Decyzje architektoniczne](docs/adr/README.md) · [Agenci Jeva — internet i prawdziwy komputer](docs/guide/agenci-jeva.md) · [Sędzia Jev](docs/guide/jev.md) · [Specyfikacja](docs/spec/README.md) · [Archiwum dawnych planów](docs/archiwum/README.md).
 
 ## Hermes — szybki start (Windows, bez WSL)
 
@@ -126,7 +126,7 @@ bridge/                     most MCP (Python): jarvis_bridge.py, agents.py, web_
 integrations/               agenci Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), clicker, łatki, testy
 hermes/                     profil Hermesa: SOUL.md, HERMES.md, apply_profile.py, install-profile.ps1,
                             plugins/jarvis-events, scripts/ (strażnik, hak blokad, health-check, raport poranny), tests/
-docs/                       specyfikacja (spec/), przewodniki (guide/), plan rozwoju, plan Jeva
+docs/                       specyfikacja (spec/), przewodniki (guide/), decyzje (adr/), plan Jeva, archiwum planów (archiwum/)
 tests/                      testy jednostkowe (Node), test dymny (Playwright), zbiory zdań
 tools/                      generator katalogów specyfikacji (gen-spec.js) i narzędzia pomocnicze
 ```

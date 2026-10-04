@@ -2,7 +2,7 @@
 
 Program typesafe-computer-use używa modelu pomocniczego do wpisywania tekstu i końcowej odpowiedzi. Darmowe modele OpenRouter są szybkie,
 ale zawodne (429 od współdzielonych dostawców, puste odpowiedzi „myślących” modeli, uszkodzony JSON), więc pośrednik próbuje ŁAŃCUCHA:
-kolejne darmowe modele (krótki limit czasu, walidacja, że odpowiedź to poprawny JSON) i dopiero na końcu Hermes (Grok z subskrypcji).
+kolejne darmowe modele (krótki limit czasu, walidacja, że odpowiedź to poprawny JSON) i dopiero na końcu Hermes (profil jarvis-desktop, MiniMax-M3).
 Model, który zawiódł, jest pomijany przez COOLDOWN sekund, więc kolejne wywołania nie tracą czasu na ten sam błąd.
 """
 from __future__ import annotations

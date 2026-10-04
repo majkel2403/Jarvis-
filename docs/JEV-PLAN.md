@@ -501,7 +501,7 @@ Otwarte, ale nie blokują F0: czy chcemy tryb cienia mimo wczesnej autonomii (re
 ## 19. Stan wdrożenia (rzeczywisty)
 
 Wdrożone i przetestowane (188 testów jednostkowych + test w przeglądarce):
-F0 (bezpiecznik, budżet, walidacja, P0–P2, dziennik, tryb cienia, naprawy L1–L4), F2 (router R1–R14, szybka ścieżka tylko dla odczytów, wartości z listy D8, dopytywanie, „Cofnij”), F3 (D9 strażnik, D10 wstrzyknięcia, D12 pamięć, D15 odpowiedzi), F4 (historia „wróć”, `schedule_day`, `settings_open`, D16 anuluj, D11 lżejszy model, D13 forma odpowiedzi, D14 ranking powiadomień), F5 (adaptacyjne progi, panel statystyk, budżet, eksport dziennika, zbiór 447 zdań, sonda, workflow kontraktowy).
+F0 (bezpiecznik, budżet, walidacja, P0–P2, dziennik, tryb cienia, naprawy L1–L4), F2 (router R1–R14, od 2026-10-04 R1–R16 — ADR 0005, szybka ścieżka tylko dla odczytów, wartości z listy D8, dopytywanie, „Cofnij”), F3 (D9 strażnik, D10 wstrzyknięcia, D12 pamięć, D15 odpowiedzi), F4 (historia „wróć”, `schedule_day`, `settings_open`, D16 anuluj, D11 lżejszy model, D13 forma odpowiedzi, D14 ranking powiadomień), F5 (adaptacyjne progi, panel statystyk, budżet, eksport dziennika, zbiór 447 zdań, sonda, workflow kontraktowy).
 
 Świadomie **niewykonane**, bo wymaga prawdziwego klucza OpenRouter:
 - faktyczny pomiar trafności Jeva, krzywa zaufania i dobór progów (`node tests/jev-probe.js`); do tego czasu progi 0,80 / 0,92 są ostrożnymi hipotezami, a tryb cienia pozwala je zweryfikować na własnym użyciu;
