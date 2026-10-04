@@ -142,6 +142,7 @@ async function connect() {
     J.log('Most Hermes połączony', J.bridge.tools.length + ' narzędzi MCP dostępnych dla Hermesa', 'info');
   });
   es.addEventListener('cmd', e => { try { handle(JSON.parse(e.data)); } catch (er) { console.error(er); } });
+  es.addEventListener('agent', e => { try { J.bridge.agentEvent(JSON.parse(e.data)); } catch (er) { console.error(er); } });
   es.onerror = async () => {
     if (es) { es.close(); es = null; }
     clearInterval(pollTimer); set('down');
@@ -149,6 +150,49 @@ async function connect() {
     retryTimer = setTimeout(connect, Math.min(30000, 1500 * 2 ** Math.min(retry++, 5)));
   };
 }
+
+/* Zadania Hermesa spoza tej karty (Telegram, cron, CLI) — zdarzenia z wtyczki jarvis-events przez most (SSE „agent”).
+   Zasilają tę samą magistralę co zadania z czatu (J.ev → Orb, HUD) i Process Log, więc pulpit pokazuje prawdziwą pracę agenta.
+   Narzędzia pulpitu (mcp__jarvis_desktop__*) karta rejestruje sama przy wykonaniu — tu je pomijamy, żeby nie było duplikatów. */
+const PLATFORM = { telegram: 'Telegram', cron: 'Cron', cli: 'Konsola', tui: 'Konsola' };
+const remote = { id: null, proc: null, steps: new Map(), watchdog: null };
+const remoteEnd = (status, result) => {
+  if (!remote.id) return;
+  clearTimeout(remote.watchdog);
+  J.ev.emit(status === 'ok' ? 'task.completed' : status === 'abort' ? 'task.cancelled' : 'task.failed', { task_id: remote.id, result: String(result || '').slice(0, 300) }, 'hermes');
+  if (remote.proc && J.proc.current === remote.proc) J.proc.end(status, result || '');
+  remote.id = null; remote.proc = null; remote.steps.clear();
+};
+J.bridge.agentEvent = e => {
+  if (!e || typeof e.type !== 'string' || typeof e.task_id !== 'string') return;
+  if (e.type === 'task.created') {
+    if (remote.id) remoteEnd('abort', 'Zastąpione nowym zadaniem');
+    if (J.brain?.busy || J.proc.active) return;   // trwa zadanie z czatu tej karty — nie mieszamy dwóch zadań na jednym Orbie
+    remote.id = e.task_id;
+    const where = PLATFORM[e.platform] || 'Hermes', title = String(e.title || 'Zadanie').slice(0, 160);
+    remote.proc = J.proc.start(where + ': ' + title);
+    J.ev.emit('task.created', { task_id: e.task_id, title, source: e.platform || 'hermes' }, 'hermes');
+  } else if (e.task_id !== remote.id) return;
+  clearTimeout(remote.watchdog);
+  remote.watchdog = setTimeout(() => remoteEnd('abort', 'Brak wieści od Hermesa (10 min) — zadanie mogło zostać przerwane'), 600000);
+  remote.watchdog?.unref?.();   // Node (testy): zegar czuwania nie trzyma procesu; w przeglądarce bez znaczenia
+  if (e.type === 'tool.started' || e.type === 'tool.completed' || e.type === 'tool.failed') {
+    const tool = String(e.tool || 'narzędzie');
+    if (tool.startsWith('mcp__jarvis_desktop__')) return;
+    const key = e.call_id || tool;
+    if (e.type === 'tool.started') {
+      J.ev.emit('tool.started', { task_id: remote.id, tool, source: 'hermes' }, 'hermes');
+      remote.steps.set(key, J.proc.step('server', tool + (e.label ? ' — ' + e.label : ''), [['Narzędzie', tool], ...(e.label ? [['Argument', e.label]] : [])], { running: true }));
+    } else {
+      J.ev.emit(e.type, { task_id: remote.id, tool, source: 'hermes', code: e.type === 'tool.failed' ? 'ERROR' : 'OK' }, 'hermes');
+      const st = remote.steps.get(key); remote.steps.delete(key);
+      if (e.type === 'tool.failed') st?.fail(e.error || 'błąd narzędzia'); else st?.done(e.ms != null ? [['Czas', J.fmtDur(e.ms)]] : null);
+    }
+  } else if (e.type === 'task.completed' || e.type === 'task.failed') {
+    if (e.result && remote.proc) J.proc.step('reply', 'Odpowiedź Hermesa', [['Treść', e.result]], { preview: String(e.result).slice(0, 70) });
+    remoteEnd(e.type === 'task.completed' ? 'ok' : 'err', e.result || '');
+  }
+};
 
 /* zgłaszamy mostowi, czy ta karta jest widoczna — polecenia trafiają do aktywnej karty, nie do „najnowszej" */
 J.on('settings', () => { const n = [S().bridgeOn, S().bridgeUrl, S().bridgeToken].join('|'); if (n !== sig) { sig = n; connect(); } });

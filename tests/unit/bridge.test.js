@@ -100,3 +100,36 @@ test('Hermes przez most: zapytania niosą token mostu zamiast klucza gatewaya', 
   assert.equal(h['X-Bridge-Token'], 'tok');
   assert.equal(h.Authorization, undefined, 'klucz gatewaya nie wychodzi z przeglądarki');
 });
+test('Zadanie Hermesa z Telegrama (zdarzenia z mostu) zasila Orb i Process Log; narzędzia pulpitu bez duplikatów', async () => {
+  const J = load({ dom: true, files: FILES, fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), state: { settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b' } } });
+  const ev = (type, extra = {}) => J.bridge.agentEvent({ v: 1, type, task_id: 'h-s1-1', ...extra });
+  ev('task.created', { platform: 'telegram', title: 'sprawdź pogodę i zapisz notatkę' });
+  assert.equal(J.proc.active, true, 'zadanie w Process Logu');
+  assert.match(J.proc.current.title, /^Telegram: sprawdź pogodę/);
+  assert.equal(J.engine.taskId, 'h-s1-1', 'Orb śledzi zadanie z Telegrama');
+  ev('tool.started', { call_id: 'c1', tool: 'web_search', label: 'pogoda Gorinchem' });
+  assert.equal(J.engine.mode, 'EXECUTING', 'Orb: działanie');
+  ev('tool.completed', { call_id: 'c1', tool: 'web_search', ms: 840 });
+  ev('tool.started', { call_id: 'c2', tool: 'mcp__jarvis_desktop__create_note' });
+  ev('tool.completed', { call_id: 'c2', tool: 'mcp__jarvis_desktop__create_note' });
+  const steps = J.proc.current.steps;
+  assert.equal(steps.filter(s => s.kind === 'server').length, 1, 'narzędzie pulpitu nie dubluje się (karta loguje je sama)');
+  assert.equal(steps.find(s => s.kind === 'server').status, 'ok');
+  J.bridge.agentEvent({ v: 1, type: 'tool.started', task_id: 'inne-zadanie', tool: 'terminal' });
+  assert.equal(J.proc.current.steps.length, steps.length, 'zdarzenia innego zadania są ignorowane');
+  ev('task.completed', { result: '12°C, notatka zapisana' });
+  assert.equal(J.proc.active, false, 'zadanie zamknięte');
+  assert.equal(J.state.history[0].status, 'ok');
+  assert.ok(J.state.history[0].steps.some(s => s.kind === 'reply'), 'odpowiedź Hermesa w historii');
+  assert.equal(J.engine.taskId, null);
+  assert.equal(J.engine.mode, 'COMPLETED');
+});
+
+test('Zadanie z Telegrama nie przejmuje Orba, gdy trwa zadanie z czatu tej karty', async () => {
+  const J = load({ dom: true, files: FILES, fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), state: { settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b' } } });
+  J.proc.start('lokalne polecenie');
+  J.bridge.agentEvent({ v: 1, type: 'task.created', task_id: 'h-s2-1', platform: 'telegram', title: 'zdalne' });
+  assert.equal(J.proc.current.title, 'lokalne polecenie');
+  J.bridge.agentEvent({ v: 1, type: 'tool.started', task_id: 'h-s2-1', tool: 'terminal' });
+  assert.equal(J.proc.current.steps.filter(s => s.kind === 'server').length, 0);
+});

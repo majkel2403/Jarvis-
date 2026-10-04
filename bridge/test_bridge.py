@@ -41,6 +41,8 @@ async def fake_browser(seen, stop):
                 line = raw.decode().rstrip("\n")
                 if line.startswith("event:"):
                     event = line[6:].strip()
+                elif line.startswith("data:") and event == "agent":
+                    seen.setdefault("agent", []).append(json.loads(line[5:]))
                 elif line.startswith("data:") and event == "cmd":
                     cmd = json.loads(line[5:])
                     seen.setdefault("cmds", []).append(cmd)
@@ -71,6 +73,8 @@ async def sse_client(respond, info):
                     data = json.loads(line[5:])
                     if event == "hello":
                         info["id"] = data["client"]
+                    elif event == "agent":
+                        info.setdefault("agent", []).append(data)
                     elif event == "cmd":
                         info["got"] = info.get("got", 0) + 1
                         if respond:
@@ -195,6 +199,31 @@ async def main():
                     check("wm_minimize", not r.is_error and "wm_minimize" in r.content[0].text, str(r))
                     r = await session.call_tool("focus_mode", {"on": False})
                     check("bool false nie jest gubiony", seen["cmds"][-1]["args"] == {"on": False}, json.dumps(seen["cmds"][-1]))
+
+                    print("\nZdarzenia zadań Hermesa (wtyczka jarvis-events)")
+                    async with httpx2.AsyncClient() as hc5:
+                        HT = {"X-Bridge-Token": TOKEN}
+                        check("/bridge/agent-event bez tokenu = 401", (await hc5.post(f"{BASE}/bridge/agent-event", json={"type": "task.created", "task_id": "t1"})).status_code == 401)
+                        check("/bridge/agent-event: nieznany typ = 400", (await hc5.post(f"{BASE}/bridge/agent-event", json={"type": "rm -rf", "task_id": "t1"}, headers=HT)).status_code == 400)
+                        r5 = await hc5.post(f"{BASE}/bridge/agent-event", headers=HT, json={"v": 1, "type": "task.created", "task_id": "h-s-1", "platform": "telegram",
+                                                                                              "title": "x" * 900, "extra": "nie przechodzi"})
+                        check("/bridge/agent-event: przyjęte", r5.status_code == 200 and r5.json().get("ok") is True, r5.text[:120])
+                        await hc5.post(f"{BASE}/bridge/agent-event", headers=HT, json={"v": 1, "type": "tool.started", "task_id": "h-s-1", "tool": "web_search", "label": "pogoda"})
+                    for _ in range(40):
+                        if len(seen.get("agent", [])) >= 2:
+                            break
+                        await asyncio.sleep(0.05)
+                    got = seen.get("agent", [])
+                    check("karta dostaje zdarzenia agenta (SSE event: agent)", [e.get("type") for e in got[:2]] == ["task.created", "tool.started"], json.dumps(got)[:200])
+                    check("zdarzenie oczyszczone (tylko znane pola, długość ≤ 400)", got and "extra" not in got[0] and len(got[0].get("title", "")) == 400)
+                    late: dict = {}
+                    tl = asyncio.create_task(sse_client(False, late))
+                    for _ in range(60):
+                        if len(late.get("agent", [])) >= 2:
+                            break
+                        await asyncio.sleep(0.05)
+                    check("karta podłączona w trakcie zadania dostaje jego przebieg", [e.get("type") for e in late.get("agent", [])] == ["task.created", "tool.started"], json.dumps(late)[:200])
+                    tl.cancel()
 
                     print("\nBłędy")
                     r = await session.call_tool("boom", {})

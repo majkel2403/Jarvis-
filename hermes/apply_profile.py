@@ -50,7 +50,9 @@ TARGET = {
     "auxiliary.vision.provider": "minimax",      # „auto” mogło wybrać płatnego dostawcę
     "auxiliary.vision.model": "MiniMax-M3",
 }
-PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "rtk-rewrite", "security-guidance", "web/ddgs"]
+PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "rtk-rewrite", "security-guidance", "web/ddgs"]
+# Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie
+REPO_PLUGINS = ["jarvis-events"]
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
@@ -311,6 +313,13 @@ def main() -> int:
     for old_soul in sorted(pdir.glob("SOUL.md.bak-jarvis-desktop-*"))[:-3]:
         old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
+    for name in REPO_PLUGINS:   # wtyczki z repo: pełna podmiana katalogu (bez __pycache__), żeby nie zostawały stare pliki
+        src, dst = HERE / "plugins" / name, pdir / "plugins" / name
+        if src.is_dir():
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            print(f"  wtyczka -> {dst.relative_to(pdir)}")
     sdir = pdir / "scripts"   # skrypty cronów no-agent i haków (raport poranny, guard_tools) — źródło w repo: hermes/scripts/
     for src in sorted((HERE / "scripts").glob("*.py")):
         sdir.mkdir(exist_ok=True)

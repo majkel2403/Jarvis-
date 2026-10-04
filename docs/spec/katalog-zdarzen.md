@@ -16,7 +16,7 @@
 | bus | `plan.step` | process.js |
 | bus | `security.injection` | ai.js |
 | bus | `signal` | context.js |
-| bus | `task.created` | ai.js |
+| bus | `task.created` | ai.js, bridge.js |
 | bus | `task.paused` | ai.js |
 | bus | `task.recovering` | ai.js |
 | bus | `task.resumed` | ai.js |
@@ -24,7 +24,7 @@
 | bus | `task.verifying` | ai.js |
 | bus | `tool.completed` | ai.js |
 | bus | `tool.failed` | ai.js |
-| bus | `tool.started` | ai.js |
+| bus | `tool.started` | ai.js, bridge.js |
 | ui | `action` | core.js |
 | ui | `agent-ui` | registry.js |
 | ui | `app-view` | apps-settings.js, apps.js, commands-ext.js |

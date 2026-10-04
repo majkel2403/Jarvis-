@@ -95,7 +95,7 @@ if cfg:
           f"agent.disabled_toolsets = {agent.get('disabled_toolsets')} (wyłącza narzędzia także na Telegramie — stary apply_profile?)")
 
     enabled = set(((cfg.get("plugins") or {}).get("enabled")) or [])
-    for plug in ("rtk-rewrite", "security-guidance"):
+    for plug in ("rtk-rewrite", "security-guidance", "jarvis-events"):
         check(plug in enabled, f"plugin {plug} włączony", f"plugin {plug} wyłączony")
     # audyt 2026-10-04: te wtyczki doklejały do KAŻDEJ rozmowy sprzeczne instrukcje (superpowers), pusty plan albo losowe skille
     for plug in ("superpowers", "planning-with-files", "skill-retrieval", "ui-review-loop"):
@@ -157,6 +157,15 @@ if hmd.exists():
         check(not (WORKSPACE / shadow).exists(), f"brak konkurencyjnego {shadow}", f"{WORKSPACE / shadow} istnieje — Hermes czyta tylko jeden plik projektu (.hermes.md > HERMES.md > AGENTS.md > CLAUDE.md)")
 else:
     problems.append(f"brak {hmd} — Hermes nie dostaje zasad pracy (uruchom hermes/apply_profile.py)")
+
+# wtyczki z repo (hermes/plugins/*) — kopia w profilu musi być identyczna (inaczej apply_profile.py nie był uruchomiony po zmianie)
+for repo_plug in sorted((REPO_SOUL.parent / "plugins").glob("*/plugin.yaml")):
+    name = repo_plug.parent.name
+    prof = PROFILE / "plugins" / name
+    same = prof.is_dir() and all((prof / f.relative_to(repo_plug.parent)).exists()
+                                 and (prof / f.relative_to(repo_plug.parent)).read_bytes().replace(b"\r\n", b"\n") == f.read_bytes().replace(b"\r\n", b"\n")
+                                 for f in repo_plug.parent.rglob("*") if f.is_file() and "__pycache__" not in f.parts)
+    check(same, f"wtyczka {name} = wersja z repo", f"wtyczka {name} w profilu różni się od repo (uruchom hermes/apply_profile.py)")
 
 # twarde blokady: hak pre_tool_call z guard_tools.py (zabijanie przeglądarki, restart gatewaya z własnego terminala)
 pre = ((cfg.get("hooks") or {}).get("pre_tool_call") or [])

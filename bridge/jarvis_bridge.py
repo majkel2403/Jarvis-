@@ -774,6 +774,59 @@ async def hermes_models(request: Request) -> Response:
     return await hermes_proxy(request, "models")
 
 
+# ---------------------------------------------------------------- zdarzenia zadań Hermesa (wtyczka jarvis-events)
+# Hermes obsługuje Telegram/cron poza kartą; wtyczka hermes/plugins/jarvis-events wysyła tu start zadania, narzędzia i wynik,
+# a most rozsyła je kartom (SSE „event: agent”), żeby Orb i Process Log pokazywały prawdziwą pracę agenta.
+AGENT_TYPES = {"task.created", "tool.started", "tool.completed", "tool.failed", "task.completed", "task.failed"}
+AGENT_FIELDS = {"v": int, "type": str, "ts": float, "task_id": str, "platform": str, "model": str, "title": str, "call_id": str,
+                "tool": str, "label": str, "ms": int, "error": str, "result": str}
+AGENT_LOG: deque = deque(maxlen=300)
+AGENT_REPLAY_MAX_AGE = 600   # s — starsze, niezakończone zadanie uznajemy za porzucone (np. restart gatewaya)
+
+
+def clean_agent_event(raw: dict) -> Optional[dict]:
+    if not isinstance(raw, dict) or raw.get("type") not in AGENT_TYPES or not isinstance(raw.get("task_id"), str):
+        return None
+    out = {}
+    for k, typ in AGENT_FIELDS.items():
+        v = raw.get(k)
+        if v is None:
+            continue
+        try:
+            v = typ(v)
+        except (TypeError, ValueError):
+            continue
+        out[k] = v[:400] if isinstance(v, str) else v
+    out.setdefault("ts", time.time())
+    return out
+
+
+def agent_replay() -> list[dict]:
+    """Zdarzenia ostatniego zadania, jeśli wciąż trwa (karta podłączona w jego trakcie)."""
+    events = list(AGENT_LOG)
+    starts = [e for e in events if e["type"] == "task.created"]
+    if not starts:
+        return []
+    last = starts[-1]
+    if time.time() - last["ts"] > AGENT_REPLAY_MAX_AGE:
+        return []
+    mine = [e for e in events if e.get("task_id") == last["task_id"]]
+    return [] if any(e["type"] in ("task.completed", "task.failed") for e in mine) else mine
+
+
+@mcp.custom_route("/bridge/agent-event", methods=["POST"])
+async def agent_event(request: Request) -> Response:
+    if not authorized(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    evt = clean_agent_event(await read_json(request))
+    if not evt:
+        return JSONResponse({"error": "nieznany typ zdarzenia albo brak task_id"}, status_code=400)
+    AGENT_LOG.append(evt)
+    for c in list(CLIENTS.values()):
+        c.queue.put_nowait({"_sse": "agent", **evt})
+    return JSONResponse({"ok": True, "clients": len(CLIENTS)})
+
+
 def tasklog_path() -> Path:
     return Path(os.environ.get("JARVIS_TASKLOG") or agents_mod.home() / "logs" / "tasks.jsonl")
 
@@ -823,10 +876,13 @@ async def events(request: Request) -> Response:
             CLIENTS[client.id] = client
             _wake_event().set()   # obudź czekające relay(), pojawił się klient
             yield f"retry: 3000\nevent: hello\ndata: {json.dumps({'client': client.id, 'tools': sorted(TOOLS)})}\n\n"
+            for evt in agent_replay():   # karta podłączona w trakcie zadania z Telegrama/crona widzi je od początku
+                yield f"event: agent\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n"
             while True:
                 try:
                     cmd = await asyncio.wait_for(client.queue.get(), 15)
-                    yield f"event: cmd\ndata: {json.dumps(cmd, ensure_ascii=False)}\n\n"
+                    kind = cmd.pop("_sse", "cmd")   # „agent” = zdarzenie zadania Hermesa (POST /bridge/agent-event)
+                    yield f"event: {kind}\ndata: {json.dumps(cmd, ensure_ascii=False)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"
         finally:
