@@ -993,6 +993,7 @@ def main() -> None:
     ap.add_argument("--host", default=os.environ.get("JARVIS_BRIDGE_HOST", "127.0.0.1"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("JARVIS_BRIDGE_PORT", "8651")))
     ap.add_argument("--show-token", action="store_true", help="wypisz token i zakończ")
+    ap.add_argument("--log-level", default=os.environ.get("JARVIS_BRIDGE_LOG_LEVEL", "warning"), choices=["critical", "error", "warning", "info", "debug"], help="szczegółowość logów serwera (diagnoza: info)")
     args = ap.parse_args()
     TOKEN = load_token()
     load_tools()
@@ -1006,7 +1007,7 @@ def main() -> None:
         print(TOKEN)
         return
     print(f"[jarvis-bridge] {len(TOOLS)} narzędzi | MCP: http://{args.host}:{args.port}/mcp  |  przeglądarka: /bridge/events  |  token: {token_path()}", file=sys.stderr)
-    uvicorn.run(build_app(args.host), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(build_app(args.host), host=args.host, port=args.port, log_level=args.log_level)
 
 
 if __name__ == "__main__":

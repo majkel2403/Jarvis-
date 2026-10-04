@@ -23,7 +23,7 @@ const KIND = {
   error:  { g: '⚠', label: 'Błąd' }
 };
 const cap = v => { const t = typeof v === 'string' ? v : JSON.stringify(v, null, 2); return t == null ? '' : (t.length > CAP ? t.slice(0, CAP) + '\n… (' + (t.length - CAP) + ' znaków ucięto)' : t); };
-const fmtDur = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' s';
+const fmtDur = J.fmtDur;
 
 /* ---------- rysowanie kroku ---------- */
 const paintStep = (s, base) => {

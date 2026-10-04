@@ -82,7 +82,10 @@ w postaci**:
 -   alert → `market_alerts remove` (autonomiczny, bez confirm)
 -   okno notes → `wm_minimize` (bez confirm dla pojedynczego okna)
 
-Operator porządkuje leftovery ręcznie albo skryptem po nazwie `__E2E_LEFTOVER`.
+Po każdym przebiegu `run_e2e.py` woła narzędzie **`e2e_cleanup`**, które usuwa bez pytania
+WYŁĄCZNIE obiekty o zastrzeżonych nazwach testów (`__E2E_LEFTOVER_…`, `E2E drill widget <ts>`,
+`E2E test note <ts>`). Klient testów wysyła też nagłówek `X-Jarvis-Quiet: 1`, więc polecenia
+testów nie pojawiają się w czacie użytkownika w karcie.
 
 ## Co NIE jest testowane
 

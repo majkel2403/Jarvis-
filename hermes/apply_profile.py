@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import secrets
 import shutil
@@ -31,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 # bez stt/tts (kanały głosowe; pulpit ma własną mowę). jarvis_desktop = nazwa serwera MCP (allowlista).
 ENABLED = ["browser", "clarify", "code_execution", "computer_use", "connections", "cronjob", "delegation",
            "file", "memory", "session_search", "skills", "terminal", "todo", "vision", "web", "jarvis_desktop"]
-ORIGINS = "http://localhost:4000,http://127.0.0.1:4000,https://majkel2403.github.io"
+ORIGINS = "http://localhost:4000,http://127.0.0.1:4000"   # bez github.io: gateway ma pełne narzędzia (terminal, pliki) — tylko strona z tego komputera
 
 
 CHEAT_TOOLS = ["desktop_open", "desktop_screenshot", "get_status", "open_app", "close_app", "wm_list", "wm_focus", "wm_arrange", "wm_minimize",
@@ -100,7 +101,7 @@ def main() -> int:
     ap.add_argument("--name", default="jarvis-desktop")
     ap.add_argument("--port", type=int, default=8643)
     ap.add_argument("--bridge-url", default="http://127.0.0.1:8651")
-    ap.add_argument("--bridge-token", default="", help="token mostu (z: jarvis_bridge.py --show-token)")
+    ap.add_argument("--bridge-token", default=os.environ.get("JARVIS_BRIDGE_TOKEN", ""), help="token mostu (domyślnie ze zmiennej JARVIS_BRIDGE_TOKEN — argumentów procesu nie widać wtedy na liście procesów)")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 

@@ -261,6 +261,7 @@ js/bridge.js          klient mostu MCP: polecenia Hermesa (SSE) → Command Regi
 js/agents.js          internet i prawdziwy komputer przez Jeva: polecenia web_* i computer_*, tłumaczenie PL→EN, zgody
 js/process.js         Process Log (kroki, plan, historia, replay)
 js/apps.js            usługi (pogoda, rynek, zadania, ICS) i aplikacje
+js/apps-settings.js   aplikacja Ustawienia (wydzielona z apps.js)
 js/widgets.js         widgety pulpitu
 js/hud.js             10 kart HUD wokół Core
 js/dash.js            wskaźnik trybu, pasek statusu, telemetria
@@ -268,6 +269,9 @@ js/main.js            start, efekty, pulpit, dok, paleta, pytania/zgody, powiado
 sw.js                 service worker (offline)
 tests/                testy jednostkowe (Node) i dymne (Playwright)
 bridge/               most MCP (Python), agents.py (agent WWW + sterowanie komputerem), migawka narzędzi tools.json, testy
+bridge/winfocus.py    Windows: okno przeglądarki z Jarvisem na wierzch i zrzut ekranu (desktop_open, desktop_screenshot)
+bridge/serve_site.py  serwer strony :4000 z walidacją Host (chroni config.local.js przed DNS rebinding)
+bridge/redeploy.ps1   wdrożenie zmian: restart mostu i Hermesa (JarvisOS-GatewayRestart) z raportem stanu
 integrations/         wdrożenie agentów Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), poprawki, testy
 hermes/               profil jarvis-desktop: SOUL.md, apply_profile.py, install-profile.ps1, start-desktop-gateway.bat
 docs/ROADMAP.md       plan rozwoju i stan realizacji

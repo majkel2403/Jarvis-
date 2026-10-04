@@ -48,6 +48,8 @@ switch ($Service) {
     $exe = $hermes; $argv = @('-p', 'jarvis-desktop', 'gateway', 'run'); $cwd = $env:USERPROFILE
   }
 }
+# poprzedni log zostaje jako .1 — wcześniej każdy start nadpisywał przyczynę ostatniej awarii
+foreach ($kind in 'out', 'err') { $lf = Join-Path $logs "$Service.$kind.log"; if ((Test-Path $lf) -and (Get-Item $lf).Length -gt 0) { Move-Item $lf "$lf.1" -Force -ErrorAction SilentlyContinue } }
 $p = Start-Process -FilePath $exe -ArgumentList $argv -WorkingDirectory $cwd -WindowStyle Hidden -PassThru `
   -RedirectStandardOutput (Join-Path $logs "$Service.out.log") -RedirectStandardError (Join-Path $logs "$Service.err.log")
 $p.WaitForExit()   # zadanie Harmonogramu trwa tak długo jak usługa

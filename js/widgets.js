@@ -13,7 +13,7 @@ const TYPES = {
   result: { label: 'Wynik zadania', icon: 'bolt', w: 340, h: 260, minW: 240, minH: 160 },
   spec:   { label: 'Widget z opisu', icon: 'chart', w: 340, h: 300, minW: 220, minH: 150 }   // docs/spec/05-widgety.md §3 (render: js/widget-spec.js)
 };
-const fmt = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+const fmt = J.mdLite;
 
 const mounts = {
   spec(body, w, ctx) { J.wspec.mount(body, w, ctx); },

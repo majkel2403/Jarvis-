@@ -224,7 +224,7 @@ const visible = text => String(text || '')
   .replace(/\n{3,}/g, '\n\n').trim();
 
 /* =================== WYKONANIE NARZĘDZIA (log + zdarzenia + rejestr) =================== */
-const fmtMs = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
+const fmtMs = J.fmtDur;
 const run = async (name, input, ctx = {}) => {
   const st = J.proc.step('tool', name, [['Argumenty', input == null ? '(brak)' : input]], { running: true });
   J.ev.emit('tool.started', { tool: name, args: input });

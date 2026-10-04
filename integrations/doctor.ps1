@@ -110,7 +110,7 @@ if ($orKey) {
       Ok "OpenRouter (fallback): klucz aktywny, plan bez limitu kredytów (darmowe modele free)"
     } else {
       $remaining = $limit - $usage
-      $pct = [math]::Round(($remaining / $limit) * 100, 0)
+      $pct = if ($limit -gt 0) { [math]::Round(($remaining / $limit) * 100, 0) } else { 0 }   # limit 0 = klucz bez kredytów (dzielenie przez zero)
       if ($pct -lt 20) {
         No "OpenRouter kredyty niskie: pozostało ${pct}% ($([math]::Round($remaining,2)) / $limit USD)" `
            'doładuj konto na openrouter.ai lub zmień fallback na modele free'

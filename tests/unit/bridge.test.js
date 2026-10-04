@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs'), path = require('path');
 const { load } = require('../harness.js');
 
-const FILES = ['core.js', 'events.js', 'store.js', 'registry.js', 'undo.js', 'jev-policy.js', 'process.js', 'apps.js', 'widgets.js', 'chart.js', 'widget-spec.js', 'commands.js', 'search.js', 'commands-ext.js', 'commands-data.js', 'commands-w4.js', 'context.js', 'judge.js', 'jev-flow.js', 'ai.js', 'bridge.js'];   // jak domyślnie w harness.js + klient mostu
+const FILES = ['core.js', 'events.js', 'store.js', 'registry.js', 'undo.js', 'jev-policy.js', 'process.js', 'apps.js', 'apps-settings.js', 'widgets.js', 'chart.js', 'widget-spec.js', 'commands.js', 'search.js', 'commands-ext.js', 'commands-data.js', 'commands-w4.js', 'context.js', 'judge.js', 'jev-flow.js', 'ai.js', 'bridge.js'];   // jak domyślnie w harness.js + klient mostu
 const DESKTOP = { hermesOn: true, hermesProvider: 'desktop', hermesUrl: 'http://localhost:8643/v1', hermesModel: 'jarvis-desktop', hermesKey: 'k', bridgeOn: false };
 
 test('bridge/tools.json odpowiada Command Registry (node bridge/export-tools.js)', () => {

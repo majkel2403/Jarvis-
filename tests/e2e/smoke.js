@@ -4,7 +4,10 @@
 'use strict';
 const path = require('path');
 let chromium;
-try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require(process.env.PLAYWRIGHT_MODULE || '/opt/node22/lib/node_modules/playwright')); }
+try { ({ chromium } = require('playwright')); } catch (e) {
+  if (!process.env.PLAYWRIGHT_MODULE) { console.error('Brak Playwrighta: npm i --no-save playwright (albo ustaw PLAYWRIGHT_MODULE na ścieżkę modułu).'); process.exit(2); }
+  ({ chromium } = require(process.env.PLAYWRIGHT_MODULE));
+}
 const URL = process.argv[2] || process.env.JARVIS_URL || 'http://localhost:8090';
 const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 

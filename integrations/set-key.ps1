@@ -66,7 +66,8 @@ if ($Provider -eq 'openrouter' -and -not $NoJarvis) {
     $cfg = Join-Path $repo 'config.local.js'
     if (Test-Path $cfg) { $txt = Get-Content $cfg -Raw } else { $txt = "window.JARVIS_CONFIG = {`n};`n" }
     $txt = [regex]::Replace($txt, "(?m)^\s*(jevKey|jevOn)\s*:.*\r?\n", '')
-    $txt = [regex]::Replace($txt, 'window\.JARVIS_CONFIG\s*=\s*\{', "window.JARVIS_CONFIG = {`n  jevKey: '$key',`n  jevOn: true,")
+    $safeKey = $key.Replace('$', '$$')   # „$” w tekście zastąpienia regex to odwołanie do grupy — klucz z „$” wychodził zniekształcony
+    $txt = [regex]::Replace($txt, 'window\.JARVIS_CONFIG\s*=\s*\{', "window.JARVIS_CONFIG = {`n  jevKey: '$safeKey',`n  jevOn: true,")
     Set-Content -Path $cfg -Value $txt -Encoding UTF8 -NoNewline
     Write-Host "Zaktualizowano $cfg (plik ignorowany przez git)." -ForegroundColor Green
   }

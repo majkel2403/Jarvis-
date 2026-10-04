@@ -51,11 +51,14 @@ if (-not (Test-Path $pdir)) {
   else { & $hermes profile create $Name --clone-from $Source --no-alias; if ($LASTEXITCODE -ne 0) { throw "profile create nie powiodło się" } }
 } else { Write-Host "Profil już istnieje — aktualizuję konfigurację." }
 
-$pyArgs = @((Join-Path $PSScriptRoot 'apply_profile.py'), '--home', $home_, '--name', $Name, '--port', $Port, '--bridge-url', $BridgeUrl, '--bridge-token', $token)
+$pyArgs = @((Join-Path $PSScriptRoot 'apply_profile.py'), '--home', $home_, '--name', $Name, '--port', $Port, '--bridge-url', $BridgeUrl)
+$env:JARVIS_BRIDGE_TOKEN = $token   # zmienną, nie argumentem: argumenty procesu widać w Menedżerze zadań i w Get-CimInstance
 if ($DryRun) { $pyArgs += '--dry-run' }
 if ($DryRun -and -not (Test-Path $pdir)) { Write-Host "[dry-run] apply_profile.py zmieniłby config.yaml/.env/SOUL.md profilu $Name"; exit 0 }
-& $python @pyArgs
+try { & $python @pyArgs } finally { Remove-Item Env:JARVIS_BRIDGE_TOKEN -ErrorAction SilentlyContinue }
 if ($LASTEXITCODE -ne 0) { throw "apply_profile.py zakończył się błędem" }
+$envFile = Join-Path $pdir '.env'
+if (-not $DryRun -and (Test-Path $envFile)) { icacls $envFile /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null }   # sekrety profilu (klucz API gatewaya, token mostu, Telegram) — tylko Twoje konto, jak jev.env
 
 if ($LoginXai -and -not $DryRun) {
   Write-Host "`nLogowanie xAI (Grok) — otwórz podany adres i zatwierdź kod (zapis w katalogu głównym Hermesa, wspólny dla profili bez własnych wpisów):"

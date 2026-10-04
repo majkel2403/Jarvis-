@@ -27,7 +27,7 @@
 | bus | `tool.started` | ai.js |
 | ui | `action` | core.js |
 | ui | `agent-ui` | registry.js |
-| ui | `app-view` | apps.js, commands-ext.js |
+| ui | `app-view` | apps-settings.js, apps.js, commands-ext.js |
 | ui | `attach` | commands-w4.js |
 | ui | `bridge` | bridge.js |
 | ui | `dictation` | commands-w4.js |
@@ -47,7 +47,7 @@
 | ui | `proc-end` | process.js |
 | ui | `routine-step` | commands-w4.js |
 | ui | `routines` | commands-w4.js |
-| ui | `settings` | apps.js, bridge.js, commands-ext.js, commands-w4.js, commands.js, core.js, main.js |
+| ui | `settings` | apps-settings.js, apps.js, bridge.js, commands-ext.js, commands-w4.js, commands.js, core.js, main.js |
 | ui | `shortcuts` | apps.js, commands-ext.js, commands.js |
 | ui | `signal` | context.js |
 | ui | `task-due` | context.js |
