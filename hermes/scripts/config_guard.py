@@ -145,7 +145,7 @@ else:
 # HERMES.md = instrukcja pracy (kontekst projektu w katalogu startowym gatewaya); źródło w repo
 REPO_HMD = REPO_SOUL.parent / "HERMES.md"
 hmd = WORKSPACE / "HERMES.md"
-check((WORKSPACE / ".git").exists(), "JarvisWorkspace ma własne .git", f"{WORKSPACE} bez .git — Hermes szuka plików projektu aż do C:\.git")
+check((WORKSPACE / ".git").exists(), "JarvisWorkspace ma własne .git", f"{WORKSPACE} bez .git — Hermes szuka plików projektu aż do C:\\.git")
 check(not (HOME / "HERMES.md").exists(), "brak starej kopii HERMES.md w katalogu domowym", f"{HOME / 'HERMES.md'} — martwa kopia (aktualna jest w {WORKSPACE})")
 if hmd.exists():
     h = hmd.read_text(encoding="utf-8")

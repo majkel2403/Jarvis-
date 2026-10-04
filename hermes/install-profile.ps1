@@ -1,20 +1,17 @@
 ﻿<#
 .SYNOPSIS
-  Tworzy lekki profil Hermesa "jarvis-desktop" sterujący pulpitem Jarvis OS przez natywne narzędzia MCP.
+  Tworzy (albo aktualizuje) profil Hermesa "jarvis-desktop" — jedyny profil: Telegram + pulpit Jarvis OS przez most MCP.
 
 .DESCRIPTION
-  1. hermes profile create <Name> --clone-from <Source>   (kanały Telegrama NIE są klonowane)
-  2. hermes\apply_profile.py: mcp_servers.jarvis_desktop, platform_toolsets.api_server, .env, SOUL.md
-  3. (opcjonalnie) -LoginXai: logowanie xAI (Grok) — kod urządzenia zatwierdzasz w przeglądarce. Zapisuje się w katalogu głównym
-     (hermes -p default), z którego profile bez własnych wpisów xAI korzystają wspólnie (Hermes 0.21: 'hermes -p <profil> auth add xai-oauth'
-     dla profilu bez własnych wierszy po cichu gubi wpis). Nie kopiujemy auth.json: refresh tokeny xAI są jednorazowe.
-
-  Twój obecny profil i gateway (np. jarvis2 + Telegram) NIE są zmieniane.
+  1. hermes profile create <Name> --clone-from <Source>   (tylko gdy profilu jeszcze nie ma; kanały Telegrama NIE są klonowane)
+  2. hermes\apply_profile.py: docelowa konfiguracja z repo (MCP pulpitu, narzędzia, wtyczki, HERMES.md w JarvisWorkspace,
+     hak blokad, SOUL.md) — ten sam skrypt służy do każdej późniejszej aktualizacji profilu.
+  Model: MiniMax-M3 (provider minimax, klucz MINIMAX_API_KEY w .env profilu) z darmowymi fallbackami OpenRouter.
   Hermes ma działać natywnie w Windows (NIE przez WSL).
 
 .EXAMPLE
   .\hermes\install-profile.ps1 -DryRun
-  .\hermes\install-profile.ps1 -LoginXai
+  .\hermes\install-profile.ps1
 #>
 param(
   [string]$Name = 'jarvis-desktop',
@@ -22,7 +19,6 @@ param(
   [int]$Port = 8643,
   [string]$BridgeUrl = 'http://127.0.0.1:8651',
   [string]$HermesHome = '',
-  [switch]$LoginXai,
   [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
@@ -60,21 +56,11 @@ if ($LASTEXITCODE -ne 0) { throw "apply_profile.py zakończył się błędem" }
 $envFile = Join-Path $pdir '.env'
 if (-not $DryRun -and (Test-Path $envFile)) { icacls $envFile /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null }   # sekrety profilu (klucz API gatewaya, token mostu, Telegram) — tylko Twoje konto, jak jev.env
 
-if ($LoginXai -and -not $DryRun) {
-  Write-Host "`nLogowanie xAI (Grok) — otwórz podany adres i zatwierdź kod (zapis w katalogu głównym Hermesa, wspólny dla profili bez własnych wpisów):"
-  & $hermes -p default auth add xai-oauth --type oauth --no-browser --timeout 900
-  Write-Host "Gotowe. Sprawdź: $hermes -p $Name auth status xai-oauth   Uruchom gateway: hermes\start-desktop-gateway.bat"
-} elseif (-not $DryRun) {
-  Write-Host "`nUwaga: Grok 4.3 wymaga logowania xAI. Uruchom ponownie z -LoginXai albo ręcznie:"
-  Write-Host "  $hermes -p default auth add xai-oauth --type oauth --no-browser"
-  Write-Host "(NIE używaj -p $Name — ten wariant nie zapisuje wpisu dla profilu bez własnych wierszy xAI.)"
-}
-
 Write-Host @"
 
-Dalej:
-  1. Most:      bridge\start-bridge.bat            (zostaw uruchomiony; token pobiera się automatycznie)
+Dalej (zwykle robi to autostart: bridge\install-autostart.ps1):
+  1. Most:      bridge\start-bridge.bat            (token pobiera się automatycznie)
   2. Gateway:   hermes\start-desktop-gateway.bat   (profil $Name, port $Port)
-  3. Jarvis OS: Ustawienia → Hermes → 'Hermes Desktop (profil jarvis-desktop + most MCP)', wpisz API_SERVER_KEY
-     Tryb MCP włączy się sam, gdy profil zgłosi się do mostu (Ustawienia → Most pulpitu dla Hermesa).
+  3. Jarvis OS: łączy się z Hermesem sam przez most (klucz gatewaya zostaje w moście, nie w przeglądarce).
+  Sprawdzenie: %USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe %USERPROFILE%\.hermes\profiles\$Name\scripts\config_guard.py --verbose
 "@
