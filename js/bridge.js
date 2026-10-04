@@ -92,7 +92,7 @@ async function handle(cmd) {
   J.bootEnter?.();   // karta stoi na ekranie „Kliknij, aby wejść” — wejdź, inaczej okno zgody jest niewidoczne pod zasłoną
   try { r = await J.brain.run(cmd.name, cmd.args || {}, { source: 'hermes', bridge: true }); }   // bridge: polecenie przyszło z mostu (Telegram/API), nie z czatu w tej karcie
   catch (e) { r = { ok: false, code: 'INTERNAL', text: 'Błąd pulpitu: ' + e.message, data: null }; }
-  if (!J.brain.busy) J.chat?.add('action', (r.ok ? '⚙ ' : '⚠ ') + 'Hermes (most): ' + cmd.name + ' → ' + r.text);
+  if (!J.brain.busy && !cmd.quiet) J.chat?.add('action', (r.ok ? '⚙ ' : '⚠ ') + 'Hermes (most): ' + cmd.name + ' → ' + r.text);   // quiet: testy E2E mostu — bez wpisów w czacie użytkownika
   try {
     await fetch(base() + '/bridge/result', { method: 'POST', headers: auth(), body: JSON.stringify({ id: cmd.id, ok: !!r.ok, code: r.code, data: safe(r.data), text: String(r.text ?? '') }) });
   } catch (e) { /* most zniknął — Hermes dostanie timeout */ }

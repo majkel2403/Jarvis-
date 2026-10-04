@@ -257,12 +257,13 @@ const mount = (body, w, wctx) => {
   /* odświeżanie: co min(refresh) s; zdarzenia przeliczają swoje źródła; wstrzymane przy ukrytej/zminimalizowanej/zwiniętej */
   const every = Math.min(...Object.values(w.spec.sources || {}).map(s => s.refresh || Infinity));
   let lastAuto = Date.now();
-  const iv = setInterval(() => { if (!paused()) rctx._ticks.forEach(f => f()); if (isFinite(every) && !paused() && Date.now() - lastAuto >= every * 1000) { lastAuto = Date.now(); refresh(false); } }, 1000);
+  const tick = () => { if (!paused()) rctx._ticks.forEach(f => f()); if (isFinite(every) && !paused() && Date.now() - lastAuto >= every * 1000) { lastAuto = Date.now(); refresh(false); } };
+  const iv = J.wspec.ticker.add(tick);
   const offs = [];
   Object.entries(w.spec.sources || {}).forEach(([n, s]) => { if (s.event) offs.push(J.on(s.event, J.debounce(() => { if (!paused()) refresh(true, [n]); }, 400))); });
   offs.push(J.on('wm-resize', id => { if (id === key) rctx._draws.forEach(f => f()); }));
   live.set(w.id, { get data() { return st.data; }, get ts() { return st.ts; }, get state() { return st.state; }, render, refresh });
-  wctx.onClose(() => { clearInterval(iv); offs.forEach(f => f?.()); live.delete(w.id); });
+  wctx.onClose(() => { J.wspec.ticker.remove(iv); offs.forEach(f => f?.()); live.delete(w.id); });
 };
 
 /* ---------- przepisy lokalne: zdanie → opis bez modelu (najczęstsze prośby z 05-widgety.md §3.9) ---------- */
@@ -287,7 +288,12 @@ const fromPrompt = text => {
   return null;
 };
 
-J.wspec = { SCHEMA, validate, check, get, fmt, value, mdNodes, mount, fromPrompt, stats, cache, live, SIZE, MAX_SPEC_WIDGETS, MAX_LIVE_SOURCES,
+/* jeden wspólny zegar 1 s dla wszystkich widgetów z opisu (wcześniej każdy miał własny setInterval); błąd w jednym nie zatrzymuje innych */
+const ticker = (() => { const fns = new Set(); let iv = null; return {
+  add(f) { fns.add(f); if (!iv) iv = setInterval(() => fns.forEach(fn => { try { fn(); } catch (e) { console.error(e); } }), 1000); return f; },
+  remove(f) { fns.delete(f); if (!fns.size && iv) { clearInterval(iv); iv = null; } },
+  get size() { return fns.size; } }; })();
+J.wspec = { SCHEMA, ticker, validate, check, get, fmt, value, mdNodes, mount, fromPrompt, stats, cache, live, SIZE, MAX_SPEC_WIDGETS, MAX_LIVE_SOURCES,
   sizeOf: spec => SIZE[spec?.size] || SIZE.M,
   refresh(id) { const ids = id ? [id] : [...live.keys()]; return Promise.all(ids.map(i => live.get(i)?.refresh(true))); },
   /* JSON Merge Patch (RFC 7386) */

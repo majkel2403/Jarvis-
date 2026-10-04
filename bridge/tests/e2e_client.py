@@ -126,7 +126,7 @@ class MCPClient:
         try:
             r = requests.post(
                 self.url,
-                headers={"Authorization": f"Bearer {self.token}",
+                headers={"Authorization": f"Bearer {self.token}", "X-Jarvis-Quiet": "1",
                          "Content-Type": "application/json",
                          "Accept": "application/json, text/event-stream"},
                 json=payload,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import atexit
+import contextvars
 import json
 import os
 import re
@@ -43,6 +44,7 @@ PAIR_ORIGINS = ["http://localhost:4000", "http://127.0.0.1:4000"]
 # Puste = bez sprawdzania, bo testy startują build_app() bez main(), na portach losowych.
 ALLOWED_HOSTS: set[str] = set()
 CALL_TIMEOUT = float(os.environ.get("JARVIS_BRIDGE_CALL_TIMEOUT", "90"))   # zapas na potwierdzenie użytkownika (Tak / Nie)
+QUIET: contextvars.ContextVar[bool] = contextvars.ContextVar("jarvis_quiet", default=False)   # polecenie z testów E2E (X-Jarvis-Quiet: 1)
 
 # Circuit breaker (per-tool). Chroni przed pętlą OFFLINE/INTERNAL/TIMEOUT: po N failed w T sekundach
 # kolejne wywołanie danego narzędzia dostaje jawny {code:"THROTTLED", retry_after_s} zamiast cichego odrzucenia.
@@ -252,7 +254,7 @@ async def relay(name: str, args: dict, timeout: float | None = None) -> dict:
     cid = uuid.uuid4().hex[:12]
     fut: asyncio.Future = asyncio.get_running_loop().create_future()
     PENDING[cid] = (fut, client.id)
-    await client.queue.put({"id": cid, "name": name, "args": {k: v for k, v in args.items() if v is not None}})
+    await client.queue.put({"id": cid, "name": name, "args": {k: v for k, v in args.items() if v is not None}, **({"quiet": True} if QUIET.get() else {})})
     if client.id not in CLIENTS and not fut.done():   # karta rozłączyła się między newest() a put — sprzątanie SSE już przeleciało, nikt by nie rozstrzygnął fut (czekanie pełne 90 s)
         fut.set_result({"ok": False, "code": "OFFLINE", "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})
     try:
@@ -975,6 +977,8 @@ class BearerGate:
             prof = dict(scope["headers"]).get(b"x-jarvis-profile", b"").decode()[:64]
             if prof:
                 HERMES_SEEN[prof] = time.time()
+            # testy E2E (bridge/tests) oznaczają się nagłówkiem — ich polecenia nie zaśmiecają czatu użytkownika w karcie
+            QUIET.set(dict(scope["headers"]).get(b"x-jarvis-quiet", b"") == b"1")
         await self.app(scope, receive, send)
 
 

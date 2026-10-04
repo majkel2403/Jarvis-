@@ -40,7 +40,7 @@ const paintStep = (s, base) => {
   const body = el.querySelector('.pbody');
   (s.fields || []).forEach(([label, val, cls]) => {
     if (val == null || val === '') return;
-    const row = h('div', { class: 'pf' }, `<em></em><pre></pre>`);
+    const row = h('div', { class: 'pf' }, `<em></em><pre></pre>`); row.dataset.l = label;   // szybka ścieżka append() znajduje pole po etykiecie
     row.querySelector('em').textContent = label; const pre = row.querySelector('pre'); pre.textContent = cap(val);
     if (cls) pre.classList.add(cls);
     body.appendChild(row);
@@ -66,13 +66,20 @@ const step = (kind, title, fields = [], opts = {}) => {
   const task = cur; task.steps.push(s);
   chip();
   if (viewing === task) { const box = stepsBox(); box.querySelector('.lp-empty')?.remove(); box.appendChild(paintStep(s, task.ts)); stick(box); }
-  let raf = 0;
+  let raf = 0, rafA = 0;
   // po zakończeniu zadania panel pokazuje wersję „saved” z _live === task
   const shown = () => viewing === task || viewing?._live === task;
   const repaint = () => { if (shown() && !raf) raf = requestAnimationFrame(() => { raf = 0; paintStep(s, task.ts); stick(stepsBox()); }); };
   return {
     set(fields2, preview) { if (fields2) s.fields = fields2; if (preview !== undefined) s.preview = preview; repaint(); },
-    append(text, label = 'Treść') { const f = s.fields.find(x => x[0] === label); if (f) f[1] += text; else s.fields.push([label, text]); repaint(); },
+    /* strumień odpowiedzi dopisuje tekst co kilka ms — zamiast przebudowy całego kroku (przyciski, pola, metadane) aktualizujemy tylko to pole */
+    append(text, label = 'Treść') {
+      const f = s.fields.find(x => x[0] === label);
+      if (!f) { s.fields.push([label, text]); return repaint(); }
+      f[1] += text;
+      if (!s.el || !shown()) return;
+      if (!rafA) rafA = requestAnimationFrame(() => { rafA = 0; const pre = [...s.el.querySelectorAll('.pf')].find(r => r.dataset.l === label)?.querySelector('pre'); if (pre) { pre.textContent = cap(f[1]); stick(stepsBox()); } else { paintStep(s, task.ts); stick(stepsBox()); } });
+    },
     done(fields2, preview) { s.status = 'ok'; s.dur = Date.now() - s.ts; if (fields2) s.fields = s.fields.concat(fields2); if (preview !== undefined) s.preview = preview; repaint(); },
     fail(err, fields2) { s.status = 'err'; s.dur = Date.now() - s.ts; s.fields = s.fields.concat(fields2 || [], [['Błąd', String(err), 'err']]); s.preview = String(err).slice(0, 80); repaint(); },
     get step() { return s; }

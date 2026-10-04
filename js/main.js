@@ -512,13 +512,16 @@ const palette = (() => {
     ...J.state.shortcuts.map(s => ({ g: 'Skróty', ic: s.icon || 'star', t: s.name, s: s.url || '', run: () => J.shortcuts.run(s) })),
     ...J.notes.live().slice(0, 20).map(n => ({ g: 'Notatki', ic: 'notes', t: n.title || 'Bez tytułu', k: n.body.slice(0, 200), run: () => J.wm.open('notes', n.id) }))
   ];
+  /* ~200 pozycji (polecenia, aplikacje, notatki) składanych przy KAŻDYM klawiszu — przy szybkim pisaniu jedna lista na 2 s */
+  let baseCache = null, baseAt = 0;
+  const getBase = () => { if (!baseCache || Date.now() - baseAt > 2000) { baseCache = base(); baseAt = Date.now(); } return baseCache; };
   const TYPE_G = { apps: ['Aplikacje', null], notes: ['Notatki', 'notes'], tasks: ['Zadania', 'calendar'], widgets: ['Widgety', 'list'], shortcuts: ['Skróty', 'link'], settings: ['Ustawienia', 'settings'], commands: ['Polecenia', 'bolt'], memory: ['Pamięć', 'brain'], chat: ['Rozmowy', 'chat'], files: ['Pliki', 'doc'] };
   const hitItem = hit => ({ g: TYPE_G[hit.type][0], ic: TYPE_G[hit.type][1] || J.apps[hit.id]?.icon || 'star', t: hit.title, s: hit.sub, key: hit.type + ':' + hit.id, open: hit.open, run: () => J.search.open(hit) });
   const pinned = () => (J.state.ui.pinned = J.state.ui.pinned || []);
   let seq = 0;
   const render = () => {
     const raw = inp.value.trim(), q0 = norm(raw), my = ++seq;
-    const all = base();
+    const all = getBase();
     const prefix = /^[>#@?]/.test(raw) ? raw[0] : '', q = norm(prefix ? raw.slice(1).trim() : raw);
     if (prefix === '?') {
       items = (J.KEYS || []).map(([k, t]) => ({ g: 'Skróty klawiszowe', ic: 'bolt', t, s: k, run: () => { } }));
