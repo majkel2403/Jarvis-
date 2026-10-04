@@ -165,6 +165,11 @@ def main() -> int:
     for old_soul in sorted(pdir.glob("SOUL.md.bak-jarvis-desktop-*"))[:-3]:
         old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
+    sdir = pdir / "scripts"   # skrypty cronów no-agent (np. raport poranny) — źródło w repo: hermes/scripts/
+    for src in sorted((HERE / "scripts").glob("*.py")):
+        sdir.mkdir(exist_ok=True)
+        shutil.copy2(src, sdir / src.name)
+        print(f"  skrypt cron -> scripts\\{src.name}")
     skill = pdir / "skills" / "jarvis-os-management" / "SKILL.md"
     if inject_cheatsheet(skill):
         print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")
