@@ -1,5 +1,5 @@
 /* Jarvis OS — service worker: działanie offline (powłoka aplikacji) */
-const CACHE = 'jarvis-os-v26';
+const CACHE = 'jarvis-os-v27';
 const SHELL = ['./', 'index.html', 'css/jarvis.css', 'js/core.js', 'js/events.js', 'js/store.js', 'js/registry.js', 'js/mcp-tool-schema.js', 'js/undo.js', 'js/jev-policy.js', 'js/process.js', 'js/apps.js', 'js/apps-settings.js', 'js/widgets.js', 'js/chart.js', 'js/widget-spec.js', 'js/commands.js', 'js/search.js', 'js/commands-ext.js', 'js/commands-data.js', 'js/commands-w4.js', 'js/agents.js', 'js/workflows.js', 'js/context.js', 'js/judge.js', 'js/jev-flow.js', 'js/ai.js', 'js/bridge.js', 'js/hud.js', 'js/dash.js', 'js/main.js', 'assets/wallpaper.jpg', 'assets/icon.svg', 'manifest.webmanifest'];
 
 const SHELL_SET = new Set(SHELL);
