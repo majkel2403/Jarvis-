@@ -36,6 +36,13 @@ const touch = r => { if (r.chat) r.chat.set(cardText(r)); J.emit('workflows', r.
 const stepOf = (r, e) => r.steps.find(s => s.id === e.step_id);
 /* Process Log i Orb: przebieg workflow przejmuje je tylko, gdy nie trwa zadanie z czatu tej karty (jak zadania z Telegrama) */
 const ownsProc = r => r.proc && J.proc.current === r.proc;
+/* przejęcie, gdy tylko Process Log jest wolny — także później, np. gdy skończyło się polecenie z czatu, które uruchomiło przebieg */
+const adopt = r => {
+  if (r.proc || !ACTIVE(r.state) || J.brain?.busy || J.proc.active) return;
+  r.proc = J.proc.start('Workflow: ' + r.name); J.proc.plan(r.steps.map(x => x.title));
+  r.steps.forEach((x, i) => { if (x.state === 'done' || x.state === 'skipped') J.proc.planStep(i); });
+  J.ev.emit('task.created', { task_id: r.id, title: r.name, source: 'workflow' }, 'workflow');
+};
 
 const WF = J.workflows = {
   runs, cardText,
@@ -53,14 +60,12 @@ const WF = J.workflows = {
       case 'run.started':
         r.autonomy = e.autonomy;
         r.chat = J.chat.add('jarvis', cardText(r));
-        if (!J.brain?.busy && !J.proc.active) {
-          r.proc = J.proc.start('Workflow: ' + r.name); J.proc.plan(r.steps.map(x => x.title));
-          J.ev.emit('task.created', { task_id: r.id, title: r.name, source: 'workflow' }, 'workflow');
-        }
+        adopt(r);
         break;
       case 'run.resumed': J.proc.active || J.toast?.('Workflow „' + r.name + '” wznowiony po restarcie mostu', 4000); break;
       case 'step.started':
         if (s) Object.assign(s, { state: 'running', attempts: e.attempt || 1 });
+        adopt(r);
         if (ownsProc(r)) { r.handles[e.step_id] = J.proc.step('server', 'Krok ' + e.n + '/' + e.total + ': ' + e.title + (e.attempt > 1 ? ' (próba ' + e.attempt + ')' : ''), [['Rodzaj', e.kind]], { running: true }); J.ev.emit('tool.started', { task_id: r.id, tool: 'workflow:' + e.kind, source: 'workflow' }, 'workflow'); }
         break;
       case 'step.retry':

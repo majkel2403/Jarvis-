@@ -61,6 +61,11 @@ test('trwa zadanie z czatu karty → workflow nie przejmuje Process Logu (karta 
   assert.equal(J.proc.current.title, 'lokalne polecenie');
   assert.equal(J.proc.current.steps.filter(s => s.kind === 'server').length, 0);
   assert.ok(said.some(x => /Workflow: Od pomysłu/.test(x.text)));
+  J.proc.end('ok', 'zrobione');   // polecenie z czatu (np. to, które uruchomiło przebieg) się skończyło
+  ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 1000 });
+  ev('step.started', { step_id: 'architektura', n: 2, kind: 'hermes', title: 'Architektura', attempt: 1 });
+  assert.match(J.proc.current.title, /^Workflow: Od pomysłu/, 'wolny Process Log przejęty przy następnym kroku');
+  assert.equal(J.engine.taskId, 'r1');
 });
 
 test('migawka po podłączeniu karty i pytanie przebiegu → odpowiedź do mostu', async () => {
