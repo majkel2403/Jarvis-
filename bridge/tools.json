@@ -733,12 +733,13 @@
  },
  {
   "name": "widgets_remove",
-  "description": "Usuwa widget z pulpitu (wymaga potwierdzenia). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun widget widget”.",
+  "description": "Usuwa (zamyka ✕) widget z pulpitu — „zamknij widget” to właśnie to polecenie (zwijanie do paska to widget_collapse). widget=\"all\" — wszystkie widgety naraz, jedno potwierdzenie. Można cofnąć („Cofnij”). Wymaga potwierdzenia użytkownika — na pulpicie albo w rozmowie (user_confirmed_in_chat). Np.: „usun widget widget”.",
   "parameters": {
    "type": "object",
    "properties": {
     "widget": {
-     "type": "string"
+     "type": "string",
+     "description": "id albo tytuł; \"all\" = wszystkie"
     },
     "user_confirmed_in_chat": {
      "type": "boolean",
@@ -2330,7 +2331,7 @@
  },
  {
   "name": "widget_collapse",
-  "description": "Zwija widget do paska tytułu albo rozwija (on). widget=\"all\" — wszystkie. Np.: „zwin widget widget”.",
+  "description": "Zwija widget do paska tytułu (on=true) albo rozwija (on=false); widget NIE znika z pulpitu — do zamknięcia/usunięcia służy widgets_remove. widget=\"all\" — wszystkie. Np.: „zwin widget widget”.",
   "parameters": {
    "type": "object",
    "properties": {

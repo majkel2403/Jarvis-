@@ -19,7 +19,7 @@ Jev to szybki „sędzia”: przy każdym zdaniu w ~200 ms decyduje, co zrobić.
 2. **Jak działa (zasady w skrócie):**
    - Odczyty i nawigacja (otwórz, pokaż, wróć) — pewne zdania wykonuje parser od razu; niepewne rozstrzyga Jev.
    - Zapisy, które da się cofnąć (dodaj zadanie, notatka, minutnik…) — Jev wykonuje sam od pewności 0,92 i pokazuje przycisk **Cofnij** (8 s; „cofnij” działa też głosem i z klawiatury).
-   - Niepewne — pytanie „Chodzi o…?”. Nieodwracalne (usuwanie, terminal, schowek) — zawsze zgoda, jeśli polecenie pochodzi od modelu lub głosu.
+   - Niepewne — gdy Hermes jest dostępny, polecenie trafia do niego (bez pytań bez wyjścia); bez Hermesa albo w trybie „zawsze pytaj” — pytanie „Chodzi o…?” ([ADR 0005](../adr/0005-niepewny-jev-oddaje-hermesowi.md)). Pytanie bez odpowiedzi wygasa z wyjaśnieniem. Nieodwracalne (usuwanie, terminal, schowek) — zawsze zgoda, jeśli polecenie pochodzi od modelu lub głosu.
    - Jev sprawdza też, czy to, co robi Hermes, jest zgodne z Twoją prośbą (strażnik), czy treść z notatek nie zawiera podszytych instrukcji, czy fakt do zapamiętania nie jest poufny i jak rozumieć odpowiedź „no dobra”.
 3. **Ustawienia:** poziom prywatności (P0 tylko zdanie · P1 + okna i dzisiejsze zadania · P2 + tytuły i profil), samodzielność (odczyty i zapisy / tylko odczyty / zawsze pytaj), progi, budżet miesięczny (domyślnie 5 USD), tryb cienia (Jev tylko liczy i zapisuje), dziennik decyzji (eksport, lokalnie), reset uczenia się (dwa odrzucenia w dobie podnoszą próg polecenia o 0,05), lżejszy model do zwykłej rozmowy.
 4. **Awarie:** trzy błędy z rzędu wstrzymują Jeva (bezpiecznik), polecenia działają dalej przez parser i Hermesa. Zły klucz — długa pauza z powodem.

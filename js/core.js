@@ -25,6 +25,8 @@ J.pad = n => String(n).padStart(2, '0');
 J.mdLite = t => J.esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');   // **pogrubienie** i `kod` w bezpiecznym HTML
 J.fmtDur = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' s';
 J.hhmm = (d = new Date()) => J.pad(d.getHours()) + ':' + J.pad(d.getMinutes());
+/* zdejmuje cudzysłowy obejmujące cały tekst: „sprawdzić logi” → sprawdzić logi (cudzysłów w środku zostaje) */
+J.unquote = t => { const s = String(t ?? '').trim(), m = /^[„"“”'«‚]+([^„"“”«»]*?)[”"“'»‘’]+$/.exec(s); return m && m[1].trim() ? m[1].trim() : s; };
 J.today = () => { const d = new Date(); return d.getFullYear() + '-' + J.pad(d.getMonth() + 1) + '-' + J.pad(d.getDate()); };
 J.fmtMoney = v => v >= 1000 ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : v >= 1 ? '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$' + v.toPrecision(4);
 J.pl = (n, one, few, many) => n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many;   // polskie liczby mnogie

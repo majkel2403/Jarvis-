@@ -352,7 +352,18 @@ const externalFlagged = async (name, r) => {
 /* =================== PĘTLA HERMESA =================== */
 const BUDGET = () => ({ turns: 10, tools: 25, ms: 90000 });
 let lastResults = [];   // wyniki narzędzi ostatniej pętli (do weryfikacji przez Jeva)
+/* czy prośba jest czynnością na pulpicie (zapis, zmiana, usunięcie)? Jev (polecenie z rejestru, pewność ≥ 0,7) albo pewny parser.
+   Odczyty i nawigacja (A3) się nie liczą — na nie Hermes może odpowiedzieć z bloku <environment>. */
+const wantsAction = (text, verdict) => {
+  const id = verdict?.intent?.id, cmd = id && R.get(id);
+  if (cmd) return (verdict.intent.confidence ?? 0) >= .7 && J.policy.level(cmd, {}) !== 'A3';
+  const top = R.match(text)[0];
+  return !!(top && top.score >= 100 && J.policy.level(top.cmd, top.args) !== 'A3');
+};
+const NUDGE = 'Nie wywołałeś żadnego narzędzia pulpitu, więc nic się nie zmieniło. Wykonaj teraz moje poprzednie polecenie narzędziami pulpitu (gdy nie znasz id obiektu — najpierw *_list / *_read / *_search). Jeśli naprawdę nie możesz, powiedz to wprost jednym zdaniem.';
+let bridgeWaited = false;   // na stan mostu czekamy tylko przy pierwszej wiadomości
 const hermes = async (text, bubble, opts = {}) => {
+  if (J.bridge?.connected && !J.bridge.checked && J.bridge.refresh && !bridgeWaited) { bridgeWaited = true; await Promise.race([J.bridge.refresh(), new Promise(r => setTimeout(r, 1500))]); }   // świeża karta: poczekaj na stan mostu (tryb MCP), maks. 1,5 s
   const mcp = mcpMode(), format = mcp ? 'none' : toolFormat(); lastResults = [];
   /* załączniki tekstowe (chat_attach): trafiają do tej jednej wiadomości jako dane obce; wstrzyknięcia sprawdzane jak treść z narzędzi (D10) */
   const atts = opts.readOnly ? [] : (J.attach?.take() || []);
@@ -539,6 +550,13 @@ J.brain = {
             return ask();
           });
           setStatus('up');
+          /* Hermes odpowiedział, ale nie wywołał ŻADNEGO narzędzia pulpitu, choć prośba była czynnością (test na żywo 2026-10-04:
+             „Mam 1 widget (Zegar) — zamykam.” i nic się nie stało) — jedno przypomnienie, potem uczciwe ostrzeżenie */
+          if (reply && !taskTools.length && !fromSignal && !opts.noRecheck && wantsAction(text, verdict) && !(/\?\s*$/.test(reply) && (verdict?.clarify ?? 0) >= .5)) {
+            J.proc.step('system', 'Hermes odpowiedział bez wykonania czynności — przypominam raz', [['Odpowiedź', String(reply).slice(0, 200)]], { status: 'err' });
+            try { const again = await hermes(NUDGE, bubble, { signal: taskAbort.signal }); if (again) reply = again; } catch (e) { if (e.name === 'AbortError') throw e; }
+            if (!taskTools.length && !/\?\s*$/.test(reply)) reply += '\n\n⚠ Hermes nie wykonał tej czynności na pulpicie (nie wywołał żadnego narzędzia) — powtórz polecenie albo sprawdź Process Log.';
+          }
           if (J.judge?.available() && J.judge.allowed('verify') && (lastResults.length || J.state.settings.hermesPreset === 'max') && lastResults.length && reply) {
             J.ev.emit('task.verifying', { results: lastResults.length });
             let p = await J.judge.verify(reply, lastResults);
@@ -598,7 +616,7 @@ J.brain = {
     }
   }
 };
-J.brain.run = run; J.brain.localPlan = localPlan; Object.defineProperty(J.brain, 'mcp', { get: mcpMode });
+J.brain.run = run; J.brain.localPlan = localPlan; J.brain.wantsAction = wantsAction; Object.defineProperty(J.brain, 'mcp', { get: mcpMode });
 J.brain.local = local; J.brain.parseCalls = parseCalls; J.brain.parsePlan = parsePlan; J.brain.visible = visible;
 J.brain.trimHistory = trimHistory; J.brain.systemPrompt = SYSTEM;
 loadHistory();

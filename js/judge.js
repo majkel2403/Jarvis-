@@ -205,7 +205,7 @@ const judge = J.judge = {
       /* skrót trasy (zgodny z HUD i logiem); pełną decyzję podejmuje J.policy.route */
       v.route = v.intent.id === 'conversation' || v.intent.id === 'multi_step' ? 'hermes' : v.intent.id === 'unclear' ? 'ask' : v.intent.confidence >= th.a3 ? 'execute' : v.intent.confidence >= th.ask ? 'ask' : 'hermes';
       v.logId = log.add({ kind: 'decide', text, intent: v.intent.id, conf: v.intent.confidence, alts, destr: v.destructive, clar: v.clarify, cur: v.current, act: v.act?.id || null, ms, cost: v.cost, cached: v.cached, guess: v.route });
-      st?.done([['Decyzja', v]], v.intent.id + ' ' + Math.round(v.intent.confidence * 100) + '% → ' + v.route + ' · ' + ms + ' ms' + (cached ? ' (cache)' : ''));
+      st?.done([['Ocena', v]], v.intent.id + ' ' + Math.round(v.intent.confidence * 100) + '% · ' + ms + ' ms' + (cached ? ' (cache)' : ''));   // co z tym zrobić, rozstrzyga polityka — osobny krok „Jev: decyzja”
       J.engine.judge = { ...v, t: Date.now() }; J.ev.emit('judge.completed', { intent: v.intent.id, confidence: v.intent.confidence, route: v.route, ms });
       return v;
     } catch (e) { st?.fail(e.message); J.ev.emit('judge.failed', { error: e.message }); return null; }

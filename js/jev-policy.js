@@ -42,8 +42,12 @@ const P = J.policy = {
   thresholds(intentId) { const t = J.judge.thresholds(), b = P.bump(intentId); return { ...t, a3: Math.min(.99, t.a3 + b), a2: Math.min(.99, t.a2 + b), execute: Math.min(.99, t.execute + b) }; },
 
   /* ---------- routing (drzewo decyzyjne) ----------
-     verdict: wynik J.judge.decide; ctx: { cmd, level, risk, undoable, source: 'typed'|'voice'|'signal', parserAgrees, slots: 'complete'|'enum'|'free', mode, th }
-     wynik: { action, reason, trust?, silent?, undo?, gated?, alts?, then? }
+     verdict: wynik J.judge.decide; ctx: { cmd, level, risk, undoable, source: 'typed'|'voice'|'signal', parserAgrees, slots: 'complete'|'enum'|'free', mode, th, hermes }
+     ctx.hermes = Hermes jest osiągalny. Wtedy niepewność (R3, R6, R13, brakujące szczegóły bez zgody parsera) nie kończy się
+     pytaniem „Chodzi o…?”, tylko przekazaniem Hermesowi (R16/R15) — test na żywo 2026-10-04: pytania bez pasującej opcji kończyły
+     się „Anulowano”, a Hermes robił to samo zadanie za pierwszym razem w ~10 s. Tryb „zawsze pytaj” i brak Hermesa = pytania jak dotąd.
+     wynik: { action, reason, trust?, silent?, undo?, gated?, alts?, then?, handoff? }
+     handoff (przy fill_enum): gdyby trzeba było zapytać użytkownika o wartość z listy, oddaj sprawę Hermesowi
      action: hermes · ask_alternatives · ask_intent · fill_enum · ask_slots · exec
      trust:  local (polecenie wpisane ręcznie i zgodne z parserem) · voice · jev (sam Jev — rejestr NIE traktuje tego jako zaufanego) */
   route(v, ctx = {}) {
@@ -51,7 +55,8 @@ const P = J.policy = {
     const real = a => a.id !== id && !['conversation', 'multi_step', 'unclear'].includes(a.id);
     if (id === 'conversation') return { action: 'hermes', reason: 'R1' };
     if (id === 'multi_step') return { action: 'hermes', reason: 'R2', plan: true };
-    if (id === 'unclear') { const alts = (v.intent.alts || []).filter(real); return alts.length && alts[0].p >= th.alt ? { action: 'ask_alternatives', reason: 'R3', alts: alts.slice(0, 2) } : { action: 'hermes', reason: 'R3' }; }
+    const handoff = !!ctx.hermes && (ctx.mode || 'auto') !== 'ask';
+    if (id === 'unclear') { const alts = (v.intent.alts || []).filter(real); return !handoff && alts.length && alts[0].p >= th.alt ? { action: 'ask_alternatives', reason: 'R3', alts: alts.slice(0, 2) } : { action: 'hermes', reason: 'R3' }; }
     if (!ctx.cmd) return { action: 'hermes', reason: 'R0' };
     if (p < th.ask) return { action: 'hermes', reason: 'R4' };
     const typed = ctx.source === 'typed', voice = ctx.source === 'voice', parser = !!ctx.parserAgrees;
@@ -61,8 +66,11 @@ const P = J.policy = {
     let level = ctx.level || 'A1'; const mode = ctx.mode || 'auto';
     const trust = voice ? 'voice' : (typed && parser) ? 'local' : 'jev';
     const need = ctx.slots || 'complete';
-    const finish = base => need === 'complete' ? { action: 'exec', ...base } : { action: need === 'enum' ? 'fill_enum' : 'ask_slots', reason: base.reason, then: base };
-    const askIntent = reason => ({ action: 'ask_intent', reason, alts: (v.intent.alts || []).filter(real).filter(a => a.p >= th.alt).slice(0, 2) });
+    const solo = handoff && !agrees;   // sam Jev, bez potwierdzenia parsera ani użytkownika
+    const finish = base => need === 'complete' ? { action: 'exec', ...base }
+      : (solo && need === 'free') ? { action: 'hermes', reason: 'R15' }
+      : { action: need === 'enum' ? 'fill_enum' : 'ask_slots', reason: base.reason, then: base, ...(solo ? { handoff: true } : {}) };
+    const askIntent = reason => handoff ? { action: 'hermes', reason: 'R16' } : ({ action: 'ask_intent', reason, alts: (v.intent.alts || []).filter(real).filter(a => a.p >= th.alt).slice(0, 2) });
     // tryb „zawsze pytaj” i „tylko odczyty” obniżają polecenia do A1
     if (mode === 'ask' && level !== 'A0') level = 'A1';
     if (mode === 'reads' && level === 'A2') level = 'A1';

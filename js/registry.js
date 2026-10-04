@@ -11,6 +11,13 @@
 const DIA = { ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z' };
 const norm = s => String(s || '').toLowerCase().replace(/[ąćęłńóśźż]/g, c => DIA[c]).replace(/[„”"']/g, '').replace(/\s+/g, ' ').trim();
 J.norm = norm;
+/* prośba o raport na końcu zdania („potem powiedz krótko, co zrobiłeś”, „podsumuj”) to nie osobne polecenie: odpowiedź Jarvisa
+   i tak wylicza, co zrobił. Bez tego łańcuch czytał na głos dosłownie „krótko, co zrobiłeś” (test na żywo 2026-10-04). */
+const REPORT = /^(?:(?:potem|a potem|i potem|nastepnie|na koniec|i|to)\s+)?(?:(?:powiedz|napisz|przekaz|zamelduj|daj znac)(?:\s+mi)?\s+(?:(?:krotko|w skrocie|na koniec|potem)\s+)?(?:co|jak)\s+(?:zrobil\w*|poszlo|wyszlo|sie udalo)|(?:(?:krotko|w skrocie)\s+)?co\s+zrobil(?:es|as))(?:\s+(?:dokladnie|po kolei|wszystko))?$|^(?:(?:potem|a potem|i potem|nastepnie|na koniec|i)\s+)?(?:podsumuj(?:\s+(?:to|krotko|wszystko))?|zrob podsumowanie|potwierdz(?:\s+mi)?)$/;
+const isReport = p => REPORT.test(norm(p).replace(/[.,!?;:]+/g, ' ').replace(/\s+/g, ' ').trim());
+/* usuwa części-raporty; sprawdza też dwie sąsiednie części razem, bo przecinek dzieli „powiedz krótko, co zrobiłeś” na dwie */
+const dropReports = parts => { const out = []; for (let i = 0; i < parts.length; i++) { if (isReport(parts[i])) continue; if (i + 1 < parts.length && isReport(parts[i] + ' ' + parts[i + 1])) { i++; continue; } out.push(parts[i]); } return out; };
+J.isReport = isReport;
 const IMPERATIVE = /^(?:otworz|zamknij|wyslij|zamow|kup|napisz|znajdz|wyszukaj|pusc|wlacz|wylacz|ustaw|dodaj|zadzwon|sprawdz|pokaz|przeczytaj|usun|zapisz|zrob|idz|wejdz|uruchom|odpal|zagraj|policz|oblicz|zanotuj|przypomnij|skopiuj|wklej|posprzataj|przenies|zmien|zarezerwuj|zaplac|przelej|odpowiedz|przeslij|udostepnij|pobierz|zainstaluj)\b/;
 
 /* ---------- koperta wyniku ---------- */
@@ -285,6 +292,7 @@ const api = J.registry = {
       if (typeof c.parse === 'function') { try { const a = c.parse(raw, n); if (a) out.push({ id: c.id, args: a.args || a, score: 100 + (a.score || 0), cmd: c }); } catch (e) { } }
       for (const p of c.compiled) {
         const m = p.re.exec(n); if (!m) continue;
+        if (c.accept && !c.accept(m.slice(1), n)) continue;   // polecenie samo odrzuca dopasowanie (np. speak: „powiedz, co zrobiłeś” to prośba o raport)
         const args = {}; let bad = false;
         const rawCut = raw.replace(/[?!.]+$/, '');   // n powstało z norm(raw) bez końcowej interpunkcji
         p.names.forEach((nm, i) => { const g = m[i + 1]; if (g == null) return; const idx = n.indexOf(g); args[nm] = (idx >= 0 && rawCut.length === n.length) ? rawCut.slice(idx, idx + g.length).trim() : g;   // offsety raw↔norm tylko przy równej długości (wzorzec z agents.js) — normalizacja usuwa np. cudzysłowy i przesuwała wycinek
@@ -308,16 +316,20 @@ const api = J.registry = {
     if (!m || m.cmd?.spansConj) return [];
     const parts = String(text).split(/\s+(?:i potem|a potem|a nastepnie|a następnie|nastepnie|następnie|potem|oraz|i|a)\s+|\s*[;,]\s*/i).map(s => norm(s).replace(/[?!.]+$/, '').trim()).filter(Boolean);
     if (parts.length < 2) return [];
+    const kept = [parts[0], ...dropReports(parts.slice(1))];
+    if (kept.length < 2) return [];
     const inArgs = norm(Object.values(m.args || {}).flatMap(v => Array.isArray(v) ? v : [v]).filter(v => typeof v === 'string' || typeof v === 'number').join(' '));   // argumenty-listy (items) też się liczą — „chleb, jajka” z listy zakupów nie są „niepokrytą” częścią zdania
     const words = p => p.split(/\s+/).filter(w => w.length > 2);
     /* część zaczynająca się od czasownika w trybie rozkazującym to OSOBNA czynność, nawet gdy trafiła do tekstu notatki czy etykiety
        („zanotuj coś i wyślij to szefowi” — „wyślij” to drugie polecenie, nie treść notatki) */
-    return parts.slice(1).filter(p => { const w = words(p); return IMPERATIVE.test(p) || (w.length && w.some(x => !inArgs.includes(x))); });
+    return kept.slice(1).filter(p => { const w = words(p); return IMPERATIVE.test(p) || (w.length && w.some(x => !inArgs.includes(x))); });
   },
   /* łańcuch: „otwórz notatnik i ustaw minutnik 5 minut” → [dopasowania] albo null */
   chain(text) {
-    const parts = String(text).split(/\s+(?:i potem|a potem|a nastepnie|a następnie|nastepnie|następnie|potem|oraz|i)\s+|\s*;\s*/i).map(s => s.trim()).filter(Boolean);
-    if (parts.length < 2) return null;
+    const all = String(text).split(/\s+(?:i potem|a potem|a nastepnie|a następnie|nastepnie|następnie|potem|oraz|i)\s+|\s*;\s*/i).map(s => s.trim().replace(/[,;]+$/, '').trim()).filter(Boolean);
+    if (all.length < 2) return null;
+    const parts = dropReports(all);
+    if (!parts.length || (parts.length < 2 && parts.length === all.length)) return null;   // jedna czynność + prośba o raport = też łańcuch (jednoelementowy)
     const res = parts.map(p => api.match(p)[0]);
     return res.every(Boolean) ? res : null;
   }

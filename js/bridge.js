@@ -173,6 +173,9 @@ J.bridge.agentEvent = e => {
     remote.proc = J.proc.start(where + ': ' + title);
     J.ev.emit('task.created', { task_id: e.task_id, title, source: e.platform || 'hermes' }, 'hermes');
   } else if (e.task_id !== remote.id) return;
+  /* w międzyczasie ruszyło zadanie z czatu tej karty i przejęło Orb oraz Process Log — dalsze kroki zadania z Telegrama trafiałyby
+     do niego (test na żywo 2026-10-04: „patch” i „execute_code” z rozmowy na Telegramie w zadaniu „Zamknij widgety”) */
+  if (remote.proc && J.proc.current !== remote.proc) { clearTimeout(remote.watchdog); remote.id = null; remote.proc = null; remote.steps.clear(); return; }
   clearTimeout(remote.watchdog);
   remote.watchdog = setTimeout(() => remoteEnd('abort', 'Brak wieści od Hermesa (10 min) — zadanie mogło zostać przerwane'), 600000);
   remote.watchdog?.unref?.();   // Node (testy): zegar czuwania nie trzyma procesu; w przeglądarce bez znaczenia

@@ -133,3 +133,16 @@ test('Zadanie z Telegrama nie przejmuje Orba, gdy trwa zadanie z czatu tej karty
   J.bridge.agentEvent({ v: 1, type: 'tool.started', task_id: 'h-s2-1', tool: 'terminal' });
   assert.equal(J.proc.current.steps.filter(s => s.kind === 'server').length, 0);
 });
+
+test('Zadanie z czatu karty zaczęte W TRAKCIE zadania z Telegrama: dalsze kroki Telegrama nie trafiają do niego', async () => {
+  const J = load({ dom: true, files: FILES, fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), state: { settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b' } } });
+  J.bridge.agentEvent({ v: 1, type: 'task.created', task_id: 'h-s3-1', platform: 'telegram', title: 'film o Jevie' });
+  assert.match(J.proc.current.title, /^Telegram: film o Jevie/);
+  J.proc.start('Zamknij wszystkie widgety na pulpicie.');   // użytkownik pisze w karcie, Telegram dalej pracuje
+  J.bridge.agentEvent({ v: 1, type: 'tool.started', task_id: 'h-s3-1', call_id: 'p1', tool: 'patch', label: 'jev.html' });
+  J.bridge.agentEvent({ v: 1, type: 'tool.completed', task_id: 'h-s3-1', call_id: 'p1', tool: 'patch' });
+  J.bridge.agentEvent({ v: 1, type: 'task.completed', task_id: 'h-s3-1', result: 'gotowe' });
+  assert.equal(J.proc.current.title, 'Zamknij wszystkie widgety na pulpicie.');
+  assert.equal(J.proc.current.steps.filter(s => s.kind === 'server' || s.kind === 'reply').length, 0, 'żadnych kroków z Telegrama w zadaniu karty');
+  assert.equal(J.proc.active, true, 'zadanie karty nie zostało zamknięte przez koniec zadania z Telegrama');
+});

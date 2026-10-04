@@ -108,7 +108,7 @@ if cfg:
         return node
     TARGET = {"compression.threshold_tokens": 120000, "session_reset.idle_minutes": 120, "memory.nudge_interval": 0,
               "kanban.dispatch_in_gateway": False, "delegation.max_concurrent_children": 3,
-              "auxiliary.vision.provider": "minimax"}
+              "auxiliary.vision.provider": "minimax", "tools.tool_search.enabled": "off"}
     for path, want in TARGET.items():
         check(at(path) == want, f"{path}={want}", f"{path}={at(path)!r} (docelowo {want!r} — hermes/apply_profile.py TARGET)")
     check(str(at("terminal.cwd")) == str(WORKSPACE), "terminal.cwd = JarvisWorkspace", f"terminal.cwd={at('terminal.cwd')!r} (docelowo {WORKSPACE})")

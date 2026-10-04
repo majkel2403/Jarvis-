@@ -49,6 +49,8 @@ TARGET = {
     "delegation.max_concurrent_children": 3,     # limit tokenów MiniMax (429) — 10 równoległych dzieci to za dużo
     "auxiliary.vision.provider": "minimax",      # „auto” mogło wybrać płatnego dostawcę
     "auxiliary.vision.model": "MiniMax-M3",
+    "tools.tool_search.enabled": "off",          # narzędzia pulpitu widoczne wprost: MiniMax psuje wywołania przez tool_search/tool_call
+                                                 # (test na żywo 2026-10-04: „zamykam widgety” bez wywołania, złe argumenty przez tool_call)
 }
 PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "rtk-rewrite", "security-guidance", "web/ddgs"]
 # Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie

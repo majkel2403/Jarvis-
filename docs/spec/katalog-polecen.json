@@ -1343,12 +1343,13 @@
   "id": "widgets_remove",
   "group": "Pulpit i widgety",
   "label": "Usuń widget",
-  "description": "Usuwa widget z pulpitu (wymaga potwierdzenia).",
+  "description": "Usuwa (zamyka ✕) widget z pulpitu — „zamknij widget” to właśnie to polecenie (zwijanie do paska to widget_collapse). widget=\"all\" — wszystkie widgety naraz, jedno potwierdzenie. Można cofnąć („Cofnij”).",
   "args": {
    "type": "object",
    "properties": {
     "widget": {
-     "type": "string"
+     "type": "string",
+     "description": "id albo tytuł; \"all\" = wszystkie"
     }
    },
    "required": [
@@ -4624,7 +4625,7 @@
   "id": "widget_collapse",
   "group": "Pulpit i widgety",
   "label": "Zwiń / rozwiń widget",
-  "description": "Zwija widget do paska tytułu albo rozwija (on). widget=\"all\" — wszystkie.",
+  "description": "Zwija widget do paska tytułu (on=true) albo rozwija (on=false); widget NIE znika z pulpitu — do zamknięcia/usunięcia służy widgets_remove. widget=\"all\" — wszystkie.",
   "args": {
    "type": "object",
    "properties": {

@@ -925,12 +925,12 @@ const askChip = (() => {
 })();
 /* J.ask(question, options[], {timeout, speak}) → Promise<odpowiedź|null>; odpowiedź: klik, Enter w czacie, głos */
 J.ask = (() => {
-  let pend = null;
+  let pend = null, timedOut = false;   // timedOut: ostatnie pytanie wygasło bez odpowiedzi (≠ „Nie”/„Anuluj”)
   const api = (question, options = [], o = {}) => new Promise(resolve => {
-    api.cancel();
+    api.cancel(); timedOut = false;
     const ms = o.timeout || 60000, opts = options.map((x, i) => typeof x === 'string' ? { label: x, value: x, primary: i === 0 } : x);
     const finish = v => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: v }); p.resolve(v); };
-    pend = { question, opts, resolve, t: setTimeout(() => finish(null), ms), quick: null };
+    pend = { question, opts, resolve, t: setTimeout(() => { timedOut = true; finish(null); }, ms), quick: null };
     J.ev.emit('approval.requested', { question }); J.sfx.ask();
     askChip.show(question, opts, finish, ms);
     pend.quick = J.chat.quick(question, opts, finish);
@@ -956,6 +956,7 @@ J.ask = (() => {
   };
   api.cancel = () => { if (!pend) return; const p = pend; pend = null; clearTimeout(p.t); askChip.hide(); p.quick?.remove(); J.ear.expectAnswer(null); J.ev.emit('approval.resolved', { answer: null }); p.resolve(null); };
   Object.defineProperty(api, 'pending', { get: () => !!pend });
+  Object.defineProperty(api, 'timedOut', { get: () => timedOut });
   return api;
 })();
 /* potwierdzenie ryzykownego narzędzia: 'yes' | 'no' | 'always' | 'timeout' */

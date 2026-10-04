@@ -74,13 +74,14 @@ const askChips = async (question, opts, o) => {
   const hit = opts.find(x => tokHas(x.label, toks) || tokHas(n, norm(String(x.value)).split(/\s+/).filter(Boolean)));
   return hit ? hit.value : null;
 };
-const fillEnums = async (cmd, args, missing, text, th) => {
+const fillEnums = async (cmd, args, missing, text, th, noAsk = false) => {
   const props = missing.map(k => ({ name: k, options: optionsFor(cmd, k) })).filter(p => p.options);
   const res = await J.judge.slots(props.map(p => ({ name: p.name, options: p.options.map(o => ({ value: o.value, label: o.label })) })), text);
   const out = {}; let asked = 0;
   for (const p of props) {
     const r = res?.[p.name];
     if (r && r.confidence >= th.slot) { out[p.name] = r.value; continue; }
+    if (noAsk) return { handoff: true };
     const v = await askChips(ENUM_PROMPTS[p.name] || promptFor(cmd, p.name), p.options); asked++;
     if (v == null) return { cancel: true };
     out[p.name] = v;
@@ -108,16 +109,25 @@ const execute = async (cmd, args, trust, o, verdict) => {
     const key = ['note', 'task', 'widget', 'name'].find(k => a[k] !== undefined) || 'note';
     const c = r.data.candidates.slice(0, 5), labels = c.map(x => ({ value: x.id, label: x.title || ((x.time || '--:--') + ' ' + (x.text || '')) || x.id }));
     const v = await askChips('Które z nich?', labels);
-    if (v == null) return { r: { ok: false, code: 'CANCELLED', text: 'Anulowano.' }, args: a };
+    if (v == null) return { r: { ok: false, code: 'CANCELLED', text: cancelled() }, args: a };
     a[key] = v; r = await o.run(cmd.id, a, { source, signal: o.signal, judge: verdict });
   }
   return { r, args: a };
 };
 
 const log = (id, patch) => { if (id) J.judge?.log.update(id, patch); };
+/* pytanie bez odpowiedzi (minął czas) to nie odmowa — użytkownik ma wiedzieć, czemu nic się nie stało */
+const NO_ANSWER = 'Nie dostałem odpowiedzi, więc nic nie zrobiłem. Powtórz polecenie, gdy będziesz gotów.';
+const cancelled = () => J.ask?.timedOut ? NO_ANSWER : 'Anulowano.';
+/* decyzja polityki w Process Logu (Jev podaje intencję i pewność, a to tutaj zapada „wykonuję / pytam / oddaję Hermesowi”) */
+const DECISION = { exec: 'wykonuję lokalnie', hermes: 'oddaję Hermesowi', ask_intent: 'dopytuję', ask_alternatives: 'dopytuję', fill_enum: 'uzupełniam szczegóły', ask_slots: 'dopytuję o szczegóły' };
+const WHY = { R4: 'pewność poniżej progu', R15: 'brakuje szczegółów', R16: 'intencja niepewna', R3: 'intencja niejasna', R0: 'brak takiego polecenia' };
+const decisionStep = (intent, conf, route) => { if (!J.proc?.active) return; const why = WHY[route.reason]; J.proc.step('judge', 'Jev: decyzja', [['Polecenie', intent], ['Pewność', Math.round(conf * 100) + '%'], ['Reguła', route.reason]], { preview: DECISION[route.action] + (why ? ' — ' + why : '') }); };
 
 const flow = J.flow = {
-  optionsFor, missingRequired, classify, fillDeixis, parseFree, CONJ,
+  optionsFor, missingRequired, classify, fillDeixis, parseFree, CONJ, NO_ANSWER,
+  /* Hermes skonfigurowany i nie zgłoszony jako niedostępny — wtedy niepewne polecenia idą do niego zamiast pytań */
+  hermesUp: () => !!(J.aiReady?.() && J.hermes && J.hermes.status !== 'down'),
 
   /* czy parser jest na tyle pewny, by pominąć Jeva (tylko A3: odczyty i nawigacja; zapisy zawsze przez Jeva) */
   parserSure(text, top) {
@@ -164,10 +174,11 @@ const flow = J.flow = {
       if (cmd) args = fillDeixis(cmd, args, v);
       const missing = cmd ? missingRequired(cmd, args) : [];
       const level = cmd ? P.level(cmd, args) : 'A1';
-      const ctx = { cmd, level, risk: level === 'A0' ? 'confirm' : 'safe', undoable: !!cmd?.undoable, source: o.source === 'voice' ? 'voice' : 'typed', parserAgrees: agrees, userConfirmed: confirmed, slots: cmd ? classify(cmd, missing) : 'complete', mode: P.mode(), th: P.thresholds(intent) };
+      const ctx = { cmd, level, risk: level === 'A0' ? 'confirm' : 'safe', undoable: !!cmd?.undoable, source: o.source === 'voice' ? 'voice' : 'typed', parserAgrees: agrees, userConfirmed: confirmed, slots: cmd ? classify(cmd, missing) : 'complete', mode: P.mode(), th: P.thresholds(intent), hermes: flow.hermesUp() };
       const vv = intent === v.intent.id ? v : { ...v, intent: { ...v.intent, id: intent, confidence: 1 } };
       const route = P.route(vv, ctx);
       log(v.logId, { route: route.reason });
+      decisionStep(intent, vv.intent.confidence, route);
 
       if (route.action === 'hermes') { log(v.logId, { outcome: 'hermes' }); return { handled: false, verdict }; }
 
@@ -181,7 +192,7 @@ const flow = J.flow = {
         const q = route.action === 'ask_intent' ? 'Chodzi o: ' + cmd.label + '?' : 'Nie jestem pewien. Chodzi o: ' + alts.map(c => c.label).join(' czy ') + '?';
         const a = await J.ask(q, items, { timeout: 30000, speak: true });
         asked = true;
-        if (a == null) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: 'Dobrze, zostawiam.', logId: v.logId }; }
+        if (a == null) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: J.ask?.timedOut ? NO_ANSWER : 'Dobrze, zostawiam.', logId: v.logId }; }
         if (a === 'yes') { confirmed = true; continue; }
         if (String(a).startsWith('alt:')) { intent = String(a).slice(4); confirmed = true; carry = {}; continue; }
         // „Nie” albo własne słowa: zapamiętaj odrzucenie i oddaj Hermesowi
@@ -190,14 +201,15 @@ const flow = J.flow = {
       }
 
       if (route.action === 'fill_enum') {
-        const en = await fillEnums(cmd, args, missing.filter(k => optionsFor(cmd, k)), text, th);
-        if (en.cancel) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: 'Anulowano.', logId: v.logId }; }
+        const en = await fillEnums(cmd, args, missing.filter(k => optionsFor(cmd, k)), text, th, !!route.handoff);
+        if (en.handoff) { log(v.logId, { outcome: 'hermes', route: 'R15' }); return { handled: false, verdict }; }   // Jev nie umie wybrać z listy, a pytanie mogłoby nie mieć pasującej opcji (np. „widget z zegarem”)
+        if (en.cancel) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: cancelled(), logId: v.logId }; }
         Object.assign(carry, en.values); if (en.asked) asked = true; continue;
       }
 
       if (route.action === 'ask_slots') {
         const fr = await askFree(cmd, args, missing);
-        if (fr.cancel) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: 'Anulowano.', logId: v.logId }; }
+        if (fr.cancel) { log(v.logId, { outcome: 'asked_no' }); return { handled: true, reply: cancelled(), logId: v.logId }; }
         Object.assign(carry, fr.values); asked = true; continue;
       }
 

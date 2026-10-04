@@ -272,6 +272,8 @@ Testowalna bez sieci: te same dane wejściowe zawsze dają ten sam wynik.
 | R12 | polecenie | dowolna | confirm | tak (wpisane ręcznie) | kompletne | wykonaj (tak jak dziś) |
 | R13 | polecenie | dowolna | confirm | głos lub tylko Jev | kompletne | **potwierdzenie** |
 | R14 | dowolna | dowolna | dowolne, D2 ≥ 0,8 | — | — | potwierdzenie także dla „safe" zapisów (jeśli nie wpisane ręcznie) |
+| R15 | polecenie | dowolna | dowolne | nie | niekompletne, a Hermes osiągalny | Hermes (wartość z listy: najpierw D8, Hermes zamiast pytania) |
+| R16 | polecenie / unclear | gdzie R3, R6, R13 pytałyby „Chodzi o…?” | dowolne | nie | — | Hermes, gdy osiągalny (poza trybem „zawsze pytaj”) — [ADR 0005](adr/0005-niepewny-jev-oddaje-hermesowi.md) |
 
 ### 7.3 Przykłady przejść
 
