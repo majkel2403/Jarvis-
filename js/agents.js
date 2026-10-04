@@ -65,7 +65,7 @@ function toEnglish(raw) {
 }
 /* domena albo adres bez spacji → otwarcie wprost (bez Jeva: szybciej i za darmo) */
 const directUrl = en => { const m = /^go to (\S+)$/.exec(en); if (!m) return null; if (DIRECT[m[1]]) return DIRECT[m[1]]; return /^(?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/:?#]\S*)?$/i.test(m[1]) ? m[1] : null; };
-J.agents = { toEnglish, directUrl, tuning: { pollMs: 1200, unitMs: 1000 } };   // tuning: czasy odpytywania (testy skracają)
+J.agents = { toEnglish, directUrl, api, tuning: { pollMs: 1200, unitMs: 1000 } };   // tuning: czasy odpytywania (testy skracają)
 
 const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return String(u || ''); } };
 const where = p => p && p.url ? '„' + String(p.title || host(p.url)).slice(0, 60) + '” (' + host(p.url) + ')' : '';

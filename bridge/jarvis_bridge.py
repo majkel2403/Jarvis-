@@ -599,6 +599,8 @@ class DesktopMCP(MCPServer):
         # zamknięta. To jest fix z t_874a5201 / B4: wcześniej każde media_* bez karty → OFFLINE.
         if name in BRIDGE_OWNED:
             return await _bridge_handle_media(name, args, CB)
+        if name in WF_TOOLS:   # workflow: silnik w moście, bez karty (ADR 0007)
+            return await _bridge_workflow(name, args)
         if name == "desktop_open":   # narzędzie naprawcze: bez bezpiecznika (CB) i bez wymogu połączonej karty
             return await _bridge_desktop_open(args)
         if name == "desktop_screenshot":
@@ -830,6 +832,193 @@ async def agent_event(request: Request) -> Response:
     return JSONResponse({"ok": True, "clients": len(CLIENTS)})
 
 
+# ---------------------------------------------------------------- workflow (ADR 0007): silnik w moście, zdarzenia „event: workflow”
+# Definicje: workflows/*.yaml (repo); stan przebiegów: ~/.jarvis-os/workflows/runs. Narzędzia workflow_* obsługuje most sam
+# (bez karty) — workflow można uruchomić z Telegrama przez Hermesa, a karta tylko pokazuje przebieg na żywo.
+import workflow_engine as wf_mod  # noqa: E402 — moduł z katalogu bridge/
+
+WF: Optional[wf_mod.WorkflowEngine] = None
+WF_TOOLS = frozenset({"workflow_list", "workflow_run", "workflow_status", "workflow_stop", "workflow_answer"})
+WF_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def wf_emit(evt: dict) -> None:
+    for c in list(CLIENTS.values()):
+        c.queue.put_nowait({"_sse": "workflow", **evt})
+
+
+async def wf_hermes(messages: list, session_id: str, timeout: float) -> tuple[str, int]:
+    """Jedna tura Hermesa dla kroku workflow: osobna sesja na krok i próbę; ponowienia tylko przy 429/5xx/zerwanym połączeniu."""
+    import aiohttp
+    t = writer_proxy.hermes_target()
+    if not t:
+        raise RuntimeError("nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)")
+    url, key, model = t
+    body = {"model": model, "stream": False, "messages": messages}
+    headers = {"Authorization": "Bearer " + key, "X-Hermes-Session-Id": session_id}
+    for attempt, delay in enumerate((5, 15, None)):
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
+                async with sess.post(url, json=body, headers=headers) as r:
+                    if r.status == 200:
+                        j = await r.json(content_type=None)
+                        msg = ((j.get("choices") or [{}])[0].get("message") or {})
+                        return str(msg.get("content") or ""), int((j.get("usage") or {}).get("total_tokens") or 0)
+                    if r.status not in WF_RETRY_STATUS or delay is None:
+                        raise RuntimeError(f"Hermes HTTP {r.status}: {(await r.text())[:200]}")
+        except aiohttp.ClientConnectionError as e:
+            if delay is None:
+                raise RuntimeError(f"Hermes niedostępny: {type(e).__name__}") from e
+        except asyncio.TimeoutError as e:   # długa generacja — ponawia krok silnik (z podpowiedzią), nie ten klient
+            raise RuntimeError(f"Hermes nie odpowiedział w {timeout:.0f} s") from e
+        await asyncio.sleep(delay)
+    raise RuntimeError("Hermes niedostępny")
+
+
+async def wf_judge(question: str, content: str) -> tuple[float, str]:
+    """Sprawdzenie kroku przez niezależny model (darmowe OpenRouter → Hermes), nie ten, który krok wykonał."""
+    msgs = [{"role": "system", "content": 'Oceniasz wynik jednego kroku pracy agenta. Odpowiedz WYŁĄCZNIE JSON-em: {"score": liczba od 0 do 1, "why": "jedno zdanie po polsku"}.'},
+            {"role": "user", "content": f"Pytanie: {question}\n\nWynik kroku:\n{content}"}]
+    reply, _model = await writer_proxy.complete({"model": "judge", "messages": msgs, "max_tokens": 200}, agents_mod.openrouter_key(),
+                                                models=agents_mod.planner_models(), timeout=20)
+    data = wf_mod.parse_json_reply(((reply.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    return max(0.0, min(1.0, float(data.get("score", 0)))), str(data.get("why", ""))[:200]
+
+
+async def wf_relay(tool: str, args: dict) -> dict:
+    if tool in WF_TOOLS:
+        return {"ok": False, "code": "DENIED", "text": "workflow nie uruchamia innych workflow"}
+    try:
+        return await relay(tool, args, timeout=90)
+    except ToolError as e:
+        return {"ok": False, "code": "OFFLINE", "text": str(e)}
+
+
+def get_workflows() -> wf_mod.WorkflowEngine:
+    """Leniwie (pierwsze użycie jest zawsze w pętli zdarzeń): tworzy silnik i wznawia przebiegi przerwane restartem mostu."""
+    global WF
+    if WF is None:
+        WF = wf_mod.WorkflowEngine(
+            defs_dir=Path(os.environ.get("JARVIS_WORKFLOWS_DIR") or Path(__file__).resolve().parent.parent / "workflows"),
+            runs_dir=Path(os.environ.get("JARVIS_WORKFLOW_RUNS") or agents_mod.home() / "workflows" / "runs"),
+            projects_root=Path(os.environ.get("JARVIS_PROJECTS_ROOT") or Path.home() / "JarvisWorkspace" / "projects"),
+            hermes=wf_hermes, judge=wf_judge, relay=wf_relay, emit=wf_emit,
+            log=lambda *a: print("[jarvis-bridge]", *a, file=sys.stderr))
+        resumed = WF.resume_pending()
+        if resumed:
+            print(f"[jarvis-bridge] workflow: wznowiono {len(resumed)} przebieg(i)", file=sys.stderr)
+    return WF
+
+
+def wf_describe(snap: dict) -> str:
+    """Zdanie dla modelu i użytkownika: co się dzieje z przebiegiem."""
+    if snap.get("state") == "idle":
+        return "Żaden workflow nie trwa."
+    steps = snap.get("steps") or []
+    done = sum(1 for x in steps if x.get("state") in ("done", "skipped"))
+    cur = next((x for x in steps if x.get("state") == "running"), None)
+    head = f"„{snap.get('name')}” ({snap.get('id')}): "
+    if snap.get("state") == "done":
+        return head + "zakończony. " + (snap.get("report") or "")
+    if snap.get("state") in ("failed", "stopped"):
+        return head + ("nie powiódł się: " if snap["state"] == "failed" else "zatrzymany: ") + str(snap.get("reason") or "")
+    if snap.get("state") == "waiting" and snap.get("pending"):
+        p = snap["pending"]
+        return head + f"czeka na odpowiedź: {p.get('question')} (opcje: {', '.join(p.get('options') or [])}) — workflow_answer."
+    return head + f"krok {done + 1}/{len(steps)}" + (f" — {cur['title']} (próba {cur.get('attempts')})" if cur else "")
+
+
+async def _bridge_workflow(name: str, args: dict) -> CallToolResult:
+    def env(code: str, ok: bool, data, text: str) -> CallToolResult:
+        body = {"ok": ok, "code": code, "data": data, "text": text}
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(body, ensure_ascii=False, default=str))], is_error=not ok)
+    wf = get_workflows()
+    try:
+        if name == "workflow_list":
+            items = wf.list()
+            return env("OK", True, {"workflows": items}, "Dostępne workflow: " + ("; ".join(f"„{i['name']}” ({i['id']}, wejście: {', '.join(i['inputs']) or 'brak'})" for i in items) or "brak") + ".")
+        if name == "workflow_run":
+            snap = await wf.start(str(args.get("workflow") or ""), args.get("inputs") or {}, args.get("autonomy"), source="hermes")
+            return env("OK", True, snap, f"Uruchomiłem „{snap['name']}” (przebieg {snap['id']}, autonomia {snap['autonomy']}, {len(snap['steps'])} kroków). Postęp: workflow_status — przebieg widać też na pulpicie (Mapa pracy).")
+        if name == "workflow_status":
+            snap = wf.status(args.get("run_id") or None)
+            return env("OK", True, snap, wf_describe(snap))
+        if name == "workflow_stop":
+            r = await wf.stop(str(args.get("run_id") or "all"))
+            return env("OK", True, r, f"Zatrzymano: {len(r['stopped'])} przebieg(i)." if r["stopped"] else "Żaden workflow nie trwał.")
+        if name == "workflow_answer":
+            r = wf.answer(str(args.get("run_id") or ""), str(args.get("answer") or ""))
+            return env("OK" if r["ok"] else "NOT_FOUND", r["ok"], r, "Przekazano odpowiedź." if r["ok"] else r["error"])
+    except KeyError as e:
+        return env("NOT_FOUND", False, None, str(e).strip("'\""))
+    except ValueError as e:
+        return env("INVALID_ARGS", False, None, str(e))
+    except RuntimeError as e:
+        return env("DUPLICATE", False, None, str(e))
+    return env("UNSUPPORTED", False, None, f"nieznane polecenie {name}")
+
+
+@mcp.custom_route("/workflows", methods=["GET", "OPTIONS"])
+async def workflows_list(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    wf = get_workflows()
+    return cors(request, JSONResponse({"workflows": wf.list(), "errors": wf._def_errors}))
+
+
+@mcp.custom_route("/workflows/run", methods=["POST", "OPTIONS"])
+async def workflows_run(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    try:
+        b = await read_json(request)
+        snap = await get_workflows().start(str(b.get("workflow") or ""), b.get("inputs") or {}, b.get("autonomy"), source="desktop")
+        return cors(request, JSONResponse(snap))
+    except ValueError as e:
+        return cors(request, JSONResponse({"error": str(e)}, status_code=400))
+    except RuntimeError as e:
+        return cors(request, JSONResponse({"error": str(e)}, status_code=409))
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+
+
+@mcp.custom_route("/workflows/runs", methods=["GET", "OPTIONS"])
+async def workflows_runs(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    return cors(request, JSONResponse({"runs": get_workflows().recent(20)}))
+
+
+@mcp.custom_route("/workflows/runs/{run_id}", methods=["GET", "OPTIONS"])
+async def workflows_run_get(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    wf, rid = get_workflows(), request.path_params["run_id"]
+    try:
+        if request.query_params.get("events") == "1":
+            return cors(request, JSONResponse({"events": wf.events_of(rid)}))
+        return cors(request, JSONResponse(wf.status(rid)))
+    except KeyError as e:
+        return cors(request, JSONResponse({"error": str(e).strip("'\"")}, status_code=404))
+
+
+@mcp.custom_route("/workflows/runs/{run_id}/{action}", methods=["POST", "OPTIONS"])
+async def workflows_run_action(request: Request) -> Response:
+    if (g := await agents_guard(request)) is not None:
+        return g
+    wf, rid, action = get_workflows(), request.path_params["run_id"], request.path_params["action"]
+    try:
+        if action == "stop":
+            return cors(request, JSONResponse(await wf.stop(rid)))
+        if action == "answer":
+            b = await read_json(request)
+            r = wf.answer(rid, str(b.get("answer") or ""))
+            return cors(request, JSONResponse(r, status_code=200 if r["ok"] else 409))
+    except Exception as e:  # noqa: BLE001
+        return agent_error(request, e)
+    return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+
+
 def tasklog_path() -> Path:
     return Path(os.environ.get("JARVIS_TASKLOG") or agents_mod.home() / "logs" / "tasks.jsonl")
 
@@ -881,6 +1070,11 @@ async def events(request: Request) -> Response:
             yield f"retry: 3000\nevent: hello\ndata: {json.dumps({'client': client.id, 'tools': sorted(TOOLS)})}\n\n"
             for evt in agent_replay():   # karta podłączona w trakcie zadania z Telegrama/crona widzi je od początku
                 yield f"event: agent\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n"
+            try:
+                for evt in get_workflows().replay():   # przebiegi workflow w toku — karta od razu rysuje ich stan
+                    yield f"event: workflow\ndata: {json.dumps(evt, ensure_ascii=False, default=str)}\n\n"
+            except Exception as e:  # noqa: BLE001 — zły plik definicji nie może zablokować kanału poleceń
+                print("[jarvis-bridge] workflow replay:", e, file=sys.stderr)
             while True:
                 try:
                     cmd = await asyncio.wait_for(client.queue.get(), 15)

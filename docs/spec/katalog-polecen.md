@@ -2,22 +2,22 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **140** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **145** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 64 |
+| A3 sam, po cichu | 67 |
 | A2 sam + Cofnij | 44 |
-| A1 pyta „Chodzi o…?” | 15 |
+| A1 pyta „Chodzi o…?” | 17 |
 | A0 zawsze zgoda | 17 |
 
 ## Aplikacje i okna
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
-| `open_app` | Otwórz aplikację — Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda,  | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files | safe | A3 | — | „otworz {app}”, „uruchom {app}”, „pokaz {app}” |
+| `open_app` | Otwórz aplikację — Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda,  | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | safe | A3 | — | „otworz {app}”, „uruchom {app}”, „pokaz {app}” |
 | `close_app` | Zamknij okno — Zamyka okno aplikacji (da się cofnąć: wm_reopen). app="all" zamyka wszystkie okna (wymaga potwierdzenia). | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | confirm | A3 (zależy od arg.) | tak | „zamknij {app}”, „wylacz {app}”, „zamknij (wszystko\|wszystkie okna\|okna)” |
 | `wm_list` | Lista okien — Zwraca otwarte okna z pozycją, rozmiarem, stanem i tym, które jest aktywne. | — | safe | A3 | — | „jakie okna sa otwarte”, „lista okien”, „co jest otwarte” |
 | `wm_focus` | Aktywuj okno — Przenosi okno na wierzch (przywraca, jeśli zminimalizowane). app="next" = następne okno. | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | safe | A3 | — | „przelacz na {app}”, „aktywuj {app}”, „nastepne okno” |
@@ -27,7 +27,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `nav_back` | Wróć do poprzedniego okna — Wraca do poprzednio aktywnego okna (historia nawigacji); otwiera je, jeśli zostało zamknięte. | — | safe | A3 | — | „wroc”, „cofnij okno”, „wroc do poprzedniego okna” |
 | `layout_save` | Zapisz układ okien — Zapisuje bieżący układ otwartych okien pod nazwą (do wm_arrange mode=layout). | **name**: string | safe | A2 | tak | „zapisz uklad [jako] {name}”, „zapamietaj uklad [jako] {name}” |
 | `wm_pin` | Zawsze na wierzchu — Przypina okno lub widget nad innymi (on=false odpina). Maks. 3 przypięte. | **app**: string; on: boolean | safe | A2 | tak | „przypnij {app} [na wierzchu]”, „odepnij {app}”, „{app} zawsze na wierzchu” |
-| `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich. | app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files | safe | A3 | tak | „otworz ponownie zamkniete [okno]”, „przywroc zamkniete okno”, „przywroc ostatnio zamkniete okno” |
+| `wm_reopen` | Otwórz ponownie zamknięte — Otwiera ostatnio zamknięte okno (albo wskazane) w tej samej pozycji i widoku. Pamięta 10 ostatnich. | app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|… | safe | A3 | tak | „otworz ponownie zamkniete [okno]”, „przywroc zamkniete okno”, „przywroc ostatnio zamkniete okno” |
 | `wm_restore` | Przywróć okna — Przywraca zminimalizowane okno albo wszystkie (app="all") — odwrotność „pokaż pulpit”. | **app**: string | safe | A3 | tak | „przywroc okna”, „przywroc wszystkie okna”, „pokaz z powrotem [wszystkie] okna” |
 | `wm_close_others` | Zamknij pozostałe — Zamyka wszystkie okna poza wskazanym (widgety zostają). Da się cofnąć. | **app**: string | safe | A1 | tak | „zostaw tylko {app}”, „zamknij pozostale [okna]”, „zamknij wszystko (poza\|oprocz) {app}” |
 | `layout_list` | Lista układów — Presety i zapisane układy okien z listą aplikacji oraz układ startowy. | — | safe | A3 | — | „jakie mam uklady”, „lista ukladow”, „pokaz [moje] zapisane uklady” |
@@ -115,12 +115,12 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `widgets_update` | Zmień widget — Zmienia tytuł, treść (note/result) lub dodaje/odhacza pozycje listy (add_items, check_item). | **widget**: string; title: string; content: string; add_items: string[]; check_item: string; uncheck_item: string | safe | A2 | tak | „dodaj do listy {widget} {add_items}”, „odhacz na liscie {widget} {check_item}” |
 | `widgets_remove` | Usuń widget — Usuwa (zamyka ✕) widget z pulpitu — „zamknij widget” to właśnie to polecenie (zwijanie do paska to widget_collapse). widget="all" — wszystkie widgety naraz, jed | **widget**: string | confirm | A0 | tak | „usun widget {widget}”, „zamknij widget {widget}” |
 | `e2e_cleanup` | Sprzątanie po testach — Usuwa wyłącznie artefakty automatycznych testów mostu (widgety i notatki o nazwach „__E2E_LEFTOVER_…”, „E2E drill widget <liczba>”, „E2E test note <liczba>”). N | — | safe | A1 | — | — |
-| `add_shortcut` | Skrót na pulpicie — Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). | **name**: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; url: string | safe | A2 | tak | „dodaj skrot {name}”, „utworz skrot do {name}”, „nowa ikona {name}” |
+| `add_shortcut` | Skrót na pulpicie — Dodaje ikonę skrótu do aplikacji (app) lub strony WWW (url). | **name**: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|…; url: string | safe | A2 | tak | „dodaj skrot {name}”, „utworz skrot do {name}”, „nowa ikona {name}” |
 | `shortcut_remove` | Usuń skrót — Usuwa skrót z pulpitu (wymaga potwierdzenia). | **name**: string | confirm | A0 | tak | „usun skrot {name}”, „usun ikone {name}” |
 | `set_theme` | Motyw kolorystyczny — Zmienia kolor akcentu interfejsu. | **color**: jarvis\|cyjan\|niebieski\|fiolet\|zielony\|złoty\|czerwony\|różowy | safe | A3 | tak | „motyw {color}”, „ustaw motyw {color}”, „zmien motyw na {color}” |
 | `set_wallpaper` | Tapeta — Zmienia tapetę: photo (jezioro w górach), aurora, void (pustka). Bez argumentu — następna. | wallpaper: photo\|aurora\|void | safe | A3 | tak | „tapeta {wallpaper}”, „zmien tapete [na] {wallpaper}”, „zmien tapete” |
 | `focus_mode` | Tryb skupienia — Włącza/wyłącza tryb skupienia (minimalizuje okna, wycisza tło). | **on**: boolean | safe | A3 | — | „tryb skupienia”, „wlacz (tryb skupienia\|skupienie\|focus)”, „wylacz (tryb skupienia\|skupienie\|focus)” |
-| `shortcut_edit` | Edytuj skrót — Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie. | **shortcut**: string; name: string; url: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; icon: string | safe | A2 | tak | „zmien nazwe skrotu {shortcut} na {name}”, „skrot {shortcut} ma sie nazywac {name}”, „zmien adres skrotu {shortcut} na {url}” |
+| `shortcut_edit` | Edytuj skrót — Zmienia nazwę, adres (url), aplikację albo ikonę skrótu na pulpicie. | **shortcut**: string; name: string; url: string; app: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|…; icon: string | safe | A2 | tak | „zmien nazwe skrotu {shortcut} na {name}”, „skrot {shortcut} ma sie nazywac {name}”, „zmien adres skrotu {shortcut} na {url}” |
 | `dock_order` | Kolejność w doku — Przesuwa aplikację w doku na pozycję (1 = pierwsza). | **item**: string; **position**: integer | safe | A2 | tak | „przesun {item} na (poczatek\|koniec) doku”, „{item} na (pierwsze\|drugie\|trzecie\|ostatnie) miejsce w doku”, „daj {item} na drugie miejsce” |
 | `widget_duplicate` | Duplikuj widget — Tworzy kopię widgetu obok oryginału. | **widget**: string | safe | A2 | tak | „zduplikuj widget {widget}”, „duplikuj widget {widget}”, „zrob kopie widgetu {widget}” |
 | `widget_collapse` | Zwiń / rozwiń widget — Zwija widget do paska tytułu (on=true) albo rozwija (on=false); widget NIE znika z pulpitu — do zamknięcia/usunięcia służy widgets_remove. widget="all" — wszyst | **widget**: string; on: boolean | safe | A3 | tak | „zwin widget {widget}”, „rozwin widget {widget}”, „zwin wszystkie widgety” |
@@ -168,7 +168,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 
 | id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
 |---|---|---|---|---|---|---|
-| `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku: notes note\|search\|trash\|tag\|folder, schedule day\|week\|overdue, files path, timer timer\|stopwatch, market coin, weather c | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files; view: string; target: string | safe | A3 | — | „pokaz stoper”, „pokaz zakladke stoper [w minutniku]”, „otworz minutnik na stoperze” |
+| `app_view` | Przejdź do widoku w aplikacji — Otwiera aplikację na konkretnym widoku: notes note\|search\|trash\|tag\|folder, schedule day\|week\|overdue, files path, timer timer\|stopwatch, market coin, weather c | **app**: chat\|notes\|market\|schedule\|monitor\|terminal\|weather\|calc\|timer\|settings\|library\|files\|…; view: string; target: string | safe | A3 | — | „pokaz stoper”, „pokaz zakladke stoper [w minutniku]”, „otworz minutnik na stoperze” |
 | `nav_forward` | Dalej (po „wróć”) — Idzie do przodu w historii okien i widoków — odwrotność nav_back. | — | safe | A3 | — | „dalej”, „naprzod”, „idz dalej” |
 | `search_all` | Szukaj wszędzie — Jedno wyszukiwanie po notatkach, zadaniach, widgetach, skrótach, pamięci, rozmowach, ustawieniach, poleceniach i plikach. Zwraca wyniki z typem; show=true otwie | **query**: string; types: string[]; limit: integer; show: boolean | safe | A3 | — | „szukaj wszedzie {query}”, „znajdz wszystko o {query}”, „gdzie mam cos o {query}” |
 | `recent_list` | Ostatnio otwierane — Lista ostatnio otwieranych okien i widoków (do szybkiego powrotu przez app_view). | limit: integer | safe | A3 | — | „ostatnio otwierane”, „co ostatnio otwieralem”, „ostatnie okna” |
@@ -212,4 +212,14 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `computer_status` | Prawdziwy komputer: status zadania — Pokazuje stan zadania sterującego prawdziwym komputerem (trwa, zakończone, przerwane), liczbę kroków i ostatnie linie dziennika. | — | safe | A3 | — | „status komputera”, „jak idzie zadanie na komputerze” |
 | `computer_stop` | Prawdziwy komputer: zatrzymaj zadanie — Natychmiast zatrzymuje trwające zadanie sterujące prawdziwym komputerem. | — | safe | A3 | — | „zatrzymaj komputer”, „przerwij sterowanie komputerem”, „stop komputer” |
 | `agents_status` | Agenci: status — Sprawdza, czy działają agent WWW (przeglądarka sterowana Jevem) i sterowanie prawdziwym komputerem, oraz czy jest klucz Jeva. | — | safe | A3 | — | „status agentow”, „czy agent www dziala”, „czy moge sterowac komputerem” |
+
+## Workflow
+
+| id | co robi | argumenty | ryzyko | poziom | cofanie | przykłady PL |
+|---|---|---|---|---|---|---|
+| `workflow_list` | Workflow: lista — Lista dostępnych workflow (powtarzalnych procesów pracy z krokami, sprawdzeniami i budżetem) z ich danymi wejściowymi. | — | safe | A3 | — | „jakie mam workflow”, „lista workflow”, „pokaz workflow” |
+| `workflow_run` | Workflow: uruchom — Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieś | **workflow**: string; inputs: object; autonomy: L0\|L1\|L2\|L3 | safe | A1 | — | „zrob projekt z pomyslu {pomysl}”, „od pomyslu do projektu {pomysl}”, „uruchom workflow {workflow}” |
+| `workflow_status` | Workflow: status — Stan workflow: bieżący krok, ponowienia, pytania do użytkownika, raport końcowy. Bez run_id — ostatni przebieg. | run_id: string | safe | A3 | — | „status workflow”, „jak idzie workflow”, „co robi workflow” |
+| `workflow_stop` | Workflow: zatrzymaj — Zatrzymuje workflow (run_id) albo wszystkie („stop wszystko”: także bieżące zadanie Jarvisa). Zrobione kroki zostają. | run_id: string | safe | A3 | — | „zatrzymaj workflow”, „stop workflow”, „stop wszystko” |
+| `workflow_answer` | Workflow: odpowiedz — Odpowiedź na pytanie zadane przez workflow (krok ask albo zgoda na krok) — po pytaniu użytkownika w rozmowie. | **run_id**: string; **answer**: string | safe | A1 | — | — |
 

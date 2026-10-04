@@ -12,3 +12,4 @@ zmiana decyzji = nowy ADR, który zastępuje stary (stary zostaje z dopiskiem �
 | [0004](0004-zdarzenia-zadan-hermesa-na-pulpicie.md) | Zadania Hermesa spoza karty widoczne na pulpicie (wtyczka jarvis-events) | przyjęta 2026-10-04 |
 | [0005](0005-niepewny-jev-oddaje-hermesowi.md) | Niepewny Jev oddaje polecenie Hermesowi zamiast pytać | przyjęta 2026-10-04 |
 | [0006](0006-narzedzia-pulpitu-wprost-i-straznik-czynnosci.md) | Narzędzia pulpitu widoczne dla Hermesa wprost + strażnik „zapowiedział, nie zrobił” | przyjęta 2026-10-04 |
+| [0007](0007-silnik-workflow-w-moscie.md) | Silnik workflow w moście (kroki, sprawdzenia, budżety, wznawianie, przebieg na żywo) | przyjęta 2026-10-04 |

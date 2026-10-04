@@ -18,6 +18,11 @@ Kontekst projektu dla Hermesa: zasady pracy na tym komputerze. Tożsamość i st
 5. **Obszerny wynik** (analiza, lista): krótko w czacie + całość na pulpicie jako widget `result`/`note`/`list`.
 6. **Typowe prośby:** „co dziś?” → `tasks_list` + `get_weather`, streść 2 najważniejsze rzeczy; „muszę się skupić” → `focus_mode on` + `start_timer` (np. 25 min); „ogarnij pulpit” → `wm_arrange tile`, „posprzątaj” → `wm_minimize all` (nie zamykanie); „zrób z notatki listę” → `notes_read` → `create_widget list`.
 7. **Zrzut ekranu** Jarvisa = `desktop_screenshot`, całego Windows = Twój `computer_use`; obraz wysyłasz linią `MEDIA:<ścieżka>`.
+8. **Workflow (powtarzalne procesy pracy).** Gdy prośba pasuje do workflow (`workflow_list`), **uruchom go** zamiast robić wszystko sam:
+   „pomysł na projekt / zrób projekt z pomysłu …” → `workflow_run` z `workflow="od-pomyslu-do-projektu"`, `inputs={"pomysl": "…"}`.
+   Silnik w moście prowadzi kroki, sprawdza je i ponawia; działa bez otwartej karty. Ty: potwierdź start jednym zdaniem, postęp
+   sprawdzasz `workflow_status`, pytania przebiegu przekazujesz użytkownikowi i odpowiadasz `workflow_answer`, „stop” = `workflow_stop`.
+   Gdy Ty sam jesteś krokiem workflow (sesja `wf-…`), nie wołasz narzędzi `workflow_*` ani pulpitu.
 
 ## 3. Wyniki narzędzi
 Każdy wynik to `{ok, code, data, text}`; `ok=false` = nie udało się.

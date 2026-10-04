@@ -113,7 +113,8 @@ async def main():
     (tmp / "hermes.env").write_text("API_SERVER_KEY=hermes-test-key\n", encoding="utf-8")
     env = dict(os.environ, JARVIS_BRIDGE_TOKEN=TOKEN, JARVIS_BRIDGE_PORT=str(PORT), JARVIS_BRIDGE_CALL_TIMEOUT="3", JARVIS_BRIDGE_TOOLS_FILE=str(tools_copy),
                JARVIS_HERMES_ENV=str(tmp / "hermes.env"), JARVIS_TASKLOG=str(tmp / "tasks.jsonl"),
-               JARVIS_HERMES_URL=f"http://127.0.0.1:{PORT + 1}/v1")
+               JARVIS_HERMES_URL=f"http://127.0.0.1:{PORT + 1}/v1",
+               JARVIS_WORKFLOW_RUNS=str(tmp / "wf-runs"), JARVIS_PROJECTS_ROOT=str(tmp / "projects"))
     proc = subprocess.Popen([sys.executable, str(HERE / "jarvis_bridge.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         async with httpx2.AsyncClient() as hc:
@@ -149,6 +150,15 @@ async def main():
             check("/agents/webtask/status: bezczynne", wt.status_code == 200 and wt.json().get("state") == "idle", wt.text[:200])
             check("/agents/webtask/run bez celu = 400", (await hc.post(f"{BASE}/agents/webtask/run", json={}, headers={"X-Bridge-Token": TOKEN})).status_code == 400)
             check("/agents/webtask/confirm bez zadania = nic", (await hc.post(f"{BASE}/agents/webtask/confirm", json={"accept": True}, headers={"X-Bridge-Token": TOKEN})).json().get("ok") is False)
+            print("Workflow (ADR 0007)")
+            T = {"X-Bridge-Token": TOKEN}
+            check("/workflows bez tokenu = 401", (await hc.get(f"{BASE}/workflows")).status_code == 401)
+            wl = (await hc.get(f"{BASE}/workflows", headers=T)).json()
+            check("/workflows: definicje z repo, bez błędów", any(w["id"] == "od-pomyslu-do-projektu" for w in wl.get("workflows", [])) and not wl.get("errors"), str(wl)[:300])
+            check("/workflows/run: nieznany workflow = 400", (await hc.post(f"{BASE}/workflows/run", json={"workflow": "nie-ma"}, headers=T)).status_code == 400)
+            check("/workflows/run: brak wejścia = 400", (await hc.post(f"{BASE}/workflows/run", json={"workflow": "od-pomyslu-do-projektu", "inputs": {}}, headers=T)).status_code == 400)
+            check("/workflows/runs: pusto", (await hc.get(f"{BASE}/workflows/runs", headers=T)).json().get("runs") == [])
+            check("/workflows/runs/<zły id> = 404", (await hc.get(f"{BASE}/workflows/runs/nie-ma-takiego", headers=T)).status_code == 404)
             print("Autoryzacja i CORS")
             check("status bez tokenu = 401", (await hc.get(f"{BASE}/bridge/status")).status_code == 401)
             check("status z tokenem = 200", (await hc.get(f"{BASE}/bridge/status", headers={"X-Bridge-Token": TOKEN})).status_code == 200)
@@ -173,6 +183,12 @@ async def main():
                     check(f"narzędzia z rejestru ({len(expected)})", names == sorted(t["name"] for t in expected), str(len(names)) + " " + str(names))
                     oa = next(t for t in tools.tools if t.name == "open_app")
                     check("schema open_app: enum aplikacji z rejestru", "notes" in oa.input_schema["properties"]["app"].get("enum", []), json.dumps(oa.input_schema)[:300])
+                    r = await session.call_tool("workflow_list", {})
+                    check("workflow_list przez MCP bez karty (most sam)", not r.is_error and "Od pomysłu do projektu" in r.content[0].text, str(r)[:300])
+                    r = await session.call_tool("workflow_status", {})
+                    check("workflow_status: nic nie trwa", not r.is_error and "Żaden workflow nie trwa" in r.content[0].text, str(r)[:300])
+                    r = await session.call_tool("workflow_run", {"workflow": "od-pomyslu-do-projektu", "inputs": {}})
+                    check("workflow_run bez wejścia = INVALID_ARGS", r.is_error and "INVALID_ARGS" in r.content[0].text, str(r)[:300])
 
                     print("\nBrak przeglądarki")
                     r = await session.call_tool("wm_list", {})

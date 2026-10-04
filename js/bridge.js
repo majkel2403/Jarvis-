@@ -143,6 +143,7 @@ async function connect() {
   });
   es.addEventListener('cmd', e => { try { handle(JSON.parse(e.data)); } catch (er) { console.error(er); } });
   es.addEventListener('agent', e => { try { J.bridge.agentEvent(JSON.parse(e.data)); } catch (er) { console.error(er); } });
+  es.addEventListener('workflow', e => { try { J.workflows?.onEvent(JSON.parse(e.data)); } catch (er) { console.error(er); } });   // przebiegi workflow z mostu (ADR 0007)
   es.onerror = async () => {
     if (es) { es.close(); es = null; }
     clearInterval(pollTimer); set('down');

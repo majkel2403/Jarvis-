@@ -137,7 +137,8 @@ def ensure_workspace() -> None:
 CHEAT_TOOLS = ["desktop_open", "desktop_screenshot", "get_status", "open_app", "close_app", "wm_list", "wm_focus", "wm_arrange", "wm_minimize",
                "create_widget", "widgets_list", "widgets_update", "widgets_remove", "create_note", "notes_list", "notes_read", "notes_append",
                "notes_delete", "add_task", "tasks_list", "tasks_complete", "tasks_remove", "start_timer", "timer_control", "set_theme",
-               "set_wallpaper", "ui_mode", "ui_toast", "ui_ask", "ui_highlight", "speak", "e2e_cleanup", "media_play", "web_task", "computer_use"]
+               "set_wallpaper", "ui_mode", "ui_toast", "ui_ask", "ui_highlight", "speak", "e2e_cleanup", "media_play", "web_task", "computer_use",
+               "workflow_list", "workflow_run", "workflow_status", "workflow_stop", "workflow_answer"]
 CHEAT_BEGIN, CHEAT_END = "<!-- JARVIS-TOOLS:BEGIN (generowane przez hermes/apply_profile.py z bridge/tools.json — nie edytuj ręcznie) -->", "<!-- JARVIS-TOOLS:END -->"
 
 

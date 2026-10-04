@@ -3,7 +3,7 @@
   "id": "open_app",
   "group": "Aplikacje i okna",
   "label": "Otwórz aplikację",
-  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki.",
+  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki, workflows=Mapa pracy.",
   "args": {
    "type": "object",
    "properties": {
@@ -21,7 +21,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     }
    },
@@ -75,6 +76,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "all",
       "current"
      ]
@@ -153,6 +155,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "next"
      ]
     }
@@ -205,6 +208,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "all",
       "current"
      ]
@@ -1425,7 +1429,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "url": {
@@ -2666,7 +2671,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "view": {
@@ -2794,7 +2800,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     }
    }
@@ -2993,7 +3000,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "icon": {
@@ -5613,6 +5621,181 @@
    "czy agent www dziala",
    "czy moge sterowac komputerem"
   ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_list",
+  "group": "Workflow",
+  "label": "Workflow: lista",
+  "description": "Lista dostępnych workflow (powtarzalnych procesów pracy z krokami, sprawdzeniami i budżetem) z ich danymi wejściowymi.",
+  "args": {
+   "type": "object",
+   "properties": {}
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "jakie mam workflow",
+   "lista workflow",
+   "pokaz workflow"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_run",
+  "group": "Workflow",
+  "label": "Workflow: uruchom",
+  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie i w Mapie pracy.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "workflow": {
+     "type": "string",
+     "description": "id workflow (workflow_list)"
+    },
+    "inputs": {
+     "type": "object",
+     "description": "dane wejściowe, np. {\"pomysl\": \"aplikacja do nawyków\"}"
+    },
+    "autonomy": {
+     "type": "string",
+     "enum": [
+      "L0",
+      "L1",
+      "L2",
+      "L3"
+     ],
+     "description": "samodzielność; domyślnie z definicji"
+    }
+   },
+   "required": [
+    "workflow"
+   ]
+  },
+  "required": [
+   "workflow"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "workflows",
+   "files"
+  ],
+  "hermes": true,
+  "examples": [
+   "zrob projekt z pomyslu {pomysl}",
+   "od pomyslu do projektu {pomysl}",
+   "uruchom workflow {workflow}"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_status",
+  "group": "Workflow",
+  "label": "Workflow: status",
+  "description": "Stan workflow: bieżący krok, ponowienia, pytania do użytkownika, raport końcowy. Bez run_id — ostatni przebieg.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "status workflow",
+   "jak idzie workflow",
+   "co robi workflow"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_stop",
+  "group": "Workflow",
+  "label": "Workflow: zatrzymaj",
+  "description": "Zatrzymuje workflow (run_id) albo wszystkie („stop wszystko”: także bieżące zadanie Jarvisa). Zrobione kroki zostają.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string",
+     "description": "id przebiegu albo \"all\""
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [
+   "workflows"
+  ],
+  "hermes": true,
+  "examples": [
+   "zatrzymaj workflow",
+   "stop workflow",
+   "stop wszystko",
+   "zatrzymaj wszystko"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_answer",
+  "group": "Workflow",
+  "label": "Workflow: odpowiedz",
+  "description": "Odpowiedź na pytanie zadane przez workflow (krok ask albo zgoda na krok) — po pytaniu użytkownika w rozmowie.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string"
+    },
+    "answer": {
+     "type": "string",
+     "maxLength": 200
+    }
+   },
+   "required": [
+    "run_id",
+    "answer"
+   ]
+  },
+  "required": [
+   "run_id",
+   "answer"
+  ],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [],
+  "hermes": true,
+  "examples": [],
   "needsConfirmText": false
  },
  {

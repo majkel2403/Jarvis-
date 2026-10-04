@@ -6,12 +6,12 @@
 'use strict';
 (() => {
 const R = J.registry, { ok, fail } = R, norm = J.norm;
-const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library', 'files'];
-const APP_NAMES = { chat: 'Czat', notes: 'Notatnik', market: 'Monitor rynku', schedule: 'Harmonogram', monitor: 'Monitor systemu', terminal: 'Terminal', weather: 'Pogoda', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Biblioteka aplikacji', files: 'Pliki' };
+const APP_IDS = ['chat', 'notes', 'market', 'schedule', 'monitor', 'terminal', 'weather', 'calc', 'timer', 'settings', 'library', 'files', 'workflows'];
+const APP_NAMES = { chat: 'Czat', notes: 'Notatnik', market: 'Monitor rynku', schedule: 'Harmonogram', monitor: 'Monitor systemu', terminal: 'Terminal', weather: 'Pogoda', calc: 'Kalkulator', timer: 'Minutnik', settings: 'Ustawienia', library: 'Biblioteka aplikacji', files: 'Pliki', workflows: 'Mapa pracy' };
 [['chat', /\b(czat|chat|rozmow)/], ['notes', /\b(notatnik|notatk|notes)/], ['market', /\b(rynek|rynku|token|krypto|kurs|gield|market|monitor rynku)/],
   ['schedule', /\b(harmonogram|kalendarz|zadani|plan dnia|agend|przypomnien)/], ['monitor', /\b(monitor system|monitor|system|statystyk|wydajnos|telemetri)/],
   ['terminal', /\b(terminal|konsol|shell)/], ['weather', /\b(pogod)/], ['calc', /\b(kalkulator|liczydl)/], ['timer', /\b(minutnik|stoper|timer|odliczani)/],
-  ['settings', /\b(ustawieni|opcje|konfiguracj|preferencj)/], ['library', /\b(bibliotek|aplikacj|menu|programy)/], ['files', /\b(eksplorator|menedzer plikow|przegladark\w* plikow|aplikacj\w* pliki|okno plikow)/]].forEach(([id, re]) => R.alias('app', id, re));
+  ['settings', /\b(ustawieni|opcje|konfiguracj|preferencj)/], ['library', /\b(bibliotek|aplikacj|menu|programy)/], ['files', /\b(eksplorator|menedzer plikow|przegladark\w* plikow|aplikacj\w* pliki|okno plikow)/], ['workflows', /\b(map\w* pracy|przeplyw\w* pracy|workflow\w*)/]].forEach(([id, re]) => R.alias('app', id, re));
 const SITES = { youtube: 'https://youtube.com', google: 'https://google.com', github: 'https://github.com', gmail: 'https://mail.google.com', spotify: 'https://open.spotify.com', netflix: 'https://netflix.com', facebook: 'https://facebook.com', twitter: 'https://x.com', wikipedia: 'https://pl.wikipedia.org', mapy: 'https://maps.google.com', linkedin: 'https://linkedin.com', reddit: 'https://reddit.com', allegro: 'https://allegro.pl', nous: 'https://nousresearch.com', hermes: 'https://hermes-agent.nousresearch.com', chatgpt: 'https://chatgpt.com', wp: 'https://wp.pl', onet: 'https://onet.pl' };
 const TRUSTED = new Set(Object.values(SITES).map(u => new URL(u).hostname).concat(['www.google.com', 'duckduckgo.com', 'pl.wikipedia.org', 'en.wikipedia.org', 'github.com', 'open-meteo.com']));
 [['cyjan', /cyjan|turkus/], ['niebieski', /niebiesk/], ['fiolet', /fiolet|purpur/], ['zielony', /zielon/], ['złoty', /zlot|pomarancz/], ['czerwony', /czerwon/], ['różowy', /rozow/], ['jarvis', /jarvis|domysl/]].forEach(([id, re]) => R.alias('color', id, re));

@@ -1,7 +1,7 @@
 [
  {
   "name": "open_app",
-  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki. Np.: „otworz app”.",
+  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki, workflows=Mapa pracy. Np.: „otworz app”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -19,7 +19,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     }
    },
@@ -49,6 +50,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "all",
       "current"
      ]
@@ -92,6 +94,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "next"
      ]
     }
@@ -122,6 +125,7 @@
       "settings",
       "library",
       "files",
+      "workflows",
       "all",
       "current"
      ]
@@ -783,7 +787,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "url": {
@@ -1358,7 +1363,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "view": {
@@ -1420,7 +1426,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     }
    }
@@ -1519,7 +1526,8 @@
       "timer",
       "settings",
       "library",
-      "files"
+      "files",
+      "workflows"
      ]
     },
     "icon": {
@@ -2803,6 +2811,89 @@
   "parameters": {
    "type": "object",
    "properties": {}
+  }
+ },
+ {
+  "name": "workflow_list",
+  "description": "Lista dostępnych workflow (powtarzalnych procesów pracy z krokami, sprawdzeniami i budżetem) z ich danymi wejściowymi. Np.: „jakie mam workflow”.",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "workflow_run",
+  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie i w Mapie pracy. Np.: „zrob projekt z pomyslu pomysl”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "workflow": {
+     "type": "string",
+     "description": "id workflow (workflow_list)"
+    },
+    "inputs": {
+     "type": "object",
+     "description": "dane wejściowe, np. {\"pomysl\": \"aplikacja do nawyków\"}"
+    },
+    "autonomy": {
+     "type": "string",
+     "enum": [
+      "L0",
+      "L1",
+      "L2",
+      "L3"
+     ],
+     "description": "samodzielność; domyślnie z definicji"
+    }
+   },
+   "required": [
+    "workflow"
+   ]
+  }
+ },
+ {
+  "name": "workflow_status",
+  "description": "Stan workflow: bieżący krok, ponowienia, pytania do użytkownika, raport końcowy. Bez run_id — ostatni przebieg. Np.: „status workflow”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string"
+    }
+   }
+  }
+ },
+ {
+  "name": "workflow_stop",
+  "description": "Zatrzymuje workflow (run_id) albo wszystkie („stop wszystko”: także bieżące zadanie Jarvisa). Zrobione kroki zostają. Np.: „zatrzymaj workflow”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string",
+     "description": "id przebiegu albo \"all\""
+    }
+   }
+  }
+ },
+ {
+  "name": "workflow_answer",
+  "description": "Odpowiedź na pytanie zadane przez workflow (krok ask albo zgoda na krok) — po pytaniu użytkownika w rozmowie.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string"
+    },
+    "answer": {
+     "type": "string",
+     "maxLength": 200
+    }
+   },
+   "required": [
+    "run_id",
+    "answer"
+   ]
   }
  },
  {
