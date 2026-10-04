@@ -99,6 +99,8 @@ npm run test:web-agent                    # agent WWW: prawdziwy Chromium + atra
 python -m pytest                          # Python (z venv Hermesa): most, agenci, planista, writer, wtyczka jarvis-events, clicker
 python -m pytest -m unit                  # tylko testy Pythona bez sieci i bez venv Hermesa (tak jak w CI)
 python bridge/tests/run_e2e.py            # most na żywo z otwartą kartą (sprząta po sobie)
+python hermes/evals/run_evals.py          # evale zachowania Hermesa na żywym gatewayu (polecenia bez skutków ubocznych)
+python hermes/scripts/metrics_report.py   # metryki z historii rozmów: czasy, kroki, tokeny, model zapasowy, błędy
 ```
 
 CI (`.github/workflows/ci.yml`) przy każdym pushu: składnia JS, testy jednostkowe JS, test dymny w Chromium i testy jednostkowe Pythona (Windows).

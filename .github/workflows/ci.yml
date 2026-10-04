@@ -39,6 +39,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Zależności
-        run: python -m pip install --quiet aiohttp pytest
+        run: python -m pip install --quiet aiohttp pytest pyyaml
       - name: Testy jednostkowe Pythona (most, agenci, planista, writer)
         run: python -m pytest -m unit -v
