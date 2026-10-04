@@ -43,9 +43,10 @@ Zadziała też dowolny statyczny serwer albo `index.html` otwarty z dysku (wtedy
 
 ## Wdrożenie
 
-Workflow `.github/workflows/pages.yml` publikuje stronę na **GitHub Pages** przy każdym pushu na `main`.
-Jednorazowo: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
-Adres: `https://<użytkownik>.github.io/<repozytorium>/`.
+Na tym komputerze: zmiany strony działają po odświeżeniu karty (service worker podbija wersję), zmiany mostu i Hermesa wdraża
+`bridge\redeploy.ps1`. Publikacja na **GitHub Pages** jest ręczna: *Actions → „Wdrożenie na GitHub Pages” → Run workflow*
+(jednorazowo włącz *Settings → Pages → Source: GitHub Actions*). Wersja z Pages działa bez Hermesa Desktop — most
+przyjmuje tylko stronę z tego komputera.
 
 ## Architektura w skrócie
 
