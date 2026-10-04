@@ -41,7 +41,7 @@ const disambiguate = async (question, cands, label) => {
   return r && r.confidence >= J.judge.thresholds().execute ? cands.find(c => c.id === r.id) || null : null;
 };
 const findNote = async q => {
-  if (!q) return { err: fail('INVALID_ARGS', 'Podaj tytuł lub id notatki.') };
+  if (!q || !norm(q)) return { err: fail('INVALID_ARGS', 'Podaj tytuł lub id notatki.') };   // same spacje/znaki: norm() = '' pasowało do każdej notatki
   const notes = J.notes.live(), n = norm(q);
   let hit = notes.find(x => x.id === q); if (hit) return { note: hit };
   const byTitle = notes.filter(x => norm(x.title) === n); if (byTitle.length === 1) return { note: byTitle[0] };
@@ -56,7 +56,7 @@ const findNote = async q => {
 /* podpowiedź najbliższych nazw przy NOT_FOUND (docs/spec/13-bledy.md §1): literówki i fragmenty słów */
 const nearest = (list, q, label, k = 3) => { const sc = J.search?.score; if (!sc) return []; const n = norm(q); return list.map(x => [x, Math.max(sc(n, label(x)), ...n.split(' ').filter(w => w.length >= 4).map(w => sc(w, label(x)) * .8))]).filter(([, v]) => v >= 40).sort((a, b) => b[1] - a[1]).slice(0, k).map(([x]) => x); };
 const findTask = async q => {
-  if (!q) return { err: fail('INVALID_ARGS', 'Podaj treść lub id zadania.') };
+  if (!q || !norm(q)) return { err: fail('INVALID_ARGS', 'Podaj treść lub id zadania.') };
   const tasks = J.state.tasks, n = norm(q);
   let hit = tasks.find(x => x.id === q); if (hit) return { task: hit };
   const today = tasks.filter(t => t.date === J.today());
@@ -304,6 +304,12 @@ R.add({ id: 'add_shortcut', group: 'Pulpit i widgety', label: 'Skrót na pulpici
 R.add({ id: 'shortcut_remove', group: 'Pulpit i widgety', label: 'Usuń skrót', description: 'Usuwa skrót z pulpitu (wymaga potwierdzenia).', risk: 'confirm', writes: ['shortcuts'],
   args: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, examples: ['usun skrot {name}', 'usun ikone {name}'],
   run({ name }) { const q = norm(name), s = J.state.shortcuts.find(x => x.id === name || norm(x.name).includes(q)); if (!s) return fail('NOT_FOUND', 'Nie ma skrótu „' + name + '”.'); const idx = J.state.shortcuts.indexOf(s); J.shortcuts.remove(s.id); return ok({ id: s.id }, 'Usunąłem skrót „' + s.name + '”.', null, () => { if (!J.state.shortcuts.some(x => x.id === s.id)) { J.state.shortcuts.splice(idx, 0, s); J.save(); J.emit('shortcuts'); } }); } });
+/* precheck (registry.run): sprawdź, czy obiekt istnieje i jest jednoznaczny, ZANIM padnie pytanie o zgodę */
+const findW = q => { const n = norm(q); return n ? (J.widgets.list.find(x => x.id === q) || J.widgets.list.find(x => norm(x.title).includes(n))) : null; };
+R.get('notes_delete').precheck = async a => (await findNote(a.note)).err || null;
+R.get('tasks_remove').precheck = async a => (await findTask(a.task)).err || null;
+R.get('widgets_remove').precheck = a => findW(a.widget) ? null : fail('NOT_FOUND', 'Nie ma widgetu „' + a.widget + '”.' + (J.widgets.list.length ? ' Są: ' + J.widgets.list.slice(0, 8).map(w => '„' + w.title + '”').join(', ') + '.' : ' Na pulpicie nie ma widgetów.'));
+R.get('shortcut_remove').precheck = a => { const n = norm(a.name); return n && J.state.shortcuts.some(x => x.id === a.name || norm(x.name).includes(n)) ? null : fail('NOT_FOUND', 'Nie ma skrótu „' + a.name + '”.'); };
 R.add({ id: 'set_theme', group: 'Pulpit i widgety', label: 'Motyw kolorystyczny', description: 'Zmienia kolor akcentu interfejsu.', idempotent: true, writes: ['settings'],
   args: { type: 'object', properties: { color: { type: 'string', enum: Object.keys(J.THEMES) } }, required: ['color'] },
   examples: ['motyw {color}', 'ustaw motyw {color}', 'zmien motyw na {color}', 'kolor {color}', 'ustaw akcent {color}', 'zmien kolor na {color}', 'nastepny motyw'],

@@ -227,6 +227,9 @@ const api = J.registry = {
     const dynRisk = c.risk === 'safe' && c.writes.length && !trusted && ctx.judge && ctx.judge.destructive >= (J.judge?.thresholds().destructive ?? .8);   // Jev ocenił wypowiedź jako destrukcyjną
     /* forceConfirm (strażnik D9, wykryta wstrzyknięta treść): pytamy zawsze, także gdy narzędzie ma „Zawsze zezwalaj” */
     const forced = !!ctx.forceConfirm && ctx.source !== 'ui' && ctx.confirmed !== true;
+    /* precheck: obiekt istnieje i jest jednoznaczny ZANIM zapytamy o zgodę — wcześniej padało pytanie
+       „Usunąć widget «coś, czego nie ma»?”, a NOT_FOUND przychodził dopiero po kliknięciu */
+    if (typeof c.precheck === 'function' && c.risk === 'confirm' && !trusted) { const e = await c.precheck(args); if (e && e.ok === false) return e; }
     if (forced || ((c.risk === 'confirm' || dynRisk) && !trusted && (ctx.source === 'routine' || !api.allowed(id)) && !pre.trusted)) {   // rutyna: „zawsze zezwalaj” z czatu nie obowiązuje (11-agent.md §4)
       /* Zgoda z rozmowy (Hermes z Telegrama): tylko działania z „Cofnij”, nigdy przy wykrytej manipulacji (forced).
          Użytkownik nie przy ekranie → od razu NEEDS_CONFIRMATION (zamiast 60 s czekania na okno, którego nikt nie widzi). */

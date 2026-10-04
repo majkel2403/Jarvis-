@@ -167,6 +167,20 @@ test('aliasy pól: pomyłki modelu z prawdziwej rozmowy działają zamiast INVAL
   // brak jakiegokolwiek dopasowania → nadal czytelny błąd
   c = R.coerce('widgets_remove', { foo: 'x' }); assert.equal(c.ok, false); assert.match(c.text, /widget/);
 });
+test('usuwanie: brak obiektu → NOT_FOUND bez pytania o zgodę; same spacje nie pasują do wszystkiego', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  let asked = 0; K.confirm = async () => { asked++; return 'yes'; };
+  K.notes.add('Zakupy', 'mleko'); K.widgets.create('note', { title: 'Lista', content: '' });
+  for (const [id, args] of [['widgets_remove', { widget: 'nie-ma-takiego' }], ['notes_delete', { note: 'nie ma takiej' }], ['tasks_remove', { task: 'nie ma' }], ['shortcut_remove', { name: 'nie ma' }]]) {
+    const r = await K.registry.run(id, args, { source: 'hermes' });
+    assert.equal(r.code, 'NOT_FOUND', id + ': ' + r.text);
+  }
+  assert.equal(asked, 0, 'żadnego okna zgody dla nieistniejących rzeczy');
+  let r = await K.registry.run('notes_delete', { note: '   ' }, { source: 'hermes' });
+  assert.equal(r.code, 'INVALID_ARGS', 'same spacje nie trafiają w losową notatkę');
+  r = await K.registry.run('widgets_remove', { widget: 'Lista' }, { source: 'hermes' });   // istnieje → normalnie pyta
+  assert.equal(r.ok, true, r.text); assert.equal(asked, 1);
+});
 test('desktop_open: karta wchodzi do systemu bez kliknięcia i raportuje stan', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   let entered = 0; K.bootEnter = () => { entered++; K.booted = true; K.bootVia = 'bridge'; K.bootAt = Date.now(); K.bootEnter = null; };
