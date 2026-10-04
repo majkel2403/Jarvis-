@@ -30,3 +30,15 @@ jobs:
         run: (python3 -m http.server 8090 >/dev/null 2>&1 &) && sleep 1
       - name: Test dymny w przeglądarce
         run: node tests/e2e/smoke.js http://localhost:8090
+  python:
+    # Testy Pythona mostu bez sieci i bez venv Hermesa (integracyjne i clicker — lokalnie: python -m pytest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Zależności
+        run: python -m pip install --quiet aiohttp pytest
+      - name: Testy jednostkowe Pythona (most, agenci, planista, writer)
+        run: python -m pytest -m unit -v

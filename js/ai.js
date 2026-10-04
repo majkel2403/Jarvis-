@@ -36,7 +36,9 @@ J.hermesBudget = { used: () => hermesDay().cost, exceeded: () => { const b = +J.
 const toolFormat = () => { const s = J.state.settings; const f = s.toolFormat && s.toolFormat !== 'auto' ? s.toolFormat : (J.hermes.format || J.HERMES_PRESETS[s.hermesProvider]?.format || 'hermes'); return f === 'auto' ? 'hermes' : f; };
 J.hermes = { status: 'unknown', checked: 0, tools: [], format: null, latency: 0, lastError: '' };
 const setStatus = st => { const ch = J.hermes.status !== st; J.hermes.status = st; J.hermes.checked = Date.now(); if (ch) J.emit('hermes'); };
-const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (c.key) h.Authorization = 'Bearer ' + c.key; if (/openrouter\.ai/.test(c.url)) { h['HTTP-Referer'] = location.origin; h['X-Title'] = 'Jarvis OS'; } return h; };
+/* Hermes przez most (/bridge/v1): karta uwierzytelnia się tokenem mostu, klucz gatewaya dokłada most — nie ma go w przeglądarce. */
+J.viaBridge = url => /\/bridge\/v1$/.test(String(url || '').replace(/\/+$/, ''));
+const headers = () => { const c = cfg(), h = { 'Content-Type': 'application/json' }; if (J.viaBridge(c.url)) h['X-Bridge-Token'] = J.state.settings.bridgeToken || ''; else if (c.key) h.Authorization = 'Bearer ' + c.key; if (/openrouter\.ai/.test(c.url)) { h['HTTP-Referer'] = location.origin; h['X-Title'] = 'Jarvis OS'; } return h; };
 /* X-Hermes-Session-Key nie jest wysyłany: Hermes 0.21 nie ma go w Access-Control-Allow-Headers, więc preflight z przeglądarki się nie udaje.
    Tryb MCP: Hermes ma natywne narzędzia pulpitu przez most (bridge/jarvis_bridge.py) i sam prowadzi pętlę narzędzi.
    „auto” = most połączony ORAZ ten profil Hermesa faktycznie z niego korzysta (most widzi go po nagłówku X-Jarvis-Profile). */

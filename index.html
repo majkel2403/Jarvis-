@@ -2,6 +2,8 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<!-- CSP: skrypty wyłącznie z plików strony (żaden wstrzyknięty HTML nie uruchomi kodu); połączenia: ta strona, most i usługi lokalne, HTTPS -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Jarvis OS</title>
 <meta name="description" content="Jarvis OS — wirtualne środowisko AI w przeglądarce: agent głosowy, pulpit HUD, okna, notatki, rynek, pogoda, terminal.">

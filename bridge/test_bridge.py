@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import aiohttp
+from aiohttp import web
 import httpx2
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -43,7 +44,7 @@ async def fake_browser(seen, stop):
                 elif line.startswith("data:") and event == "cmd":
                     cmd = json.loads(line[5:])
                     seen.setdefault("cmds", []).append(cmd)
-                    if cmd["name"] == "boom":
+                    if cmd["name"] == "boom" or (cmd.get("args") or {}).get("title") == "__fail__":
                         res = {"id": cmd["id"], "ok": False, "text": "Nie ma takiego okna"}
                     elif cmd["name"] == "slow":
                         continue
@@ -76,14 +77,39 @@ async def sse_client(respond, info):
                             await s.post(f"{BASE}/bridge/result", json={"id": data["id"], "ok": True, "text": "odp z widocznej"}, headers={"X-Bridge-Token": TOKEN})
 
 
+async def fake_gateway(seen_gw):
+    """Udaje gateway Hermesa: zapamiętuje nagłówek Authorization, odpowiada strumieniem SSE."""
+    async def chat(request):
+        seen_gw["auth"] = request.headers.get("Authorization")
+        seen_gw["body"] = await request.json()
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
+        await resp.prepare(request)
+        await resp.write(b'data: {"choices":[{"delta":{"content":"cze"}}]}\n\n')
+        await resp.write(b"data: [DONE]\n\n")
+        return resp
+    async def models(request):
+        seen_gw["auth_models"] = request.headers.get("Authorization")
+        return web.json_response({"data": [{"id": "jarvis-desktop"}]})
+    app = web.Application()
+    app.router.add_post("/v1/chat/completions", chat)
+    app.router.add_get("/v1/models", models)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", PORT + 1).start()
+    return runner
+
+
 async def main():
+    seen_gw: dict = {}
+    gw_runner = await fake_gateway(seen_gw)
     tools_copy = Path(tempfile.mkdtemp()) / "tools.json"
     tools_copy.write_text((HERE / "tools.json").read_text(encoding="utf-8"), encoding="utf-8")
     expected = json.loads(tools_copy.read_text(encoding="utf-8"))
     tmp = Path(tempfile.mkdtemp())
     (tmp / "hermes.env").write_text("API_SERVER_KEY=hermes-test-key\n", encoding="utf-8")
     env = dict(os.environ, JARVIS_BRIDGE_TOKEN=TOKEN, JARVIS_BRIDGE_PORT=str(PORT), JARVIS_BRIDGE_CALL_TIMEOUT="3", JARVIS_BRIDGE_TOOLS_FILE=str(tools_copy),
-               JARVIS_HERMES_ENV=str(tmp / "hermes.env"), JARVIS_TASKLOG=str(tmp / "tasks.jsonl"))
+               JARVIS_HERMES_ENV=str(tmp / "hermes.env"), JARVIS_TASKLOG=str(tmp / "tasks.jsonl"),
+               JARVIS_HERMES_URL=f"http://127.0.0.1:{PORT + 1}/v1")
     proc = subprocess.Popen([sys.executable, str(HERE / "jarvis_bridge.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         async with httpx2.AsyncClient() as hc:
@@ -101,7 +127,16 @@ async def main():
             check("/bridge/hermes bez tokenu = 401", (await hc.get(f"{BASE}/bridge/hermes", headers={"Origin": "http://localhost:4000"})).status_code == 401)
             check("/bridge/hermes z obcej strony = 401", (await hc.get(f"{BASE}/bridge/hermes", headers={"Origin": "https://zla.example", "X-Bridge-Token": TOKEN})).status_code == 401)
             hj = (await hc.get(f"{BASE}/bridge/hermes", headers=H)).json()
-            check("/bridge/hermes: adres, model i klucz jarvis-desktop", hj.get("key") == "hermes-test-key" and hj.get("model") == "jarvis-desktop" and hj.get("url", "").endswith("/v1"), str(hj))
+            check("/bridge/hermes: adres pośrednika i model, BEZ klucza gatewaya", hj.get("key") == "" and hj.get("proxy") is True and hj.get("model") == "jarvis-desktop" and hj.get("url", "").endswith("/bridge/v1"), str(hj))
+            print("Pośrednik Hermesa (/bridge/v1)")
+            check("/bridge/v1 bez tokenu = 401", (await hc.post(f"{BASE}/bridge/v1/chat/completions", json={}, headers={"Origin": "http://localhost:4000"})).status_code == 401)
+            check("/bridge/v1 z obcej strony = 401", (await hc.post(f"{BASE}/bridge/v1/chat/completions", json={}, headers={"Origin": "https://zla.example", "X-Bridge-Token": TOKEN})).status_code == 401)
+            pr = await hc.post(f"{BASE}/bridge/v1/chat/completions", json={"model": "jarvis-desktop", "stream": True, "messages": [{"role": "user", "content": "hej"}]}, headers=H)
+            check("/bridge/v1/chat/completions: strumień z gatewaya", pr.status_code == 200 and "[DONE]" in pr.text and "cze" in pr.text, pr.text[:200])
+            check("klucz gatewaya dokłada most (nie przeglądarka)", seen_gw.get("auth") == "Bearer hermes-test-key" and seen_gw.get("body", {}).get("messages", [{}])[0].get("content") == "hej", str(seen_gw.get("auth")))
+            check("CORS dla karty na odpowiedzi pośrednika", pr.headers.get("access-control-allow-origin") == "http://localhost:4000")
+            pm = await hc.get(f"{BASE}/bridge/v1/models", headers=H)
+            check("/bridge/v1/models", pm.status_code == 200 and seen_gw.get("auth_models") == "Bearer hermes-test-key", pm.text[:120])
             check("/bridge/tasklog bez tokenu = 401", (await hc.post(f"{BASE}/bridge/tasklog", json={"text": "x"})).status_code == 401)
             await hc.post(f"{BASE}/bridge/tasklog", json={"ts": 1, "text": "otwórz youtube i puść", "route": "local", "fail": "pół zadania (odmowa)", "evil": "x"}, headers={"X-Bridge-Token": TOKEN})
             rec = json.loads((tmp / "tasks.jsonl").read_text(encoding="utf-8").splitlines()[-1])
@@ -167,15 +202,19 @@ async def main():
 
                     print("\nRejestr z przeglądarki")
                     async with httpx2.AsyncClient() as hc4:
-                        extra = expected + [{"name": "boom", "description": "test", "parameters": {"type": "object", "properties": {}}}]
+                        fresh = [dict(t, description=t["description"] + " (nowy opis z karty)") if i == 0 else t for i, t in enumerate(expected)]
+                        extra = fresh + [{"name": "boom", "description": "test", "parameters": {"type": "object", "properties": {}}}]
                         rr = (await hc4.post(f"{BASE}/bridge/tools", json={"tools": extra}, headers={"X-Bridge-Token": TOKEN})).json()
-                        check("POST /bridge/tools aktualizuje listę", rr.get("changed") is True and rr.get("tools") == len(extra), json.dumps(rr))
+                        check("POST /bridge/tools aktualizuje opisy narzędzi z migawki", rr.get("changed") is True and rr.get("tools") == len(expected), json.dumps(rr))
+                        check("karta NIE dopisze nowego narzędzia (kanał prompt-injection)", "boom" not in [t.name for t in (await session.list_tools()).tools])
                         check("POST /bridge/tools bez tokenu = 401", (await hc4.post(f"{BASE}/bridge/tools", json={"tools": extra})).status_code == 401)
-                        old_tab = [t for t in extra if t["name"] != expected[0]["name"]]   # karta ze starym kodem: brakuje narzędzia z aktualnej migawki
+                        old_tab = [t for t in fresh if t["name"] != expected[0]["name"]]   # karta ze starym kodem: brakuje narzędzia z aktualnej migawki
                         rs = (await hc4.post(f"{BASE}/bridge/tools", json={"tools": old_tab}, headers={"X-Bridge-Token": TOKEN})).json()
-                        check("stara karta nie wypiera nowych narzędzi (stale, lista bez zmian)", rs.get("stale") is True and rs.get("changed") is False and rs.get("tools") == len(extra) and expected[0]["name"] in rs.get("missing", []), json.dumps(rs)[:200])
-                    check("migawka zapisana na dysk", any(t["name"] == "boom" for t in json.loads(tools_copy.read_text(encoding="utf-8"))))
-                    r = await session.call_tool("boom", {})
+                        check("stara karta nie wypiera nowych narzędzi (stale, lista bez zmian)", rs.get("stale") is True and rs.get("changed") is False and rs.get("tools") == len(expected) and expected[0]["name"] in rs.get("missing", []), json.dumps(rs)[:200])
+                    runtime = tools_copy.with_name(tools_copy.stem + ".runtime.json")
+                    check("schematy z karty w pliku roboczym", runtime.exists() and "(nowy opis z karty)" in runtime.read_text(encoding="utf-8"))
+                    check("migawka w repo nietknięta", json.loads(tools_copy.read_text(encoding="utf-8")) == expected)
+                    r = await session.call_tool("create_widget", {"type": "note", "title": "__fail__"})
                     check("błąd z pulpitu -> is_error z kodem", r.is_error and json.loads(r.content[0].text).get("ok") is False, str(r))
 
                     print("\nWykrywanie profilu Hermesa")
@@ -213,6 +252,7 @@ async def main():
             proc.wait(5)
         except subprocess.TimeoutExpired:
             proc.kill()
+        await gw_runner.cleanup()
     print("\n" + ("WSZYSTKO OK" if not fails else f"BŁĘDY ({len(fails)}): " + ", ".join(fails)))
     sys.exit(1 if fails else 0)
 

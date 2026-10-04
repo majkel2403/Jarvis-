@@ -23,8 +23,9 @@ J.tabChannel = (() => {
     ch?.postMessage({ type: 'claim', id });
     clearInterval(heartT);
     heartT = setInterval(() => ch?.postMessage({ type: 'heartbeat', id }), 3000);
+    J.emit?.('tab-role', 'primary');
   };
-  const release = () => { primary = false; clearInterval(heartT); };
+  const release = () => { primary = false; clearInterval(heartT); J.emit?.('tab-role', 'preview'); };
   const showViewer = () => {
     setReadonly(true);   // najpierw stop zapisu, potem UI — żadnego okna, w którym dwie karty piszą naraz
     if (document.getElementById('tab-viewer')) return;

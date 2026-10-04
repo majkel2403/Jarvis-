@@ -5,6 +5,7 @@
 window.JARVIS_CONFIG = {
   jevKey: 'sk-or-v1-…',        // klucz OpenRouter (openrouter.ai/keys) — sędzia Jev
   jevOn: true,
-  // hermesKey: '…', hermesUrl: 'http://localhost:8642/v1', hermesModel: 'hermes-agent',
+  // Hermes Desktop konfiguruje się sam przez most (bridgeOn: true) — klucza gatewaya NIE wpisuj tutaj ani w przeglądarce.
+  // Własny serwer bez mostu: hermesUrl: 'http://localhost:8642/v1', hermesModel: 'hermes-agent', hermesKey: '…',
   // city: 'Wrocław', user: 'JD'
 };

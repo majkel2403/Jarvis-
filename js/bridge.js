@@ -65,15 +65,18 @@ async function ensureHermes(why) {
   const s = S();
   if (s.offlineMode || !S().bridgeToken || Date.now() - hermesTried < 60000) return false;
   if (!['agent', 'desktop', '', undefined].includes(s.hermesProvider)) return false;
-  const unset = !s.hermesKey || /:8642\b/.test(s.hermesUrl || '') || !s.hermesUrl;
+  /* direct = karta rozmawia z gatewayem bezpośrednio, z kluczem w localStorage (sprzed 2026-10-04) — przejdź na most */
+  const direct = !J.viaBridge?.(s.hermesUrl) && /\/\/(localhost|127\.0\.0\.1):8643\b/.test(s.hermesUrl || '');
+  const unset = (!s.hermesKey && !J.viaBridge?.(s.hermesUrl)) || /:8642\b/.test(s.hermesUrl || '') || !s.hermesUrl || direct;
   if (!unset && J.hermes.status !== 'down') return false;
   hermesTried = Date.now();
   try {
     const r = await fetch(base() + '/bridge/hermes', { headers: auth(), signal: AbortSignal.timeout(5000) });
     if (!r.ok) return false;
-    const j = await r.json(); if (!j.url || !j.key) return false;
-    if (s.hermesUrl === j.url && s.hermesKey === j.key && s.hermesModel === j.model && s.hermesOn) return false;
-    Object.assign(s, { hermesProvider: j.preset || 'desktop', hermesUrl: j.url, hermesModel: j.model, hermesKey: j.key, hermesOn: true });
+    const j = await r.json(); if (!j.url || (!j.key && !j.proxy)) return false;
+    const key = j.proxy ? '' : j.key;   // most-pośrednik: klucza nie ma i nie powinno być w przeglądarce
+    if (s.hermesUrl === j.url && s.hermesKey === key && s.hermesModel === j.model && s.hermesOn) return false;
+    Object.assign(s, { hermesProvider: j.preset || 'desktop', hermesUrl: j.url, hermesModel: j.model, hermesKey: key, hermesOn: true });
     J.save(); J.emit('settings'); J.brain?.reset?.();
     J.log('Hermes połączony automatycznie', 'Profil ' + j.model + ' (' + j.url + ') — ustawienie wzięte z mostu (' + why + ')', 'info');
     J.toast?.('Połączono z Hermesem (' + j.model + ')', 4000);
@@ -87,8 +90,14 @@ J.on('hermes', () => { if (J.hermes.status === 'down' && J.bridge.connected) ens
 const busyNow = () => !!document.querySelector('.orb.thinking, #orb.thinking') || J.orb?.state === 'thinking';
 
 const safe = v => { try { return JSON.parse(JSON.stringify(v ?? null)); } catch (e) { return null; } };
+/* karta w trybie podglądu (druga karta) ma wyłączony zapis — nie może wykonywać poleceń Hermesa, bo zmiana zniknęłaby po odświeżeniu */
+const previewTab = () => J.tabChannel?.primary === false;
 async function handle(cmd) {
   let r;
+  if (previewTab()) {
+    try { await fetch(base() + '/bridge/result', { method: 'POST', headers: auth(), body: JSON.stringify({ id: cmd.id, ok: false, code: 'OFFLINE', data: null, text: 'Ta karta Jarvis OS jest w trybie podglądu — polecenia wykonuje karta główna.' }) }); } catch (e) { }
+    return;
+  }
   J.bootEnter?.();   // karta stoi na ekranie „Kliknij, aby wejść” — wejdź, inaczej okno zgody jest niewidoczne pod zasłoną
   try { r = await J.brain.run(cmd.name, cmd.args || {}, { source: 'hermes', bridge: true }); }   // bridge: polecenie przyszło z mostu (Telegram/API), nie z czatu w tej karcie
   catch (e) { r = { ok: false, code: 'INTERNAL', text: 'Błąd pulpitu: ' + e.message, data: null }; }
@@ -101,9 +110,10 @@ async function handle(cmd) {
 /* zgłaszamy mostowi, czy ta karta jest widoczna — polecenia trafiają do aktywnej karty, nie do „najnowszej” */
 const reportFocus = () => {
   if (!myId || !S().bridgeToken) return;
-  fetch(base() + '/bridge/focus', { method: 'POST', headers: auth(), body: JSON.stringify({ client: myId, visible: document.visibilityState === 'visible' && document.hasFocus() }) }).catch(() => { });
+  fetch(base() + '/bridge/focus', { method: 'POST', headers: auth(), body: JSON.stringify({ client: myId, visible: document.visibilityState === 'visible' && document.hasFocus() && !previewTab() }) }).catch(() => { });
 };
 document.addEventListener('visibilitychange', reportFocus); addEventListener('focus', reportFocus); addEventListener('blur', reportFocus);
+J.on('tab-role', reportFocus);   // karta przejęła rolę główną albo przeszła w podgląd (js/main.js)
 
 function disconnect(quiet) {
   clearTimeout(retryTimer); clearInterval(pollTimer);

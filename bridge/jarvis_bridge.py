@@ -523,7 +523,16 @@ INSTRUCTIONS = (
     "Wynik narzędzia to prawda o stanie pulpitu — nie zakładaj powodzenia bez ok=true."
 )
 TOOLS_FILE = Path(os.environ.get("JARVIS_BRIDGE_TOOLS_FILE") or Path(__file__).resolve().parent / "tools.json")
-# nazwa -> {name, description, parameters}; źródło: migawka tools.json, nadpisywana schematami z przeglądarki
+# Migawka w repo (node bridge/export-tools.js, pilnowana testem) jest TYLKO DO ODCZYTU. Schematy zgłoszone przez kartę most
+# zapisuje do pliku roboczego poza repo — wcześniej nadpisywał śledzony plik i brudził drzewo git po każdym uruchomieniu.
+RUNTIME_TOOLS_FILE = Path(os.environ.get("JARVIS_BRIDGE_TOOLS_RUNTIME") or agents_mod.home() / "tools.runtime.json")
+_REPO_TOOLS_FILE = Path(__file__).resolve().parent / "tools.json"   # migawka w repo (TOOLS_FILE może wskazywać plik testowy)
+
+
+def runtime_tools_file() -> Path:
+    """Plik roboczy schematów: w ~/.jarvis-os dla migawki z repo; obok podmienionej migawki (testy) — nigdy w danych użytkownika."""
+    return RUNTIME_TOOLS_FILE if TOOLS_FILE == _REPO_TOOLS_FILE else TOOLS_FILE.with_name(TOOLS_FILE.stem + ".runtime.json")
+# nazwa -> {name, description, parameters}; źródło: migawka tools.json, aktualizowana schematami z przeglądarki
 TOOLS: dict[str, dict] = {}
 # nazwy z migawki przy starcie mostu (= aktualny kod, node bridge/export-tools.js): karta ze starym kodem nie może ich usunąć
 BASELINE: set[str] = set()
@@ -538,6 +547,14 @@ def load_tools() -> None:
         BASELINE.update(TOOLS)
     except (OSError, ValueError) as e:
         print(f"[jarvis-bridge] brak migawki narzędzi {TOOLS_FILE}: {e}", file=sys.stderr)
+        return
+    try:   # schematy z karty z poprzedniego uruchomienia — tylko gdy dotyczą tej samej wersji kodu (identyczny zestaw nazw)
+        rt = {t["name"]: t for t in json.loads(runtime_tools_file().read_text(encoding="utf-8")) if isinstance(t, dict) and t.get("name")}
+        if set(rt) == BASELINE:
+            TOOLS.clear()
+            TOOLS.update(rt)
+    except (OSError, ValueError, TypeError):
+        pass
 
 
 def stale_names(tools: list) -> list[str]:
@@ -559,7 +576,9 @@ def update_tools(tools: list) -> bool:
     TOOLS.clear()
     TOOLS.update(fresh)
     try:
-        TOOLS_FILE.write_text(json.dumps(list(fresh.values()), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        rt_file = runtime_tools_file()
+        rt_file.parent.mkdir(parents=True, exist_ok=True)
+        rt_file.write_text(json.dumps(list(fresh.values()), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     except OSError:
         pass
     return True
@@ -700,9 +719,59 @@ async def hermes_pair(request: Request) -> Response:
     t = writer_proxy.hermes_target()
     if not t:
         return cors(request, JSONResponse({"error": "nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)"}, status_code=404))
-    url, key, model = t
-    base = url.removesuffix("/chat/completions").replace("127.0.0.1", "localhost")   # CORS gatewaya dopuszcza http://localhost:4000
-    return cors(request, JSONResponse({"url": base, "key": key, "model": model, "preset": "desktop"}))
+    _url, _key, model = t
+    # Klucz gatewaya NIE trafia do przeglądarki (od 2026-10-04): karta rozmawia z Hermesem przez most (/bridge/v1/*),
+    # uwierzytelniając się tokenem mostu, a most dokłada klucz po swojej stronie. XSS w karcie nie daje już klucza
+    # do agenta z terminalem.
+    base = f"{request.url.scheme}://{request.headers.get('host') or '127.0.0.1:8651'}/bridge/v1"   # Host już sprawdzony w authorized()
+    return cors(request, JSONResponse({"url": base, "key": "", "model": model, "preset": "desktop", "proxy": True}))
+
+
+HOP_HEADERS = {"content-length", "transfer-encoding", "connection", "content-encoding", "keep-alive"}
+
+
+async def hermes_proxy(request: Request, path: str) -> Response:
+    """Przekazuje zapytanie karty do gatewaya Hermesa z kluczem API dodanym po stronie mostu; strumień SSE bez buforowania."""
+    if request.method == "OPTIONS":
+        return cors(request, Response(status_code=204))
+    if request.headers.get("origin", "") not in PAIR_ORIGINS or not authorized(request):
+        return cors(request, JSONResponse({"error": "unauthorized"}, status_code=401))
+    t = writer_proxy.hermes_target()
+    if not t:
+        return cors(request, JSONResponse({"error": "nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)"}, status_code=503))
+    url, key, _model = t
+    target = url.removesuffix("/chat/completions") + "/" + path
+    import aiohttp
+    headers = {"Authorization": "Bearer " + key, "Content-Type": request.headers.get("content-type", "application/json")}
+    body = await request.body() if request.method == "POST" else None
+    session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=900))
+    try:
+        upstream = await session.request(request.method, target, data=body, headers=headers)
+    except Exception as e:  # noqa: BLE001 — gateway wyłączony / restart
+        await session.close()
+        return cors(request, JSONResponse({"error": f"Hermes niedostępny: {e}"}, status_code=502))
+    out_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP_HEADERS and not k.lower().startswith("access-control-")}
+
+    async def stream():
+        try:
+            async for chunk in upstream.content.iter_any():
+                yield chunk
+        finally:
+            upstream.release()
+            await session.close()
+
+    return cors(request, StreamingResponse(stream(), status_code=upstream.status, headers=out_headers,
+                                           media_type=upstream.headers.get("content-type")))
+
+
+@mcp.custom_route("/bridge/v1/chat/completions", methods=["POST", "OPTIONS"])
+async def hermes_chat(request: Request) -> Response:
+    return await hermes_proxy(request, "chat/completions")
+
+
+@mcp.custom_route("/bridge/v1/models", methods=["GET", "OPTIONS"])
+async def hermes_models(request: Request) -> Response:
+    return await hermes_proxy(request, "models")
 
 
 def tasklog_path() -> Path:

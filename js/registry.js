@@ -234,16 +234,18 @@ const api = J.registry = {
       /* Zgoda z rozmowy (Hermes z Telegrama): tylko działania z „Cofnij”, nigdy przy wykrytej manipulacji (forced).
          Użytkownik nie przy ekranie → od razu NEEDS_CONFIRMATION (zamiast 60 s czekania na okno, którego nikt nie widzi). */
       const viaChat = ctx.source === 'hermes' && !forced && !dynRisk && api.chatConfirmable(c);
+      const askInChat = () => fail('NEEDS_CONFIRMATION', 'Użytkownika nie ma przy pulpicie, więc okno zgody nic nie da. Zapytaj go w rozmowie (np. clarify) o dokładnie to działanie: „' + (typeof c.confirmText === 'function' ? c.confirmText(args) : c.label) + '”. Po wyraźnym „tak” wywołaj ' + id + ' ponownie z tymi samymi argumentami i ' + CHAT_FLAG + '=true. Działanie da się cofnąć.');
       if (viaChat && chatOk) {
         J.notice?.({ title: 'Wykonano na podstawie zgody z rozmowy', body: c.label + (Object.keys(args).length ? ': ' + Object.values(args).filter(x => typeof x !== 'object').join(', ').slice(0, 80) : '') + ' — można cofnąć („cofnij”).', kind: 'agent' });
         J.ev?.emit('approval.resolved', { answer: 'chat', tool: id });
       } else if (viaChat && ctx.bridge && !userAtScreen()) {
-        return fail('NEEDS_CONFIRMATION', 'Użytkownika nie ma przy pulpicie, więc okno zgody nic nie da. Zapytaj go w rozmowie (np. clarify) o dokładnie to działanie: „' + (typeof c.confirmText === 'function' ? c.confirmText(args) : c.label) + '”. Po wyraźnym „tak” wywołaj ' + id + ' ponownie z tymi samymi argumentami i ' + CHAT_FLAG + '=true. Działanie da się cofnąć.');
+        return askInChat();
       } else {
       if (!J.confirm) return fail('DENIED', 'Brak możliwości potwierdzenia.');
       const q = forced ? String(ctx.forceConfirm) : typeof c.confirmText === 'function' ? c.confirmText(args) : (c.confirmText || ('Wykonać: ' + c.label + '?')) + (dynRisk ? ' (Jev: działanie może być nieodwracalne)' : '');
       const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
       if (dec === 'always' && !forced) api.allowAlways(id);
+      else if (dec === 'timeout' && viaChat && ctx.bridge) return askInChat();   // okno było, nikt nie kliknął — użytkownik odszedł; zapytaj w rozmowie zamiast odmawiać
       else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' + (viaChat ? ' Jeśli rozmawiasz z nim zdalnie: zapytaj w rozmowie i wywołaj ponownie z ' + CHAT_FLAG + '=true.' : '') : 'Użytkownik odmówił.');
       ctx = { ...ctx, approved: true };   // użytkownik zatwierdził w oknie zgody (osobny znacznik: „confirmed” znaczy „zatwierdzone ZANIM rejestr zapytał” — agents.js na tym polega)
       }
