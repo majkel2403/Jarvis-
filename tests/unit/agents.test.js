@@ -3,7 +3,7 @@
    Bez sieci: fetch to atrapa mostu; okna zgody (J.confirm) i pytań (J.ask) też. */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('../harness.js');
+const { load, refShort } = require('../harness.js');
 
 const bridge = handlers => {
   const calls = [];
@@ -24,6 +24,7 @@ const setup = (handlers = {}, { token = 't', confirm = 'yes', ask = 1 } = {}) =>
   J.confirm = async req => { prompts.push({ kind: 'confirm', ...req }); return confirm; };
   J.ask = async (q, opts) => { prompts.push({ kind: 'ask', q, opts }); return ask; };
   J.toast = () => { }; J.agents.tuning.pollMs = 5; J.agents.tuning.unitMs = 20;
+  J.__ctx.setTimeout = refShort;   // odpytywanie agenta (sleep 5 ms) musi podtrzymać pętlę zdarzeń — Node 22 kończył test przed wynikiem
   return { J, calls: b.calls, prompts };
 };
 const en = (J, s) => J.agents.toEnglish(s);
