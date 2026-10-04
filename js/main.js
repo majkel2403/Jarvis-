@@ -123,7 +123,14 @@ const fx = (() => {
     pts = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .35, vy: (Math.random() - .5) * .35, r: Math.random() * 1.6 + .4 }));
   };
   addEventListener('resize', resize); resize();
+  /* spoczynek: brak zadania, Orb bezczynny i 15 s bez ruchu myszy/klawiatury → rysujemy co 3. klatkę (~20/s zamiast 60/s);
+     każda aktywność albo zadanie przywraca pełną płynność. Licznik FPS dalej liczy wszystkie klatki (adapt() nie obniża jakości). */
+  let activeAt = performance.now(), tick = 0;
+  const wake = () => { activeAt = performance.now(); };
+  addEventListener('keydown', wake, { passive: true }); addEventListener('wheel', wake, { passive: true }); addEventListener('pointerdown', wake, { passive: true });
+  const resting = () => J.engine?.mode === 'IDLE' && !J.engine?.taskId && performance.now() - activeAt > 15000;
   addEventListener('pointermove', e => {
+    wake();
     mouse.x = e.clientX; mouse.y = e.clientY;
     const wp = $('#wallpaper'); if (wp) wp.style.transform = `translate(${(e.clientX / W - .5) * -18}px,${(e.clientY / H - .5) * -12}px) scale(1.02)`;
   });
@@ -139,6 +146,7 @@ const fx = (() => {
     if (document.hidden) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle nic nie rysujemy
     frames++;
     if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
+    if (++tick % 3 && resting()) { requestAnimationFrame(loop); return; }
     c.clearRect(0, 0, W, H);
     const LOW = J.quality === 'low';
     if (S.particles && !LOW && J.fx.rank() >= 2 && !$('#app').classList.contains('focus')) {
