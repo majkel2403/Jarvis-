@@ -7,7 +7,9 @@ ogranicza tylko kanał api_server (platform_toolsets.api_server).
 Uruchamiaj Pythonem z venv Hermesa (ma PyYAML):
   %USERPROFILE%\\.hermes\\hermes-agent\\venv\\Scripts\\python.exe hermes\\apply_profile.py --home %USERPROFILE%\\.hermes --name jarvis-desktop
 
-Zmienia WYŁĄCZNIE profil docelowy: config.yaml (z kopią zapasową), .env, SOUL.md.
+Zmienia WYŁĄCZNIE profil docelowy: config.yaml (z kopią zapasową; docelowe ustawienia z TARGET), .env, SOUL.md, scripts/,
+bloki generowane w skillu jarvis-os-management oraz HERMES.md w katalogu roboczym (JarvisWorkspace, tworzony z własnym .git).
+Skrypt jest idempotentny: ponowne uruchomienie daje ten sam stan, a strażnik (scripts/config_guard.py) sprawdza go codziennie.
 """
 from __future__ import annotations
 
@@ -33,6 +35,99 @@ HERE = Path(__file__).resolve().parent
 ENABLED = ["browser", "clarify", "code_execution", "computer_use", "connections", "cronjob", "delegation",
            "file", "memory", "session_search", "skills", "terminal", "todo", "vision", "web", "jarvis_desktop"]
 ORIGINS = "http://localhost:4000,http://127.0.0.1:4000"   # bez github.io: gateway ma pełne narzędzia (terminal, pliki) — tylko strona z tego komputera
+
+# Katalog roboczy Hermesa: własne repo git (izolacja od C:\.git — inaczej cały dysk jest „projektem”), tu leży HERMES.md.
+WORKSPACE = Path.home() / "JarvisWorkspace"
+
+# Docelowa konfiguracja (audyt 2026-10-04, docs/adr/0002). Klucze kropkowane = ścieżka w config.yaml. Strażnik (scripts/config_guard.py) sprawdza to samo.
+TARGET = {
+    "compression.threshold_tokens": 120000,      # streszczanie przy ~120 tys. tokenów (bez tego: ~500 tys. przy oknie 1 mln; fallback M2.5 ma 205 tys.)
+    "session_reset.idle_minutes": 120,           # świeża sesja po 2 h ciszy (długie wątki = wolniej i więcej pomyłek)
+    "memory.nudge_interval": 0,                  # bez zapisów pamięci „w tle” (wpisywały rozkazy zamiast faktów)
+    "kanban.dispatch_in_gateway": False,         # kanban nieużywany
+    "kanban.auto_decompose": False,
+    "delegation.max_concurrent_children": 3,     # limit tokenów MiniMax (429) — 10 równoległych dzieci to za dużo
+    "auxiliary.vision.provider": "minimax",      # „auto” mogło wybrać płatnego dostawcę
+    "auxiliary.vision.model": "MiniMax-M3",
+}
+PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "rtk-rewrite", "security-guidance", "web/ddgs"]
+# superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
+# skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
+PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
+REMOVE_KEYS = ["moa", "agent.personalities", "plugins.hermes-memory-store"]
+# Bez stałej zgody na operacje niszczące — te zawsze ocenia tryb smart albo pyta użytkownika.
+# (Uruchamianie skryptów -c/heredoc użytkownik zatwierdził „zawsze” na Telegramie 2026-10-04 07:31 — jego decyzja, nie ruszamy.)
+DANGEROUS_ALLOW = {"force kill processes (Stop-Process -Force)", "force kill processes (taskkill /F)", "recursive delete"}
+ENV_DROP = ("TELEGRAM_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS")   # tylko lista TELEGRAM_ALLOWED_USERS
+
+
+def set_path(cfg: dict, dotted: str, value) -> None:
+    *parents, leaf = dotted.split(".")
+    node = cfg
+    for p in parents:
+        if not isinstance(node.get(p), dict):
+            node[p] = {}
+        node = node[p]
+    node[leaf] = value
+
+
+def drop_path(cfg: dict, dotted: str) -> bool:
+    *parents, leaf = dotted.split(".")
+    node = cfg
+    for p in parents:
+        node = node.get(p) if isinstance(node, dict) else None
+        if not isinstance(node, dict):
+            return False
+    return node.pop(leaf, None) is not None
+
+
+def apply_target(cfg: dict) -> list[str]:
+    """Docelowe ustawienia profilu (idempotentnie). Zwraca listę zmian do wypisania."""
+    changes = []
+    for dotted, value in TARGET.items():
+        cur = cfg
+        for p in dotted.split("."):
+            cur = cur.get(p) if isinstance(cur, dict) else None
+        if cur != value:
+            set_path(cfg, dotted, value)
+            changes.append(f"{dotted}={value}")
+    terminal = cfg.setdefault("terminal", {})
+    if terminal.get("cwd") != str(WORKSPACE):
+        terminal["cwd"] = str(WORKSPACE)
+        changes.append(f"terminal.cwd={WORKSPACE}")
+    plugins = cfg.setdefault("plugins", {})
+    if plugins.get("enabled") != PLUGINS_ENABLED or plugins.get("disabled") != PLUGINS_DISABLED:
+        plugins["enabled"], plugins["disabled"] = list(PLUGINS_ENABLED), list(PLUGINS_DISABLED)
+        changes.append("plugins.enabled/disabled")
+    entries = plugins.get("entries") or {}
+    for name in PLUGINS_DISABLED:
+        if entries.pop(name, None) is not None:
+            changes.append(f"plugins.entries.{name} usunięty")
+    for dotted in REMOVE_KEYS:
+        if drop_path(cfg, dotted):
+            changes.append(f"{dotted} usunięty")
+    allow = cfg.get("command_allowlist") or []
+    kept = [x for x in allow if x not in DANGEROUS_ALLOW]
+    if kept != allow:
+        cfg["command_allowlist"] = kept
+        changes.append(f"command_allowlist: −{len(allow) - len(kept)} niebezpiecznych")
+    return changes
+
+
+def ensure_workspace() -> None:
+    """Katalog roboczy z własnym .git (granica wyszukiwania HERMES.md/AGENTS.md przez Hermesa)."""
+    import subprocess
+    WORKSPACE.mkdir(exist_ok=True)
+    if not (WORKSPACE / ".git").exists():
+        subprocess.run(["git", "init", "-q", str(WORKSPACE)], check=True)
+    gi = WORKSPACE / ".gitignore"
+    if not gi.exists():
+        gi.write_text("# Katalog roboczy Hermesa — wersjonowane są tylko pliki dodane świadomie\n.out/\n.bak/\n*.tmp\n", encoding="utf-8")
+    readme = WORKSPACE / "README.md"
+    if not readme.exists():
+        readme.write_text("# JarvisWorkspace\n\nKatalog roboczy Hermesa (profil jarvis-desktop, `terminal.cwd`). "
+                          "`HERMES.md` jest kopiowany z repozytorium Jarvis OS (`hermes/HERMES.md`) przez `hermes/apply_profile.py` — nie edytuj kopii.\n",
+                          encoding="utf-8")
 
 
 CHEAT_TOOLS = ["desktop_open", "desktop_screenshot", "get_status", "open_app", "close_app", "wm_list", "wm_focus", "wm_arrange", "wm_minimize",
@@ -173,8 +268,10 @@ def main() -> int:
     pt = cfg.setdefault("platform_toolsets", {})
     pt["api_server"] = list(ENABLED)
     set_guard_hook(cfg, guard_hook_command(pdir))
+    changes = apply_target(cfg)
 
     env = read_env(env_path)
+    env = [ln for ln in env if not any(re.match(rf"^\s*{k}\s*=", ln) for k in ENV_DROP)]
     # Najmniejsze uprawnienia: usuń sekrety kanałów, których ten profil nie obsługuje (Telegram ZOSTAJE — to kanał tego profilu).
     drop = re.compile(r"^\s*(WHATSAPP|DISCORD|SLACK|MATRIX|MATTERMOST|SIGNAL|EMAIL|NOTION|HERMES_DASHBOARD|BROWSERBASE|OBSIDIAN|TERMINAL_MODAL)_\w*\s*=")
     scrubbed = sorted({ln.split("=")[0].strip() for ln in env if drop.match(ln)})
@@ -194,6 +291,7 @@ def main() -> int:
     print(f"  platform_toolsets.api_server -> {ENABLED}")
     print(f"  API: http://127.0.0.1:{a.port}/v1  (model: {a.name})")
     print(f"  .env: usunięto zbędne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or '—'}")
+    print(f"  konfiguracja docelowa: {', '.join(changes) or 'bez zmian'}")
     if a.dry_run:
         print("(dry-run: nic nie zapisano)")
         return 0
@@ -223,9 +321,16 @@ def main() -> int:
         print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")
     if inject_catalog(skill):
         print(f"  katalog możliwości -> {skill.relative_to(pdir)}")
+    ensure_workspace()
     hmd = context_dir(cfg) / "HERMES.md"
     shutil.copy2(HERE / "HERMES.md", hmd)   # kontekst projektu (instrukcja pracy); pierwszeństwo przed AGENTS.md/CLAUDE.md
     print(f"  instrukcja pracy -> {hmd}")
+    stale = Path.home() / "HERMES.md"   # stara lokalizacja (katalog domowy) — po przeniesieniu cwd do JarvisWorkspace to martwa kopia
+    if hmd.parent != stale.parent and stale.exists():
+        bak = Path(a.home) / "backups" / f"HERMES.md.home-{time.strftime('%Y%m%d-%H%M%S')}"
+        bak.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(stale), str(bak))
+        print(f"  stara kopia HERMES.md z katalogu domowego -> {bak}")
     ok_hook = approve_guard_hook(pdir, guard_hook_command(pdir))
     print(f"  hak blokad (pre_tool_call: {GUARD_HOOK_MATCHER}) -> " + ("zatwierdzony" if ok_hook else "NIE zatwierdzony: uruchom raz `hermes -p " + a.name + " --accept-hooks hooks list`"))
     if key:
