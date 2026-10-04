@@ -143,6 +143,12 @@ J.save = J.debounce(() => J.saveNow(), 250);
 J.DEFAULTS = () => DEFAULTS();
 /* tryb bez sieci: żadnych zapytań poza tę stronę (Ustawienia → Interfejs) */
 { const f0 = window.fetch; if (typeof f0 === 'function') window.fetch = (u, o) => { const url = String(u?.url || u); if (J.state?.settings?.offlineMode && /^(https?|wss?):/i.test(url) && !url.startsWith(location.origin)) return Promise.reject(new TypeError('Tryb bez sieci jest włączony')); return f0.call(window, u, o); }; }
+/* ostatnia prawdziwa aktywność użytkownika w tej karcie (zgoda z rozmowy: fokus okna nie dowodzi, że ktoś przy nim siedzi —
+   okno bywa na pierwszym planie po manewrach agenta albo przy pustym biurku). 0 = od otwarcia karty nikt jej nie dotknął. */
+J.lastInput = 0;
+{ let t = 0; const mark = () => { const n = Date.now(); if (n - t > 1000) { t = n; J.lastInput = n; } };
+  for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart', 'mousemove']) addEventListener(ev, mark, { passive: true, capture: true }); }
+J.userActive = (ms = 120000) => J.lastInput > 0 && Date.now() - J.lastInput < ms;
 /* BroadcastChannel — inicjalizowany w main.js po bootowaniu aplikacji */
 J.tabChannel = { primary: true, claim: () => {}, release: () => {} };
 /* flagi funkcji (Ustawienia → O programie → Eksperymenty): domyślnie włączone */

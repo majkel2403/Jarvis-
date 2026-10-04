@@ -116,6 +116,18 @@ test('zgoda z rozmowy: cofalne działanie z mostu bez użytkownika przy ekranie 
   assert.equal(r.ok, true, r.text); assert.equal(K.widgets.list.length, 0); assert.equal(asked, 0);
   await K.undo.run(); assert.equal(K.widgets.list.length, 1, 'zgoda z rozmowy nie odbiera „Cofnij”');
 });
+test('zgoda z rozmowy: sam fokus okna nie oznacza obecności — liczy się niedawna aktywność w karcie', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  K.__ctx.document.hasFocus = () => true; K.__ctx.document.visibilityState = 'visible';   // okno na pierwszym planie…
+  let asked = 0; K.confirm = async () => { asked++; return 'yes'; };
+  K.widgets.create('note', { title: 'A', content: '' }); K.widgets.create('note', { title: 'B', content: '' });
+  K.lastInput = Date.now() - 10 * 60e3;   // …ale nikt go nie dotknął od 10 minut
+  let r = await K.registry.run('widgets_remove', { widget: 'A' }, { source: 'hermes', bridge: true });
+  assert.equal(r.code, 'NEEDS_CONFIRMATION'); assert.equal(asked, 0);
+  K.lastInput = Date.now() - 5e3;   // ruch myszą przed chwilą: użytkownik jest — zwykłe okno zgody
+  r = await K.registry.run('widgets_remove', { widget: 'B' }, { source: 'hermes', bridge: true });
+  assert.equal(r.ok, true, r.text); assert.equal(asked, 1);
+});
 test('zgoda z rozmowy NIE działa dla nieodwracalnych, przy manipulacji ani dla źródeł innych niż Hermes', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   K.__ctx.document.hasFocus = () => false;

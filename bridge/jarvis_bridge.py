@@ -414,9 +414,10 @@ def stale_names(tools: list) -> list[str]:
 def update_tools(tools: list) -> bool:
     """Przeglądarka zgłasza aktualny rejestr. Zmiana trafia do pliku — Hermes zobaczy ją po restarcie gatewaya.
     Rejestr bez narzędzi z aktualnego kodu (stara karta) jest odrzucany: inaczej wypierał nowe narzędzia i nadpisywał migawkę.
-    Tylko nazwy z BASELINE (migawka = node bridge/export-tools.js, pilnowana testem) i opisy z limitem długości —
+    Tylko nazwy z BASELINE (migawka = node bridge/export-tools.js, pilnowana testem) i opisy z limitem długości (2000) —
     karta z tokenem nie może dopisać NOWEGO narzędzia ani wstrzyknąć elaboratu do kontekstu Hermesa (kanał prompt-injection przy XSS)."""
-    fresh = {t["name"]: {"name": t["name"], "description": str(t.get("description") or "")[:600], "parameters": t.get("parameters") or {"type": "object", "properties": {}}}
+    # limit 2000: najdłuższy prawdziwy opis ma ~900 znaków (600 ucinało computer_use/web_task i rozjeżdżało migawkę z kodem)
+    fresh = {t["name"]: {"name": t["name"], "description": str(t.get("description") or "")[:2000], "parameters": t.get("parameters") or {"type": "object", "properties": {}}}
              for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", t["name"]) and t["name"] in BASELINE}
     if not fresh or fresh == TOOLS or stale_names(list(fresh.values())):
         return False

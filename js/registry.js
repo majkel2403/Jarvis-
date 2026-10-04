@@ -149,8 +149,9 @@ const compile = (tpl) => {
 
 const CHAT_FLAG = 'user_confirmed_in_chat';
 const CHAT_NEVER = new Set(['settings_reset', 'chat_clear']);   // cofalne, ale zbyt rozległe, by zatwierdzać je jednym „tak” z telefonu
-/* karta, na którą użytkownik faktycznie patrzy: widoczna i z fokusem (inaczej okno zgody wisi na drugim monitorze lub pod oknami) */
-const userAtScreen = () => typeof document === 'undefined' || (document.visibilityState !== 'hidden' && (typeof document.hasFocus !== 'function' || document.hasFocus()));
+/* użytkownik faktycznie przy karcie: widoczna, z fokusem I niedawna aktywność (mysz/klawisz) — sam fokus kłamie,
+   np. okno przeglądarki zostaje na pierwszym planie, gdy użytkownik pisze z telefonu */
+const userAtScreen = () => typeof document === 'undefined' || (document.visibilityState !== 'hidden' && (typeof document.hasFocus !== 'function' || document.hasFocus()) && (!J.userActive || J.userActive()));
 
 const api = J.registry = {
   ok, fail, norm,
