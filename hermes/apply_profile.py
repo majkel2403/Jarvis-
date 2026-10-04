@@ -51,6 +51,9 @@ TARGET = {
     "auxiliary.vision.model": "MiniMax-M3",
     "tools.tool_search.enabled": "off",          # narzędzia pulpitu widoczne wprost: MiniMax psuje wywołania przez tool_search/tool_call
                                                  # (test na żywo 2026-10-04: „zamykam widgety” bez wywołania, złe argumenty przez tool_call)
+    "approvals.unattended_mode": "deny",         # = domyślne wg dokumentacji Hermesa (security.md), zapisane wprost: sesje bez człowieka (api_server — karta Jarvisa,
+                                                 # evale; webhook) natychmiast odrzucają niebezpieczne polecenia zamiast czekać na zgodę; drogą do stanu
+                                                 # komputera jest narzędzie `system_info` w moście, nie `powershell -c` (audyt 2026-10-05)
 }
 PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "rtk-rewrite", "security-guidance", "web/ddgs"]
 # Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie
@@ -60,7 +63,8 @@ REPO_PLUGINS = ["jarvis-events"]
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
 REMOVE_KEYS = ["moa", "agent.personalities", "plugins.hermes-memory-store"]
 # Bez stałej zgody na operacje niszczące — te zawsze ocenia tryb smart albo pyta użytkownika.
-# (Uruchamianie skryptów -c/heredoc użytkownik zatwierdził „zawsze” na Telegramie 2026-10-04 07:31 — jego decyzja, nie ruszamy.)
+# (Stałą zgodę „script execution via heredoc” użytkownik dał „zawsze” na Telegramie 2026-10-04 07:31 — jego decyzja, nie ruszamy.
+#  „script execution via -e/-c flag” NIE jest na liście: `powershell -c …` wymaga zgody i w sesjach bez człowieka jest odrzucane.)
 DANGEROUS_ALLOW = {"force kill processes (Stop-Process -Force)", "force kill processes (taskkill /F)", "recursive delete"}
 ENV_DROP = ("TELEGRAM_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS")   # tylko lista TELEGRAM_ALLOWED_USERS
 

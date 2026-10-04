@@ -50,7 +50,6 @@ def _start_isolated_bridge(port: int, token: str) -> dict:
 
     Zwraca dict z proc/port/token/tools_path. Most działa w tle (daemon thread).
     """
-    import importlib
     import jarvis_bridge as jb  # type: ignore
 
     tools_path = Path(tempfile.mkdtemp()) / "tools.json"

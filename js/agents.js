@@ -302,8 +302,27 @@ R.add({ id: 'agents_status', group: 'Internet i komputer', label: 'Agenci: statu
     return ok(r, 'Klucz Jeva: ' + (r.key ? 'jest' : 'BRAK (integrations\\set-key.ps1)') + ' · agent WWW: ' + (r.web.up ? 'działa' : r.web.autostart ? 'uruchomi się przy pierwszym użyciu' : 'wyłączony') + ' · sterowanie komputerem: ' + (r.computer.installed ? (r.computer.running ? 'zadanie trwa' : 'gotowe') + (r.computer.writer ? '' : ', ale BEZ modelu pomocniczego — kliknie, lecz nie wpisze tekstu') : 'nie zainstalowane (integrations\\setup.ps1)') + '.');
   }) });
 
+/* stan komputera tylko do odczytu (most: bridge/system_info.py) — zamiast `powershell -c …`, które zgody Hermesa odrzucają */
+R.add({ id: 'system_info', group: 'Internet i komputer', label: 'Stan komputera', idempotent: true, reads: ['system'],
+  description: 'Stan komputera tylko do odczytu: wolne miejsce na dyskach, pamięć RAM, obciążenie procesora, czas działania i największe programy w pamięci. Użyj do pytań „ile mam miejsca na dysku”, „ile wolnej pamięci”, „co zjada pamięć”; nie pisz do tego skryptów PowerShell. Działa lokalnie w moście, także bez karty Jarvis OS.',
+  args: { type: 'object', properties: { drive: { type: 'string', description: 'litera dysku, np. "C" (domyślnie wszystkie dyski stałe)' }, processes: { type: 'integer', minimum: 0, maximum: 10, description: 'ile największych programów podać (domyślnie 5, 0 = bez)' } } },
+  examples: ['ile mam miejsca na dysku', 'ile wolnego miejsca na dysku c', 'ile mam wolnej pamieci ram', 'co zjada pamiec', 'stan komputera'],
+  parse(raw, n) {
+    const disk = /\b(miejsc[ae]|wolne|wolnego|zajetosc|zajete)\b.*\bdysk\w*\b|\bdysk\w*\b.*\b(miejsc[ae]|wolne|wolnego|zajetosc|zajete)\b/.test(n);
+    const mem = /\b(ile|jak\w*)\b.*\b(ram|pamiec\w*)\b|\bco zjada\b.*\b(ram|pamiec\w*)\b/.test(n);
+    const gen = /^(stan komputera|jak dziala komputer|jak dlugo dziala komputer|obciazenie (procesora|komputera))$/.test(n);
+    if (!disk && !mem && !gen) return null;
+    const d = /\bdysk(?:u|iem)?\s+([a-z])\b/.exec(n);
+    return { args: d && disk ? { drive: d[1].toUpperCase() } : {}, score: 42 };
+  },
+  run: guard(async ({ drive, processes } = {}, { ok }) => {
+    const q = new URLSearchParams(); if (drive) q.set('drive', String(drive)); if (processes != null) q.set('processes', String(processes));
+    const r = await api('/bridge/system' + (q.toString() ? '?' + q : ''), { timeout: 20000 });
+    return ok(r.data, r.text);
+  }) });
+
 /* poziomy autonomii (js/jev-policy.js): odczyty i zatrzymanie po cichu; polecenia z pytaniem/zgodą zostają na domyślnym A1/A0 */
-for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'media_play', 'media_control', 'web_task_status', 'web_task_stop']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
+for (const id of ['web_read', 'computer_status', 'computer_stop', 'agents_status', 'system_info', 'media_play', 'media_control', 'web_task_status', 'web_task_stop']) J.policy?.A3?.add(id);   // media_play: tylko odtwarza w przeglądarce agenta — nic nie kupuje ani nie wysyła
 
 /* Jawny prefiks („w przeglądarce…”, „na komputerze…”) to wyraźny zamiar użytkownika: wykonujemy od razu, bez sędziego Jev. Bez tego zdanie
    „w przeglądarce wróć” trafiało do sędziego, który z 129 poleceń potrafił wybrać coś innego (np. akt dialogowy „zostawiam”). Zgody i

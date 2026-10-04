@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
-import statistics
 import sys
 import time
 from collections import Counter, defaultdict

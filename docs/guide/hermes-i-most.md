@@ -29,6 +29,22 @@ Lista narzędzi, którą Hermes widzi od startu, to migawka `bridge/tools.json` 
 
 > **Bezpieczeństwo mostu:** nasłuchuje tylko na `127.0.0.1`; `/mcp` wymaga tokenu Bearer, kanał przeglądarki — tokenu i dozwolonego Origin (CORS + Private Network Access); polecenia trafiają do widocznej / ostatnio aktywnej karty.
 
+### Zgody Hermesa a pytania o komputer (`system_info`)
+
+Hermes ocenia niebezpieczne polecenia terminala przez `approvals` (dokumentacja: *user-guide/security*). Sesje **bez człowieka**
+(`api_server` — czyli karta Jarvisa i evale, webhooki) są rozstrzygane natychmiast przez `approvals.unattended_mode` (domyślnie i u nas
+`deny`, zapisane wprost w `hermes/apply_profile.py`): polecenie z listy niebezpiecznych jest odrzucane, chyba że jego klucz reguły
+jest w `command_allowlist`. U nas jest tam `script execution via heredoc` i `execute_code`, **nie ma** `script execution via -e/-c flag`
+— więc `powershell -c "Get-PSDrive …"` jest odrzucane (a model próbował wtedy obejść to zapisem skryptu do pliku; audyt 2026-10-05).
+Szerokie dopuszczenie `-c` byłoby ryzykowne, dlatego pytania o stan komputera obsługuje narzędzie **`system_info`**: tylko odczyt,
+działa w moście (bez karty, bez powłoki, bez zapisu), zwraca wolne miejsce na dyskach stałych, RAM, obciążenie procesora, czas
+działania i 5 największych programów (sama nazwa i MB — bez ścieżek i właścicieli). Ten sam odczyt dla karty: `GET /bridge/system?drive=C`
+(token mostu), a w czacie „ile mam miejsca na dysku”. Reguła dla Hermesa jest w `hermes/HERMES.md`, a eval `miejsce-na-dysku` pilnuje,
+że odpowiada jednym narzędziem i bez skryptów.
+
+`security.tirith_enabled: true` nie daje na Windows żadnej ochrony: dokumentacja mówi wprost, że Tirith nie ma gotowej wersji dla Windows
+i jest po cichu pomijany. Jedyną blokadą treści poleceń u nas są wzorce Hermesa i hak `scripts/guard_tools.py` (przeglądarka, restart gatewaya).
+
 ## Inne źródła modelu Hermes
 
 Bez mostu karta łączy się z serwerem bezpośrednio, a narzędzia pulpitu opisuje modelowi w prompcie (format `<tool_call>`

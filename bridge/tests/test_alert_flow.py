@@ -6,7 +6,6 @@ zapisu/odczytu/usunięcia, a nie sam alert.
 """
 from __future__ import annotations
 
-import time
 import unittest
 
 from e2e_client import MCPClient, Result, preflight

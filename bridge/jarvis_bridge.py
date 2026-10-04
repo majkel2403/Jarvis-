@@ -28,6 +28,7 @@ from urllib.parse import quote
 
 import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
 import writer_proxy           # bridge/writer_proxy.py: model pomocniczy (darmowe modele → Hermes)
+import system_info            # bridge/system_info.py: stan komputera tylko do odczytu (dysk, RAM, procesor, procesy)
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -601,6 +602,8 @@ class DesktopMCP(MCPServer):
             return await _bridge_handle_media(name, args, CB)
         if name in WF_TOOLS:   # workflow: silnik w moście, bez karty (ADR 0007)
             return await _bridge_workflow(name, args)
+        if name == "system_info":   # odczyt stanu komputera: lokalnie w moście, bez karty i bez powłoki
+            return await _bridge_system_info(args)
         if name == "desktop_open":   # narzędzie naprawcze: bez bezpiecznika (CB) i bez wymogu połączonej karty
             return await _bridge_desktop_open(args)
         if name == "desktop_screenshot":
@@ -654,6 +657,49 @@ def authorized(request: Request) -> bool:
     if not tok and request.url.path == "/bridge/events":   # EventSource nie może ustawić nagłówka — TYLKO tu token w query (adresy trafiają do logów/historii)
         tok = request.query_params.get("token") or ""
     return secrets.compare_digest(tok, TOKEN)
+
+
+DRIVE_RE = re.compile(r"^[A-Za-z]:?[\\/]?$")
+
+
+def _sys_args(raw_drive, raw_processes) -> tuple[str | None, int]:
+    """Walidacja wspólna dla MCP i HTTP: litera dysku (opcjonalnie) i liczba procesów 0–10."""
+    drive = str(raw_drive or "").strip()
+    if drive and not DRIVE_RE.match(drive):
+        raise ValueError("drive: podaj literę dysku, np. C")
+    try:
+        n = int(5 if raw_processes in (None, "") else raw_processes)
+    except (TypeError, ValueError):
+        raise ValueError("processes: liczba od 0 do 10") from None
+    return (drive or None), max(0, min(10, n))
+
+
+async def _bridge_system_info(args: dict) -> CallToolResult:
+    def env(code: str, ok: bool, data, text: str) -> CallToolResult:
+        body = {"ok": ok, "code": code, "data": data, "text": text}
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(body, ensure_ascii=False, default=str))], is_error=not ok)
+    try:
+        drive, n = _sys_args(args.get("drive"), args.get("processes"))
+    except ValueError as e:
+        return env("INVALID_ARGS", False, None, str(e))
+    try:
+        data = await asyncio.to_thread(system_info.snapshot, drive, n)
+    except Exception as e:  # noqa: BLE001
+        return env("INTERNAL", False, None, f"Nie udało się odczytać stanu komputera: {type(e).__name__}")
+    return env("OK", True, data, system_info.describe(data, drive))
+
+
+@mcp.custom_route("/bridge/system", methods=["GET", "OPTIONS"])
+async def system_route(request: Request) -> Response:
+    """Stan komputera (tylko odczyt) dla karty: ?drive=C&processes=5 — ta sama odpowiedź co narzędzie MCP system_info."""
+    if (g := await agents_guard(request)) is not None:
+        return g
+    try:
+        drive, n = _sys_args(request.query_params.get("drive"), request.query_params.get("processes"))
+    except ValueError as e:
+        return cors(request, JSONResponse({"error": str(e)}, status_code=400))
+    data = await asyncio.to_thread(system_info.snapshot, drive, n)
+    return cors(request, JSONResponse({"ok": True, "data": data, "text": system_info.describe(data, drive)}))
 
 
 @mcp.custom_route("/bridge/status", methods=["GET", "OPTIONS"])

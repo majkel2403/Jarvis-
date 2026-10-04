@@ -2,8 +2,9 @@ name: Wdrożenie na GitHub Pages
 
 # Publikacja ręczna (Actions → „Wdrożenie na GitHub Pages” → Run workflow), gdy Pages jest włączone w ustawieniach repo
 # (Settings → Pages → Source: GitHub Actions). Przy każdym pushu testy uruchamia ci.yml — ten workflow nie zapala
-# czerwonego krzyżyka, dopóki Pages nie jest włączone. Uwaga: most Jarvis OS nie wpuszcza originu github.io (klucz
-# Hermesa i narzędzia tylko z tego komputera), więc wersja z Pages działa bez Hermesa Desktop.
+# czerwonego krzyżyka, dopóki Pages nie jest włączone. Uwaga: most Jarvis OS dopuszcza origin github.io tylko w CORS;
+# token oddaje wyłącznie originom lokalnym (/bridge/pair), więc na Pages trzeba go wkleić raz ręcznie — bez tego wersja
+# z Pages działa bez Hermesa Desktop.
 on:
   workflow_dispatch:
 

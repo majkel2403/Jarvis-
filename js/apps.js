@@ -113,7 +113,7 @@ J.market = (() => {
       const j = await r.json();
       j.forEach(x => { const c = COINS.find(k => k.id === x.id); if (!c) return; const d = data[c.sym]; d.price = x.current_price; d.chg = x.price_change_percentage_24h || 0; const sp = x.sparkline_in_7d?.price || []; d.spark = sp.filter((_, i) => i % 2 === 0).slice(-80); d.stale = false; emit(c.sym); });
       clearInterval(sim); sim = null; loaded = true; lastFetched = Date.now();
-      if (!ws || ws.readyState !== 1) source = 'CoinGecko';
+      if (!ws || ws.readyState !== 1) { source = 'CoinGecko'; J.emit('market', null); }   // etykieta „Źródło” musi się przerysować po zmianie
       return true;
     } catch (e) {
       if (!loaded) simulate();
@@ -654,7 +654,7 @@ J.apps.notes = {
 J.apps.market = {
   title: 'Monitor rynku', icon: 'market', minW: 320, minH: 300, w: 440, h: 400,
   mount(body, ctx, arg) {
-    body.innerHTML = `<div class="market" id="mk"></div><div class="src"><span id="mkSrc">Łączenie…</span><span class="dim">aktualizacja na żywo</span></div>`;
+    body.innerHTML = `<div class="market" id="mk"></div><div class="src"><span id="mkSrc">Łączenie…</span><span class="dim" id="mkLive"></span></div>`;
     const grid = $('#mk', body), cards = {};
     const build = () => { grid.innerHTML = ''; Object.keys(cards).forEach(k => delete cards[k]); J.market.COINS.forEach(c => {
       const el = h('div', { class: 'coin' }, `<div class="h"><div><b>${esc(c.name)}</b><span class="sym">${esc(c.sym)}</span></div><span class="chg"></span></div><div class="price">—</div><canvas></canvas>`);
@@ -670,6 +670,7 @@ J.apps.market = {
         J.spark($('canvas', el), d.spark, d.chg >= 0 ? '#39e59a' : '#ff5d7a');
       });
       $('#mkSrc', body).textContent = 'Źródło: ' + J.market.source;
+      $('#mkLive', body).textContent = /^Binance/.test(J.market.source) ? 'aktualizacja na żywo' : /CoinGecko/.test(J.market.source) ? 'odświeżanie co 90 s' : '';
     };
     sub(ctx, 'market', draw); sub(ctx, 'wm-resize', () => draw());
     J.market.subscribe(); ctx.onClose(() => J.market.unsubscribe());

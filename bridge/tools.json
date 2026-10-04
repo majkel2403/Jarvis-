@@ -2806,6 +2806,25 @@
   }
  },
  {
+  "name": "system_info",
+  "description": "Stan komputera tylko do odczytu: wolne miejsce na dyskach, pamięć RAM, obciążenie procesora, czas działania i największe programy w pamięci. Użyj do pytań „ile mam miejsca na dysku”, „ile wolnej pamięci”, „co zjada pamięć”; nie pisz do tego skryptów PowerShell. Działa lokalnie w moście, także bez karty Jarvis OS. Np.: „ile mam miejsca na dysku”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "drive": {
+     "type": "string",
+     "description": "litera dysku, np. \"C\" (domyślnie wszystkie dyski stałe)"
+    },
+    "processes": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 10,
+     "description": "ile największych programów podać (domyślnie 5, 0 = bez)"
+    }
+   }
+  }
+ },
+ {
   "name": "workflow_list",
   "description": "Lista dostępnych workflow (powtarzalnych procesów pracy z krokami, sprawdzeniami i budżetem) z ich danymi wejściowymi. Np.: „jakie mam workflow”.",
   "parameters": {

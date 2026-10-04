@@ -2,13 +2,13 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **145** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **146** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 67 |
+| A3 sam, po cichu | 68 |
 | A2 sam + Cofnij | 44 |
 | A1 pyta „Chodzi o…?” | 17 |
 | A0 zawsze zgoda | 17 |
@@ -212,6 +212,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `computer_status` | Prawdziwy komputer: status zadania — Pokazuje stan zadania sterującego prawdziwym komputerem (trwa, zakończone, przerwane), liczbę kroków i ostatnie linie dziennika. | — | safe | A3 | — | „status komputera”, „jak idzie zadanie na komputerze” |
 | `computer_stop` | Prawdziwy komputer: zatrzymaj zadanie — Natychmiast zatrzymuje trwające zadanie sterujące prawdziwym komputerem. | — | safe | A3 | — | „zatrzymaj komputer”, „przerwij sterowanie komputerem”, „stop komputer” |
 | `agents_status` | Agenci: status — Sprawdza, czy działają agent WWW (przeglądarka sterowana Jevem) i sterowanie prawdziwym komputerem, oraz czy jest klucz Jeva. | — | safe | A3 | — | „status agentow”, „czy agent www dziala”, „czy moge sterowac komputerem” |
+| `system_info` | Stan komputera — Stan komputera tylko do odczytu: wolne miejsce na dyskach, pamięć RAM, obciążenie procesora, czas działania i największe programy w pamięci. Użyj do pytań „ile  | drive: string; processes: integer | safe | A3 | — | „ile mam miejsca na dysku”, „ile wolnego miejsca na dysku c”, „ile mam wolnej pamieci ram” |
 
 ## Workflow
 

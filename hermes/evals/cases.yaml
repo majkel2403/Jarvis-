@@ -33,10 +33,10 @@
 - id: miejsce-na-dysku
   prompt: "Ile jest wolnego miejsca na dysku C? Krótko."
   expect: ["(GB|GiB|TB)"]
-  max_tools: 3
-  tools_any: [terminal, execute_code]
-  tools_none: [write_file, patch, delegate_task, computer_use]
-  max_seconds: 120
+  max_tools: 2
+  tools_any: [mcp__jarvis_desktop__system_info]   # tylko odczyt w moście; `powershell -c` zgody odrzucają, a obejście przez zapis skryptu jest zakazane
+  tools_none: [write_file, patch, delegate_task, computer_use, terminal, execute_code]
+  max_seconds: 60
 
 - id: wiedza-bez-narzedzi
   prompt: "Wyjaśnij w dwóch zdaniach, czym jest prompt injection."

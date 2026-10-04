@@ -6,7 +6,7 @@
 'use strict';
 (() => {
 const { $, $$, h, esc } = J;
-const MAX_HISTORY = 30, CAP = 6000;
+const MAX_HISTORY = 30, CAP = 6000, MAX_LOG_STEPS = 300;   // wpisy systemowe (J.log) po 300 krokach zadania są pomijane — długie zadanie nie rozrasta panelu bez końca (audyt 2026-10-05)
 
 let cur = null;          // aktywne zadanie {id,title,ts,status,steps[],result}
 let viewing = null;      // zadanie pokazywane w panelu (aktywne albo z historii)
@@ -113,7 +113,7 @@ const end = (status, result) => {
 };
 // wpisy J.log() (systemowe) trafiają do aktywnego zadania jako kroki; poza zadaniem nie tworzą szumu
 const log = (title, text = '', level = '') => {
-  if (!cur) return;
+  if (!cur || cur.steps.length >= MAX_LOG_STEPS) return;
   step('system', title, text ? [['Szczegóły', text]] : [], { status: level === 'err' ? 'err' : 'ok', preview: String(text).slice(0, 70) });
 };
 
