@@ -57,8 +57,9 @@ J.applyTheme();
 const boot = () => new Promise(resolve => {
   const el = $('#boot');
   let entered = false;
-  const finish = () => {
+  const finish = (via = 'user') => {
     if (entered) return; entered = true; J.bootEnter = null;
+    J.booted = true; J.bootVia = via === 'bridge' ? 'bridge' : 'user'; J.bootAt = Date.now();   // desktop_open raportuje to Hermesowi zamiast zgadywania
     try { J.sfx.unlock(); J.sfx.boot(); } catch (e) { /* bez gestu użytkownika dźwięk bywa zablokowany — to nie powód, by nie wejść */ }
     el.classList.add('out'); $('#app').classList.add('on');
     setTimeout(() => el.remove(), 1000);
@@ -66,7 +67,7 @@ const boot = () => new Promise(resolve => {
   };
   /* wejście bez kliknięcia: polecenie z mostu (Hermes z Telegrama) przy karcie otwartej przez autostart.
      Okno zgody rysuje się w #app — pod zasłoną startową nikt nie mógł go kliknąć i każde ryzykowne polecenie kończyło się DENIED. */
-  J.bootEnter = finish;
+  J.bootEnter = () => finish('bridge');
   if (S.skipBoot) {
     $('#bootTitle').textContent = 'JARVIS'; $('#bootBar').style.width = '100%'; $('#bootPct').textContent = '100%';
     const e = $('#bootEnter'); e.classList.add('show');

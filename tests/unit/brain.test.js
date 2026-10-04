@@ -150,6 +150,16 @@ test('zgoda z rozmowy NIE działa dla nieodwracalnych, przy manipulacji ani dla 
   assert.ok(names('widgets_remove').includes('user_confirmed_in_chat'));
   assert.ok(!names('computer_use').includes('user_confirmed_in_chat')); assert.ok(!names('files_write').includes('user_confirmed_in_chat'));
 });
+test('desktop_open: karta wchodzi do systemu bez kliknięcia i raportuje stan', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  let entered = 0; K.bootEnter = () => { entered++; K.booted = true; K.bootVia = 'bridge'; K.bootAt = Date.now(); K.bootEnter = null; };
+  let r = await K.registry.run('desktop_open', {}, { source: 'hermes', bridge: true });
+  assert.equal(r.ok, true, r.text); assert.equal(entered, 1); assert.equal(r.data.booted, true); assert.equal(r.data.entered_now, true);
+  assert.match(r.text, /Wszedłem do systemu/);
+  r = await K.registry.run('desktop_open', {}, { source: 'hermes', bridge: true });   // drugi raz: nic do zdejmowania
+  assert.equal(entered, 1); assert.equal(r.data.booted, true);
+  assert.equal(K.policy.level('desktop_open'), 'A1', 'bezpieczne — bez okna zgody');
+});
 test('e2e_cleanup: usuwa tylko artefakty testów mostu, nic więcej', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   K.notes.add('__E2E_LEFTOVER_1791061718630__', 'x'); K.notes.add('E2E test note 1791061718630', 'x'); K.notes.add('Moje E2E notatki', 'nie ruszać'); K.notes.add('__E2E_LEFTOVER', 'też nie — brak sufiksu?');

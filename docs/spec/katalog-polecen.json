@@ -1937,6 +1937,32 @@
   "needsConfirmText": false
  },
  {
+  "id": "desktop_open",
+  "group": "Interfejs",
+  "label": "Uruchom Jarvis OS",
+  "description": "Uruchamia Jarvis OS i wchodzi do systemu bez klikania: gdy żadna karta nie jest otwarta, otwiera ją w domyślnej przeglądarce; gdy jest — zdejmuje ekran „Kliknij, aby wejść” i wyciąga okno przeglądarki na wierzch. Używaj ZAWSZE na prośbę „odpal / otwórz / uruchom Jarvis OS” i zanim poprosisz użytkownika o kliknięcie. Zwraca: opened (nowa karta), booted, entered_now, focused (okno na wierzchu), windows.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "focus": {
+     "type": "boolean",
+     "description": "wyciągnij okno przeglądarki na wierzch (domyślnie true)"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [],
+  "needsConfirmText": false
+ },
+ {
   "id": "ui_highlight",
   "group": "Interfejs",
   "label": "Wskaż element",

@@ -2,7 +2,7 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **138** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **139** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
@@ -10,7 +10,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|
 | A3 sam, po cichu | 64 |
 | A2 sam + Cofnij | 44 |
-| A1 pyta „Chodzi o…?” | 13 |
+| A1 pyta „Chodzi o…?” | 14 |
 | A0 zawsze zgoda | 17 |
 
 ## Aplikacje i okna
@@ -62,6 +62,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|---|---|---|---|---|
 | `settings_open` | Otwórz sekcję ustawień — Otwiera Ustawienia przewinięte do sekcji: openrouter, akcent, tapeta, interfejs, glos, uzytkownik, hermes, agent, jev, powiadomienia, skroty, uklady, pamiec, pl | **section**: openrouter\|akcent\|tapeta\|interfejs\|glos\|uzytkownik\|hermes\|agent\|jev\|powiadomienia\|skroty\|uklady\|… | safe | A3 | — | „otworz ustawienia {section}”, „pokaz ustawienia {section}”, „przejdz do ustawien {section}” |
 | `get_status` | Raport stanu — Pełny stan środowiska: okna, widgety, notatki, zadania, minutnik, skróty, połączenie, tryb agenta. | — | safe | A3 | — | „status”, „raport”, „stan systemu” |
+| `desktop_open` | Uruchom Jarvis OS — Uruchamia Jarvis OS i wchodzi do systemu bez klikania: gdy żadna karta nie jest otwarta, otwiera ją w domyślnej przeglądarce; gdy jest — zdejmuje ekran „Kliknij | focus: boolean | safe | A1 | — | — |
 | `ui_highlight` | Wskaż element — Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id). | **target**: string; text: string | safe | A3 | — | — |
 | `ui_narrate` | Komunikat na Core — Krótki komunikat statusu na Core (np. "szukam w sieci…") bez wpisu w czacie; speak=true wypowiada go. | **text**: string; speak: boolean | safe | A3 | — | — |
 | `ui_toast` | Powiadomienie — Pokazuje powiadomienie w interfejsie i zapisuje je w centrum powiadomień. | **title**: string; body: string | safe | A3 | — | — |

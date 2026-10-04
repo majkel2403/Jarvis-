@@ -223,7 +223,7 @@ def newest() -> Optional[Browser]:
     return max(CLIENTS.values(), key=lambda c: (c.visible, c.focus_ts, c.since)) if CLIENTS else None
 
 
-async def relay(name: str, args: dict) -> dict:
+async def relay(name: str, args: dict, timeout: float | None = None) -> dict:
     """Wyślij polecenie do przeglądarki i poczekaj na wynik.
 
     Race fix: jeśli brak klienta SSE, ale karta właśnie wysłała /bridge/wake (PWA-side handshake),
@@ -256,9 +256,9 @@ async def relay(name: str, args: dict) -> dict:
     if client.id not in CLIENTS and not fut.done():   # karta rozłączyła się między newest() a put — sprzątanie SSE już przeleciało, nikt by nie rozstrzygnął fut (czekanie pełne 90 s)
         fut.set_result({"ok": False, "code": "OFFLINE", "text": "Połączenie z kartą Jarvis OS zostało utracone w trakcie polecenia."})
     try:
-        res = await asyncio.wait_for(fut, CALL_TIMEOUT)
+        res = await asyncio.wait_for(fut, timeout or CALL_TIMEOUT)
     except asyncio.TimeoutError:
-        raise ToolError(f"Przeglądarka nie odpowiedziała w {CALL_TIMEOUT:.0f} s (karta uśpiona, zablokowana albo brak zgody użytkownika).")
+        raise ToolError(f"Przeglądarka nie odpowiedziała w {timeout or CALL_TIMEOUT:.0f} s (karta uśpiona, zablokowana albo brak zgody użytkownika).")
     finally:
         PENDING.pop(cid, None)
     return res
@@ -379,6 +379,113 @@ async def _bridge_handle_media_inner(name, args, cb, _envelope):
 BRIDGE_OWNED = frozenset({"media_play", "media_control"})
 
 
+# -------------------- desktop_open: „odpal Jarvis OS” bez proszenia użytkownika o kliknięcie --------------------
+# Brak karty → strona :4000 (gdy nie działa) + karta w domyślnej przeglądarce + czekanie na SSE.
+# Karta jest → okno przeglądarki na wierzch (winfocus) i karta „wchodzi do systemu” (bridge.js → J.bootEnter).
+# Karta nie odpowiada (np. przeglądarka zamroziła kartę w tle) → po wyciągnięciu na wierzch ponów, w ostateczności nowa karta.
+SITE_URL = os.environ.get("JARVIS_SITE_URL", "http://localhost:4000")
+REPO_DIR = Path(__file__).resolve().parent.parent
+
+
+def _site_up() -> bool:
+    import socket
+    from urllib.parse import urlsplit
+    u = urlsplit(SITE_URL)
+    try:
+        with socket.create_connection((u.hostname or "127.0.0.1", u.port or 80), 0.5):
+            return True
+    except OSError:
+        return False
+
+
+async def _ensure_site() -> str:
+    """'' = strona już działała; 'started' = uruchomiona; 'failed' = nie wstała."""
+    if _site_up():
+        return ""
+    import subprocess
+    started = False
+    if os.name == "nt":   # najpierw zadanie autostartu (te same logi i ustawienia co po zalogowaniu)
+        r = await asyncio.to_thread(subprocess.run, ["schtasks", "/Run", "/TN", "JarvisOS-Site"], capture_output=True, creationflags=agents_mod.NO_WINDOW)
+        started = r.returncode == 0
+    if not started:
+        from urllib.parse import urlsplit
+        subprocess.Popen([sys.executable, str(REPO_DIR / "bridge" / "serve_site.py"), str(urlsplit(SITE_URL).port or 4000)], cwd=str(REPO_DIR),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=agents_mod.NO_WINDOW)
+    for _ in range(60):
+        if _site_up():
+            return "started"
+        await asyncio.sleep(0.25)
+    return "failed"
+
+
+def _open_tab() -> None:
+    if os.name == "nt":
+        os.startfile(SITE_URL)   # domyślna przeglądarka użytkownika (np. Comet), jego profil i logowania
+    else:
+        import webbrowser
+        webbrowser.open(SITE_URL)
+
+
+async def _wait_client(seconds: float) -> bool:
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if newest() is not None:
+            return True
+        try:
+            await asyncio.wait_for(_wake_event().wait(), 0.5)
+        except asyncio.TimeoutError:
+            pass
+        _wake_event().clear()
+    return newest() is not None
+
+
+async def _bridge_desktop_open(args: dict) -> CallToolResult:
+    import winfocus
+
+    def env(code, ok, data, text):
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps({"ok": ok, "code": code, "data": data, "text": text}, ensure_ascii=False, default=str))], is_error=not ok)
+
+    focus = (args or {}).get("focus", True) is not False
+    opened, site, win, res = False, "", None, None
+    if newest() is None:
+        site = await _ensure_site()
+        if site == "failed":
+            return env("INTERNAL", False, {"site": "failed"}, f"Strona Jarvis OS ({SITE_URL}) nie wstała. Sprawdź integrations\\doctor.ps1.")
+        await asyncio.to_thread(_open_tab)
+        opened = True
+        if not await _wait_client(30):
+            return env("OFFLINE", False, {"opened": True, "site": site or "ok"}, "Otworzyłem kartę Jarvis OS, ale nie połączyła się z mostem w 30 s (przeglądarka nie wystartowała albo most jest wyłączony w Ustawieniach karty).")
+    if focus:
+        win = await asyncio.to_thread(winfocus.bring_to_front)   # najpierw na wierzch: widoczna karta „odmarza” i pokaże okna zgody
+    for attempt in range(3):
+        try:
+            res = await relay("desktop_open", {}, timeout=12)
+            break
+        except ToolError:
+            if attempt == 0 and not win:
+                win = await asyncio.to_thread(winfocus.bring_to_front)
+            elif attempt == 1:   # karta martwa mimo połączenia — nowa karta
+                await asyncio.to_thread(_open_tab)
+                opened = True
+                await asyncio.sleep(3)
+                await _wait_client(25)
+                if focus:
+                    win = await asyncio.to_thread(winfocus.bring_to_front)
+    if res is None:
+        return env("TIMEOUT", False, {"opened": opened, "window": win}, "Karta Jarvis OS nie odpowiada mimo wyciągnięcia na wierzch i otwarcia nowej. Zamknij ręcznie stare karty Jarvisa.")
+    data = dict(res.get("data") or {}) if isinstance(res.get("data"), dict) else {}
+    data.update(opened=opened, site=site or "ok", focused=bool(win and win.get("foreground")), window=(win or {}).get("title"), browser=(win or {}).get("browser"))
+    if not res.get("ok") and res.get("code") == "NOT_FOUND":   # karta ze starszym kodem (bez desktop_open) — weszła do systemu przez bridge.js, odświeży się sama
+        data.setdefault("booted", True)
+    parts = ["Otworzyłem nową kartę Jarvis OS." if opened else "Karta Jarvis OS już działała."]
+    if site == "started":
+        parts.insert(0, "Uruchomiłem stronę Jarvis OS.")
+    parts.append(str(res.get("text") or "") if res.get("ok") else "Wszedłem do systemu.")
+    if focus:
+        parts.append(f"Okno {data.get('browser') or 'przeglądarki'} jest na wierzchu." if data["focused"] else ("Nie udało się wyciągnąć okna na wierzch (Windows zablokował zmianę fokusu)." if win and win.get("found") else "Nie znalazłem okna przeglądarki z Jarvisem (karta może nie być aktywną kartą okna)."))
+    return env("OK", True, data, " ".join(p for p in parts if p))
+
+
 
 
 INSTRUCTIONS = (
@@ -445,6 +552,8 @@ class DesktopMCP(MCPServer):
         # zamknięta. To jest fix z t_874a5201 / B4: wcześniej każde media_* bez karty → OFFLINE.
         if name in BRIDGE_OWNED:
             return await _bridge_handle_media(name, args, CB)
+        if name == "desktop_open":   # narzędzie naprawcze: bez bezpiecznika (CB) i bez wymogu połączonej karty
+            return await _bridge_desktop_open(args)
         # Circuit breaker: przed relay() sprawdź czy to narzędzie nie jest w trakcie cooldown.
         # Chroni przed pętlą OFFLINE/INTERNAL/TIMEOUT — model widzi jawny kod THROTTLED zamiast cichego odrzucenia.
         allow, retry_after = CB.check(name)

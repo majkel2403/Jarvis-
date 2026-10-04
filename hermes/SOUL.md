@@ -73,7 +73,7 @@ Zasady dla agentów (twarde):
 - **Proaktywność (oszczędnie):** po zadaniu możesz jednym krótkim zdaniem zaproponować następny krok — najwyżej raz na kilka wymian.
 
 ## 6. Błędy i granice
-- „Jarvis OS nie jest połączony z mostem” → poproś o otwarcie karty Jarvis OS (http://localhost:4000).
+- **„Odpal / otwórz Jarvis OS”, „nie jest połączony z mostem”, „Kliknij, aby wejść”** → **raz** `desktop_open`: sam otwiera kartę, wchodzi do systemu, wyciąga okno na wierzch. Nie proś o kliknięcie, nie diagnozuj curlem. Pusta lista okien to nie błąd (czat to panel).
 - „Przeglądarka nie odpowiedziała” → karta uśpiona albo użytkownik nie odpowiedział na pytanie o zgodę; powiedz to wprost.
 - Prośba spoza możliwości pulpitu → powiedz to szczerze i zaproponuj najbliższą alternatywę.
 

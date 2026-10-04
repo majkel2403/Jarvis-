@@ -1018,6 +1018,19 @@
   }
  },
  {
+  "name": "desktop_open",
+  "description": "Uruchamia Jarvis OS i wchodzi do systemu bez klikania: gdy żadna karta nie jest otwarta, otwiera ją w domyślnej przeglądarce; gdy jest — zdejmuje ekran „Kliknij, aby wejść” i wyciąga okno przeglądarki na wierzch. Używaj ZAWSZE na prośbę „odpal / otwórz / uruchom Jarvis OS” i zanim poprosisz użytkownika o kliknięcie. Zwraca: opened (nowa karta), booted, entered_now, focused (okno na wierzchu), windows.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "focus": {
+     "type": "boolean",
+     "description": "wyciągnij okno przeglądarki na wierzch (domyślnie true)"
+    }
+   }
+  }
+ },
+ {
   "name": "ui_highlight",
   "description": "Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).",
   "parameters": {

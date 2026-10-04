@@ -365,6 +365,17 @@ R.add({ id: 'clipboard_read', group: 'Dane', label: 'Odczytaj schowek', descript
 R.add({ id: 'get_status', group: 'Interfejs', label: 'Raport stanu', description: 'Pełny stan środowiska: okna, widgety, notatki, zadania, minutnik, skróty, połączenie, tryb agenta.', idempotent: true, reads: ['all'],
   examples: ['status', 'raport', 'stan systemu', 'jak sie masz', 'podsumuj dzien', 'co sie dzieje'],
   run() { const p = J.context.packet({ full: true, quiet: true }); const today = p.tasks.today; return ok(p, `Otwarte okna: ${J.wm.list().map(i => J.apps[i]?.title).filter(Boolean).join(', ') || 'brak'}. Widgety: ${J.widgets.list.length}. Notatki: ${J.state.notes.length}. Zadania dziś: ${today.filter(t => t.done).length}/${today.length}${p.tasks.overdue ? ', zaległe: ' + p.tasks.overdue : ''}. Minutnik: ${J.timer.running ? J.timer.label + ', zostało ' + J.timer.fmt(J.timer.left()) : 'nieaktywny'}. Hermes: ${p.conn.hermes}. Tryb: ${J.engine.mode}.`); } });
+/* „odpal Jarvis OS”: przez most to narzędzie obsługuje najpierw sam most (otwiera kartę, gdy jej nie ma; wyciąga okno na wierzch),
+   a karta tylko wchodzi do systemu (bridge.js → J.bootEnter) i raportuje stan */
+R.add({ id: 'desktop_open', group: 'Interfejs', label: 'Uruchom Jarvis OS', description: 'Uruchamia Jarvis OS i wchodzi do systemu bez klikania: gdy żadna karta nie jest otwarta, otwiera ją w domyślnej przeglądarce; gdy jest — zdejmuje ekran „Kliknij, aby wejść” i wyciąga okno przeglądarki na wierzch. Używaj ZAWSZE na prośbę „odpal / otwórz / uruchom Jarvis OS” i zanim poprosisz użytkownika o kliknięcie. Zwraca: opened (nowa karta), booted, entered_now, focused (okno na wierzchu), windows.', idempotent: true, palette: false, voice: false,
+  args: { type: 'object', properties: { focus: { type: 'boolean', description: 'wyciągnij okno przeglądarki na wierzch (domyślnie true)' } } },
+  run() {
+    J.bootEnter?.();
+    const entered = J.bootVia === 'bridge' && Date.now() - (J.bootAt || 0) < 10000;
+    const wins = J.wm.list().filter(k => !J.wm.isMin(k));
+    return ok({ booted: !!J.booted || !J.bootEnter, entered_now: entered, visible: typeof document === 'undefined' || document.visibilityState !== 'hidden', windows: wins.length, chat_panel: !!J.chatPanel?.visible?.() },
+      (entered ? 'Wszedłem do systemu (ekran startowy zdjęty). ' : 'Jarvis OS działa. ') + (wins.length ? 'Otwarte okna: ' + wins.length + '.' : 'Pulpit bez otwartych okien (czat to panel boczny, nie okno).'));
+  } });
 R.add({ id: 'ui_highlight', group: 'Interfejs', label: 'Wskaż element', description: 'Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).', idempotent: true, hermes: true, voice: false, palette: false,
   args: { type: 'object', properties: { target: { type: 'string' }, text: { type: 'string', description: 'krótki podpis' } }, required: ['target'] },
   run({ target, text }) { const r = J.ui.highlight(target, text); return r ? ok({ target }, 'Wskazałem ' + target + '.') : fail('NOT_FOUND', 'Nie ma elementu „' + target + '”.'); } });
