@@ -181,6 +181,20 @@ test('usuwanie: brak obiektu → NOT_FOUND bez pytania o zgodę; same spacje nie
   r = await K.registry.run('widgets_remove', { widget: 'Lista' }, { source: 'hermes' });   // istnieje → normalnie pyta
   assert.equal(r.ok, true, r.text); assert.equal(asked, 1);
 });
+test('memory_remember: poufne dane z modelu/mostu nie trafiają do pamięci; ręcznie wpisane — tak', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  let r = await K.registry.run('memory_remember', { fact: 'moje hasło do banku to Kot123' }, { source: 'hermes', bridge: true });
+  assert.equal(r.code, 'DENIED'); assert.equal((await K.memory.all()).length, 0);
+  r = await K.registry.run('memory_remember', { fact: 'PESEL 90010112345' }, { source: 'jev' });
+  assert.equal(r.code, 'DENIED');
+  r = await K.registry.run('memory_remember', { fact: 'lubię kawę o 9' }, { source: 'hermes' });
+  assert.equal(r.ok, true, 'zwykłe fakty bez zmian');
+  r = await K.registry.run('memory_remember', { fact: 'hasło do wifi: Dom2024' }, { source: 'local' });
+  assert.equal(r.ok, true, 'wpisane ręcznie — decyzja użytkownika');
+  K.confirm = async () => 'yes';   // ścieżka Hermesa w karcie: strażnik pyta (forceConfirm), użytkownik mówi „tak” → zapis
+  r = await K.registry.run('memory_remember', { fact: 'kod do bramy to PIN 4321' }, { source: 'hermes', forceConfirm: 'To wygląda na poufną informację. Zapamiętać?' });
+  assert.equal(r.ok, true, 'po zgodzie na ekranie — zapisane: ' + r.text);
+});
 test('desktop_open: karta wchodzi do systemu bez kliknięcia i raportuje stan', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   let entered = 0; K.bootEnter = () => { entered++; K.booted = true; K.bootVia = 'bridge'; K.bootAt = Date.now(); K.bootEnter = null; };

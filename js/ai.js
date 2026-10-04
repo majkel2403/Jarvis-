@@ -137,9 +137,8 @@ const netError = () => { const c = cfg(); if (c.provider === 'agent') return `Ni
 const httpError = async r => { let msg = ''; try { const j = await r.json(); msg = j.error?.message || j.message || JSON.stringify(j); } catch (e) { } if (r.status === 401 || r.status === 403) return 'Hermes odrzucił klucz API (' + r.status + ') — sprawdź API_SERVER_KEY w Ustawieniach.'; if (r.status === 404) return 'Nie znaleziono endpointu lub modelu „' + cfg().model + '” (404).'; if (r.status === 429) return 'Przekroczono limit zapytań — spróbuj za chwilę.'; return 'Błąd Hermesa (' + r.status + ')' + (msg ? ': ' + msg.slice(0, 200) : ''); };
 let controller = null;
 /* zwraca { content, calls: [{id,name,args}] (natywne), raw } ; on.delta(acc), on.tool(progress), on.reason(txt), on.call(call) gdy domknie się wywołanie w strumieniu */
-const streamChat = async (messages, o = {}) => {
+const streamChatInner = async (messages, o, ctl) => {
   const c = cfg(), on = o.on || {};
-  controller = new AbortController();
   const body = { model: o.model || c.model, messages, stream: true, temperature: o.temperature ?? 0.6 };
   if (o.format === 'openai') { body.tools = R.tools(); body.tool_choice = 'auto'; }
   if (c.provider === 'openrouter') body.usage = { include: true };   // koszt w ostatniej porcji strumienia (dzienny limit)
@@ -147,8 +146,8 @@ const streamChat = async (messages, o = {}) => {
   let r;
   /* jedno ponowienie po 2 s przy błędzie sieci albo 502/503 (np. chwilowy restart serwera) */
   for (let attempt = 0; ; attempt++) {
-    try { r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: controller.signal, body: JSON.stringify(body) }); }
-    catch (e) { if (e.name === 'AbortError') throw e; if (attempt === 0 && !J.state.settings.offlineMode) { J.proc.active && J.proc.step('system', 'Hermes nie odpowiada — ponawiam za 2 s', [], { status: 'err' }); await new Promise(res => setTimeout(res, J.HERMES_RETRY_MS ?? 2000)); if (controller.signal.aborted) throw Object.assign(new Error('przerwano'), { name: 'AbortError' }); continue; } const er = new Error(J.state.settings.offlineMode ? 'Tryb bez sieci jest włączony — Hermes niedostępny.' : netError()); er.net = true; throw er; }
+    try { r = await fetch(c.url + '/chat/completions', { method: 'POST', headers: headers(), signal: ctl.signal, body: JSON.stringify(body) }); }
+    catch (e) { if (e.name === 'AbortError') throw e; if (attempt === 0 && !J.state.settings.offlineMode) { J.proc.active && J.proc.step('system', 'Hermes nie odpowiada — ponawiam za 2 s', [], { status: 'err' }); await new Promise(res => setTimeout(res, J.HERMES_RETRY_MS ?? 2000)); if (ctl.signal.aborted) throw Object.assign(new Error('przerwano'), { name: 'AbortError' }); continue; } const er = new Error(J.state.settings.offlineMode ? 'Tryb bez sieci jest włączony — Hermes niedostępny.' : netError()); er.net = true; throw er; }
     if (!r.ok && [502, 503].includes(r.status) && attempt === 0) { await new Promise(res => setTimeout(res, J.HERMES_RETRY_MS ?? 2000)); continue; }
     break;
   }
@@ -166,7 +165,7 @@ const streamChat = async (messages, o = {}) => {
   const re = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
   /* watchdog: serwer wiszący w pół strumienia (SSE bez danych) nie blokuje zadania w nieskończoność */
   const IDLE_MS = 90000; let idleHit = false, idleT = null;
-  const armIdle = () => { clearTimeout(idleT); idleT = setTimeout(() => { idleHit = true; try { controller.abort(); } catch (e) { } }, IDLE_MS); };
+  const armIdle = () => { clearTimeout(idleT); idleT = setTimeout(() => { idleHit = true; try { ctl.abort(); } catch (e) { } }, IDLE_MS); };
   armIdle();
   try {
     for (;;) {
@@ -201,6 +200,14 @@ const streamChat = async (messages, o = {}) => {
   return { content, calls: finishNative(), raw: content };
 };
 
+/* każde wywołanie ma własny AbortController: wspólny (module-level) był podmieniany przez równoległe streszczanie,
+   więc „Stop” i strażnik ciszy przerywały nie to zapytanie; abort() przerywa wszystkie aktywne */
+const activeCtl = new Set();
+const streamChat = async (messages, o = {}) => {
+  const ctl = new AbortController(); activeCtl.add(ctl); controller = ctl;
+  try { return await streamChatInner(messages, o, ctl); }
+  finally { activeCtl.delete(ctl); if (controller === ctl) controller = null; }
+};
 /* wyciąganie wywołań <tool_call> (tekstowo) i czyszczenie tekstu do wyświetlenia */
 const parseCalls = text => {
   const calls = [], re = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g; let m;
@@ -454,7 +461,7 @@ J.brain = {
   async reload() { resetGen++; await loadHistory(); },
   snapshot: () => ({ history: history.slice(), summary }),
   restoreSnapshot(sn) { history.length = 0; history.push(...(sn.history || [])); summary = sn.summary || ''; persist(); },
-  abort() { let did = false; if (controller) { controller.abort(); did = true; } if (taskAbort) { taskAbort.abort(); did = true; } J.ask?.cancel?.(); return did; },
+  abort() { let did = false; for (const c of activeCtl) { c.abort(); did = true; } if (taskAbort) { taskAbort.abort(); did = true; } J.ask?.cancel?.(); return did; },
   async models() { const c = cfg(); let r; try { r = await fetch(c.url + '/models', { headers: headers() }); } catch (e) { throw new Error(netError()); } if (!r.ok) throw new Error(await httpError(r)); const j = await r.json(); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean); },
   /* test połączenia + autodetekcja formatu narzędzi */
   async test() {
@@ -563,6 +570,7 @@ J.brain = {
       if (flowRes?.shadow) J.judge.log.update(flowRes.logId, { actual: { local: flowRes.local, tools: lastResults.map(x => x.name) }, outcome: J.aiReady() && !skipNet ? 'hermes' : 'local' });
       bubble.set(reply);
       if (!J.aiReady() || skipNet) { if (!fromSignal) history.push({ role: 'user', content: text }, { role: 'assistant', content: reply }); }   // rozmowa lokalna też buduje kontekst dla Hermesa
+      else if (!fromSignal && (route === 'undo' || route === 'chain')) history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });   // obsłużone lokalnie mimo Hermesa — bez tego w następnej turze nie wiedział, co cofnięto / wykonano
       if (/⏹ przerwano\.$/.test(reply)) status = 'abort';
       if (skipNet && !/⚠/.test(reply)) reply += '\n\n⚠ Hermes offline — tryb lokalny.';
       J.proc.step('reply', 'Odpowiedź Jarvisa', [['Treść', reply]], { preview: reply.replace(/\s+/g, ' ').slice(0, 70) });

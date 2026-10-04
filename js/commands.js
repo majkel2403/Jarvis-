@@ -440,7 +440,12 @@ R.add({ id: 'help', group: 'Interfejs', label: 'Co potrafisz', description: 'Lis
 R.add({ id: 'memory_remember', group: 'Pamięć', label: 'Zapamiętaj', description: 'Zapisuje trwały fakt o użytkowniku lub preferencję (np. "pracuję zdalnie", "lubię kawę o 9"). Fakty trafiają do kontekstu każdej rozmowy.', writes: ['memory'],
   args: { type: 'object', properties: { fact: { type: 'string', maxLength: 200 }, scope: { type: 'string', enum: ['profile', 'preference', 'project', 'other'] } }, required: ['fact'] },
   examples: ['zapamietaj [ze] {fact}', 'zapamietaj sobie {fact}', 'pamietaj [ze] {fact}'],
-  async run({ fact, scope = 'other' }) { const had = (await J.memory.all()).some(x => J.norm(x.fact) === J.norm(fact)); const f = await J.memory.remember(fact, scope); return ok(f, 'Zapamiętałem: ' + fact + '.', null, had ? null : () => J.memory.forget(f.id)); } });
+  async run({ fact, scope = 'other' }, { ctx }) {
+    const trusted = ctx?.source === 'ui' || ctx?.source === 'local' || ctx?.confirmed === true || ctx?.approved === true;
+    /* poufne dane z niezaufanego źródła (model, głos, Jev, most): pamięć trafia do KAŻDEJ rozmowy z modelem — nie zapisujemy.
+       Wcześniej ta kontrola żyła tylko w pętli Hermesa w karcie (ai.js guardCall), a ścieżki Jev/most ją omijały. */
+    if (!trusted && J.policy?.sensitive?.(fact)?.flagged) return fail('DENIED', 'Nie zapisuję poufnych danych (hasła, klucze, numery kart, PESEL) w pamięci, która trafia do każdej rozmowy z modelem. Jeśli naprawdę chcesz, wpisz to sam w Jarvisie: „zapamiętaj …”.');
+    const had = (await J.memory.all()).some(x => J.norm(x.fact) === J.norm(fact)); const f = await J.memory.remember(fact, scope); return ok(f, 'Zapamiętałem: ' + fact + '.', null, had ? null : () => J.memory.forget(f.id)); } });
 R.add({ id: 'memory_recall', group: 'Pamięć', label: 'Przypomnij fakty', description: 'Zwraca zapamiętane fakty pasujące do zapytania (bez zapytania — wszystkie).', idempotent: true, reads: ['memory'],
   args: { type: 'object', properties: { query: { type: 'string' } } }, examples: ['co o mnie wiesz', 'co pamietasz', 'co pamietasz o {query}'],
   async run({ query }) { const l = await J.memory.recall(query); return ok({ facts: l }, l.length ? 'Pamiętam: ' + l.map(f => f.fact).join('; ') + '.' : 'Nie mam jeszcze zapamiętanych faktów' + (query ? ' o „' + query + '”' : '') + '.'); } });

@@ -245,6 +245,7 @@ const api = J.registry = {
       const dec = await J.confirm({ id, label: c.label, args, question: q, source: ctx.source, forced });
       if (dec === 'always' && !forced) api.allowAlways(id);
       else if (dec !== 'yes' && dec !== 'always') return fail('DENIED', dec === 'timeout' ? 'Brak odpowiedzi użytkownika — nie wykonano.' + (viaChat ? ' Jeśli rozmawiasz z nim zdalnie: zapytaj w rozmowie i wywołaj ponownie z ' + CHAT_FLAG + '=true.' : '') : 'Użytkownik odmówił.');
+      ctx = { ...ctx, approved: true };   // użytkownik zatwierdził w oknie zgody (osobny znacznik: „confirmed” znaczy „zatwierdzone ZANIM rejestr zapytał” — agents.js na tym polega)
       }
     }
     /* proaktywność (docs/spec/11-agent.md §6): Jarvis sam z siebie (źródło „signal”) niczego nie zmienia ani nie przełącza okien —
