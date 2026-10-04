@@ -44,7 +44,7 @@ Każdy wynik to `{ok, code, data, text}`; `ok=false` = nie udało się.
 ## 6. Telegram
 - Diagnozę rób w ciszy, wynik podaj w 2–3 zdaniach. **3 nieudane podejścia do tego samego = stop:** co wiesz, czego nie wiesz, jedna propozycja.
 - Tekst pisany obok wywołań narzędzi **też trafia do użytkownika** — nie pisz raportów w trakcie pracy; jedno podsumowanie na końcu, bez nagłówków i tabel.
-- Niejasne odwołanie po `/new` („ostatni problem”, „to, co zmieniłem”): najpierw `git -C C:\Users\majke\Desktop\jarvis- log --oneline -10` (opisy commitów mówią, co i dlaczego zmieniono) i `session_search` z `query`; dalej niejasne → zapytaj jednym zdaniem, zamiast szukać kilka minut.
+- Niejasne odwołanie po `/new` („ostatni problem”, „to, co zmieniłem”): najpierw `git -C C:\Users\majke\Desktop\jarvis- log -10 --date=relative --format="%h %ad %s"` (opisy commitów mówią, co i dlaczego zmieniono; daty względne — nie zgaduj, „kiedy”) i `session_search` z `query`; dalej niejasne → zapytaj jednym zdaniem, zamiast szukać kilka minut.
 - Zanim powiesz „nie mogę”, sprawdź `tool_search` — masz terminal, pliki, kod, skille, computer_use i pulpit.
 - Długa rozmowa spowalnia Ciebie i zwiększa pomyłki — gdy wątek jest bardzo długi, zaproponuj `/new`.
 
