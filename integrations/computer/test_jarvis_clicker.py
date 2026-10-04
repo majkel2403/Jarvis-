@@ -121,6 +121,21 @@ def test_open_app_istniejaca_instancja_jest_wysuwana_zamiast_nowej(windows):
     assert J.open_app("calculator", sleep=lambda s: None).startswith("opened calculator") and windows["front"] == 50
 
 
+def test_open_app_nie_bierze_karty_przegladarki_ani_cudzego_procesu(windows, monkeypatch):
+    names = {10: "comet.exe", 30: "chrome.exe", 31: "notepad++.exe", 99: "systemsettings.exe", 200: "notepad.exe"}
+    monkeypatch.setattr(J, "_proc_name", lambda pid: names.get(pid, ""))
+    windows["wins"][40] = ("Ustawienia – Google Chrome", 30)    # karta przeglądarki o tytule „Ustawienia”
+    windows["appear"] = ("Ustawienia", 99)                      # prawdziwe okno pojawia się dopiero po uruchomieniu
+    assert J.open_app("settings", sleep=lambda s: None).startswith("opened settings")
+    assert windows["launched"] == ["ms-settings:"] and windows["front"] == 99, "nie kliknął w kartę Chrome"
+    # stare okno o pasującym tytule, ale z innego programu (Notepad++ ≠ notepad.exe) nie jest „istniejącą instancją”
+    windows["launched"].clear(); windows["wins"].pop(99, None)
+    windows["wins"][41] = ("notatnik.txt - Notepad++", 31)
+    windows["appear"] = ("Bez tytułu – Notatnik", 200)
+    assert J.open_app("notepad", sleep=lambda s: None).startswith("opened notepad")
+    assert windows["launched"] == ["notepad.exe"] and windows["front"] == 99
+
+
 def test_open_app_odmowy_i_bledy(windows, monkeypatch):
     assert "not in the app list" in J.open_app("powershell")
     assert "not in the app list" in J.open_app("rm -rf /")

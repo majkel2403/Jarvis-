@@ -202,15 +202,34 @@ def _foreground() -> str:
         return ""
 
 
+BROWSER_EXES = {"chrome.exe", "msedge.exe", "comet.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "arc.exe", "chromium.exe"}
+
+
+def _proc_name(pid: int) -> str:
+    try:
+        import psutil
+        return psutil.Process(pid).name().lower()
+    except Exception:  # noqa: BLE001 — proces zniknął albo brak uprawnień
+        return ""
+
+
 def _find_app_window(app: App, before: dict[int, tuple[str, int]]) -> int | None:
-    """Nowe okno o pasującym tytule; w drugiej kolejności okno tego programu, które już było (program miał jedną instancję)."""
+    """Nowe okno o pasującym tytule; w drugiej kolejności okno tego programu, które już było (program miał jedną instancję).
+    Okna przeglądarek nigdy nie pasują (karta „Settings”/„Kalkulator – Google” to nie program), a stare okna programów
+    o znanej nazwie procesu muszą się zgadzać także procesem — inaczej klikaliśmy w cudze okno o podobnym tytule."""
     now = visible_windows()
     fresh = [h for h in now if h not in before]
-    for pool in (fresh, list(now)):
+    for pool, strict in ((fresh, False), (list(now), True)):
         for hwnd in pool:
             title = now[hwnd][0].lower()
-            if any(t in title for t in app.titles):
-                return hwnd
+            if not any(t in title for t in app.titles):
+                continue
+            exe = _proc_name(now[hwnd][1])
+            if exe in BROWSER_EXES:
+                continue
+            if strict and app.exes and exe and exe not in app.exes:
+                continue
+            return hwnd
     if app.exes:
         try:
             import psutil
@@ -273,6 +292,9 @@ def url_of_window(hwnd: int, *, now=time.monotonic, title=None) -> str | None:
     except Exception:  # noqa: BLE001 — okno zniknęło albo odmawia UI Automation
         return None
     _url_cache[hwnd] = (t, url, now())
+    if len(_url_cache) > 64:   # okna przychodzą i odchodzą — bez limitu słownik rósł przez całe zadanie
+        for k in sorted(_url_cache, key=lambda h: _url_cache[h][2])[:len(_url_cache) - 64]:
+            _url_cache.pop(k, None)
     return url or None
 
 

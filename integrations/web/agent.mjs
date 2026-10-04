@@ -73,12 +73,27 @@ export async function startChrome({ log = () => { }, profileDir, port, mode } = 
   if (m === 'chromium') return null;
   const exe = findChrome();
   if (!exe) { if (m === 'chrome') throw new Error('JARVIS_WEB_BROWSER=chrome, ale nie znaleziono Google Chrome (JARVIS_CHROME_PATH)'); return null; }
-  const p = port || +process.env.JARVIS_CDP_PORT || 9223, endpoint = `http://127.0.0.1:${p}`;
-  const probe = async () => { try { const r = await fetch(endpoint + '/json/version', { signal: AbortSignal.timeout(1000) }); return r.ok ? await r.json() : null; } catch { return null; } };
-  let info = await probe(), child = null, reused = !!info;
+  const dir = profileDir || process.env.JARVIS_CHROME_PROFILE || path.join(HOME, 'chrome-profile');
+  fs.mkdirSync(dir, { recursive: true });
+  /* Podpinamy się WYŁĄCZNIE pod Chrome'a, którego sami uruchomiliśmy (pid zapisany w profilu agenta). Wcześniej każdy Chrome
+     z debugowaniem na tym porcie (np. prywatny użytkownika) był przejmowany — z jego kartami i zalogowanymi kontami. */
+  const stateFile = path.join(dir, '.jarvis-cdp.json');
+  const readState = () => { try { return JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { return null; } };
+  const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const probeAt = async port => { try { const r = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) }); return r.ok ? await r.json() : null; } catch { return null; } };
+  let p = port || +process.env.JARVIS_CDP_PORT || 9223;
+  let info = await probeAt(p);
+  const st = readState();
+  const ours = !!info && st?.port === p && st?.pid && alive(st.pid);
+  if (info && !ours) {   // obcy proces na naszym porcie — omijamy go, szukając wolnego portu obok
+    log(`Port ${p} zajmuje obca przeglądarka z debugowaniem — nie podpinam się, szukam wolnego portu`);
+    info = null;
+    for (let q = p + 1; q <= p + 20; q++) if (!(await probeAt(q))) { p = q; break; }
+  }
+  const endpoint = `http://127.0.0.1:${p}`;
+  const probe = () => probeAt(p);
+  let child = null; const reused = !!info;
   if (!info) {
-    const dir = profileDir || process.env.JARVIS_CHROME_PROFILE || path.join(HOME, 'chrome-profile');
-    fs.mkdirSync(dir, { recursive: true });
     child = spawn(exe, [`--remote-debugging-port=${p}`, '--remote-debugging-address=127.0.0.1', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
       '--disable-features=BackForwardCache',   // jak w Chromium z Playwrighta: przy bfcache goBack(domcontentloaded) czeka do limitu 15 s
       '--autoplay-policy=no-user-gesture-required',   // „puść piosenkę”: film ma grać z dźwiękiem od razu, a nie czekać na kliknięcie
@@ -86,6 +101,7 @@ export async function startChrome({ log = () => { }, profileDir, port, mode } = 
     child.on('error', e => log('Chrome nie wystartował: ' + e.message));
     for (let i = 0; i < 100 && !info; i++) { await new Promise(r => setTimeout(r, 150)); info = await probe(); if (child.exitCode !== null) break; }
     if (!info) { child.kill(); if (m === 'chrome') throw new Error('Chrome nie otworzył portu debugowania na ' + endpoint); return null; }
+    try { fs.writeFileSync(stateFile, JSON.stringify({ port: p, pid: child.pid, started: new Date().toISOString() })); } catch (e) { log('Nie zapisałem stanu Chrome agenta: ' + e.message); }
   }
   return { endpoint, version: (info.Browser || '').replace(/^Chrome\//, ''), reused, stop() { if (child && child.exitCode === null) { try { child.kill(); } catch { /* już zamknięty */ } } } };
 }

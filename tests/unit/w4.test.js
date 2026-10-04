@@ -106,6 +106,24 @@ test('przycisk z poleceniem A0 w widgecie pyta zawsze, zwykły działa od razu',
   await btns.find(b => b.textContent === 'Notatnik').onclick(); await wait(20); assert.equal(J.wm.isOpen('notes'), true); assert.equal(asked.length, 1);
 });
 
+test('widget od modelu: przycisk zapisujący pyta i pokazuje PRAWDZIWE polecenie; odczyt/nawigacja bez pytania; widget użytkownika bez zmian', async () => {
+  const J = mk(); const asked = []; J.confirm = async q => { asked.push(q.question); return 'yes'; };
+  const btns = w => { const out = []; const walk = el => { if (!el) return; if (el.tagName === 'BUTTON' && el.onclick) out.push(el); (el.children || []).forEach(walk); }; walk(J.wm.ctx('w:' + w.id).body); return out; };
+  // model podpisał przycisk „Pokaż pogodę”, a naprawdę tworzy notatkę
+  const spec = { v: 1, title: 'Model', blocks: [{ kind: 'buttons', buttons: [{ label: 'Pokaż pogodę', command: 'create_note', args: { title: 'X', content: 'y' } }, { label: 'Notatnik', command: 'open_app', args: { app: 'notes' } }] }] };
+  let r = await run(J, 'widget_build', { spec }, 'hermes'); await wait(30);
+  const wm = J.widgets.list.find(x => x.id === r.data.id);
+  await btns(wm).find(b => b.textContent === 'Pokaż pogodę').onclick(); await wait(20);
+  assert.equal(asked.length, 1, 'zapis z widgetu modelu pyta'); assert.match(asked[0], /zbudowany przez model/); assert.match(asked[0], /wykona: Utwórz notatkę|wykona: .*notat/i);
+  await btns(wm).find(b => b.textContent === 'Notatnik').onclick(); await wait(20); assert.equal(asked.length, 1, 'nawigacja (A3) bez pytania');
+  // ten sam przycisk w widgecie zbudowanym przez użytkownika — bez pytania
+  r = await run(J, 'widget_build', { spec: { ...spec, title: 'Mój' } }, 'ui'); await wait(30);
+  const wu = J.widgets.list.find(x => x.id === r.data.id); assert.equal(wu.author, 'user');
+  await btns(wu).find(b => b.textContent === 'Pokaż pogodę').onclick(); await wait(20); assert.equal(asked.length, 1);
+  // model zmienia widget użytkownika → widget traci pełne zaufanie
+  r = await run(J, 'widget_edit', { widget: wu.id, patch: { title: 'Mój 2' } }, 'hermes'); assert.equal(r.ok, true, r.text); assert.equal(wu.author, 'model');
+});
+
 test('wykresy: chart_show i stats_series (zadania w tygodniu, aktywność)', async () => {
   const J = mk();
   J.tasks.add('09:00', 'x', J.today()); J.tasks.add('10:00', 'y', J.today());

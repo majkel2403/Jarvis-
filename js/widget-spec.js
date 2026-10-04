@@ -149,9 +149,13 @@ const renderBlock = (b, data, w, ctx) => {
   const box = el('div', 'ws-b ws-' + b.kind);
   const run = (cmd, args, label) => {
     const c = J.registry.get(cmd); if (!c) return;
-    const a0 = J.policy.level(c, args || {}) === 'A0';
-    /* przycisk z polecenia A0 pyta zawsze (opis mógł przyjść od modelu) */
-    return J.registry.run(cmd, args || {}, a0 ? { source: 'widget', forceConfirm: 'Widget „' + w.title + '”: ' + (label || c.label) + ' — wykonać?' } : { source: 'ui' }).then(r => { if (r.ok && r.undoEntry) J.undo.offer(r.undoEntry); if (!r.ok) J.toast?.(r.text); J.wspec.refresh(w.id); return r; });
+    const lvl = J.policy.level(c, args || {});
+    /* przycisk z polecenia A0 pyta zawsze; w widgecie zbudowanym (albo zmienionym) przez model pyta też każdy zapis spoza A3 —
+       podpis przycisku pisał model i mógł nie odpowiadać temu, co przycisk naprawdę robi, więc w pytaniu pokazujemy prawdziwe polecenie */
+    const fromModel = w.author === 'model' && (c.writes || []).length && lvl !== 'A3';
+    const real = c.label + (Object.keys(args || {}).length ? ' (' + Object.entries(args).filter(([, v]) => typeof v !== 'object').map(([k, v]) => k + ': ' + String(v).slice(0, 40)).join(', ') + ')' : '');
+    const ask = lvl === 'A0' || fromModel;
+    return J.registry.run(cmd, args || {}, ask ? { source: 'widget', forceConfirm: 'Widget „' + w.title + '”' + (fromModel ? ' (zbudowany przez model)' : '') + ': przycisk „' + (label || c.label) + '” wykona: ' + real + '. Wykonać?' } : { source: 'ui' }).then(r => { if (r.ok && r.undoEntry) J.undo.offer(r.undoEntry); if (!r.ok) J.toast?.(r.text); J.wspec.refresh(w.id); return r; });
   };
   switch (b.kind) {
     case 'text': box.appendChild(el('div', 'ws-text' + (b.size ? ' ' + b.size : '') + (b.dim ? ' dim' : ''), value(data, b.text))); break;

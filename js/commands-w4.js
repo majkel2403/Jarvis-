@@ -49,14 +49,15 @@ R.add({ id: 'widget_edit', group: 'Pulpit i widgety', label: 'Zmień widget zdan
   args: { type: 'object', properties: { widget: { type: 'string', description: 'id albo tytuł; "current" = aktywny' }, patch: { type: 'object' }, instruction: { type: 'string', maxLength: 300 } }, required: ['widget'] },
   examples: ['zmien ten widget na wykres', 'zmien tytul widgetu na {instruction}', 'odswiezaj ten widget co minute', 'zmien widget {widget} na wykres slupkowy'],
   parse(raw, n) { let m; if ((m = /^(zmien (?:ten widget|widget)(?:\s+(.+?))? na wykres.*|odswiezaj (?:ten widget|widget\s+(.+?)) co .+|zmien tytul (?:tego widgetu|widgetu(?:\s+(.+?))?) na .+)$/.exec(n))) { const who = m[2] || m[3] || m[4]; return { args: { widget: who && findWidget(who) ? raw.slice(n.indexOf(who), n.indexOf(who) + who.length) : 'current', instruction: raw.replace(/ten widget |tego widgetu |widget /i, '') }, score: 40 }; } return null; },
-  run({ widget, patch, instruction }) {
+  run({ widget, patch, instruction }, { ctx }) {
     const w = findWidget(widget) || (widget === 'current' ? specWidgets().slice(-1)[0] : null); if (!w) return fail('NOT_FOUND', 'Nie ma widgetu „' + widget + '”.');
     if (w.type !== 'spec') return fail('UNSUPPORTED', '„' + w.title + '” to widget z szablonu — zmieniaj go poleceniami widgets_update / widget_items.');
     let p = patch; if (!p && instruction) p = editByText(w.spec, instruction);
     if (!p) return fail('INVALID_ARGS', instruction ? 'Nie umiem sam zrobić tej zmiany („' + instruction + '”). Hermes może ją opisać jako patch.' : 'Podaj patch albo instruction.');
     const next = J.wspec.merge(w.spec, p), errs = J.wspec.check(next); if (errs.length) return fail('INVALID_ARGS', 'Po zmianie opis jest niepoprawny: ' + errs.slice(0, 4).join('; ') + '.');
-    const prev = w.spec, prevTitle = w.title; J.widgets.setSpec(w.id, next);
-    return ok({ id: w.id, title: w.title }, 'Zmieniłem widget „' + w.title + '”.', { highlight: 'w:' + w.id }, () => { J.widgets.setSpec(w.id, prev); w.title = prevTitle; });
+    const prev = w.spec, prevTitle = w.title, prevAuthor = w.author; J.widgets.setSpec(w.id, next);
+    if (p && /hermes|jev|signal|routine/.test(ctx?.source || '')) { w.author = 'model'; J.save(); }   // model dopisał coś do widgetu użytkownika → jego przyciski tracą pełne zaufanie
+    return ok({ id: w.id, title: w.title }, 'Zmieniłem widget „' + w.title + '”.', { highlight: 'w:' + w.id }, () => { J.widgets.setSpec(w.id, prev); w.title = prevTitle; w.author = prevAuthor; J.save(); });
   } });
 R.add({ id: 'widget_refresh', group: 'Pulpit i widgety', label: 'Odśwież widget', description: 'Pobiera od nowa dane widgetów z opisu (wszystkich albo jednego).', idempotent: true, reads: ['widgets'],
   args: { type: 'object', properties: { widget: { type: 'string' } } },
