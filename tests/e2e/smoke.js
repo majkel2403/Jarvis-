@@ -257,6 +257,18 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     const nodes = [...document.querySelectorAll('.wf-node')]; const out = { open: J.wm.isOpen('workflows'), nodes: nodes.length, done: nodes[0]?.dataset.s, aria: nodes[0]?.getAttribute('aria-label') || '' };
     J.wm.close('workflows'); return out; });
   assert(wfA.open && wfA.nodes === 1 && wfA.done === 'done' && /Krok 1: Krok A/.test(wfA.aria), 'Mapa pracy: ' + JSON.stringify(wfA));
+  // pigułka na pulpicie przy zamkniętej mapie + „Co powstaje”: drzewo plików z podglądu wyniku kroku
+  const wfB = await p.evaluate(async () => {
+    const E = (type, x = {}) => J.workflows.onEvent({ v: 1, type, run_id: 'e2e2', workflow: 'y', name: 'Test drzewa', ts: Date.now() / 1000, state: 'running', total: 2, ...x });
+    E('run.started', { steps: [{ id: 'a', title: 'Struktura', kind: 'hermes' }, { id: 'b', title: 'Zapis', kind: 'write_files' }] });
+    await new Promise(r => setTimeout(r, 120)); const pill = document.querySelector('.wf-pill')?.classList.contains('show');
+    J.wm.open('workflows'); await new Promise(r => setTimeout(r, 300));
+    E('step.started', { step_id: 'a', n: 1, kind: 'hermes', title: 'Struktura', attempt: 1 });
+    E('step.completed', { step_id: 'a', n: 1, kind: 'hermes', title: 'Struktura', ms: 900, artifact: { kind: 'tree', paths: ['src/app.js', 'src/ui/view.js', 'README.md'], filled: false, notes: {} } });
+    await new Promise(r => setTimeout(r, 300));
+    const out = { pill, rows: document.querySelectorAll('#wfArt .wf-tr').length, pillHiddenWithMap: !document.querySelector('.wf-pill')?.classList.contains('show') };
+    E('run.stopped', { state: 'stopped', reason: 'test' }); J.wm.close('workflows'); return out; });
+  assert(wfB.pill && wfB.rows === 5 && wfB.pillHiddenWithMap, 'pigułka i drzewo plików: ' + JSON.stringify(wfB));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });

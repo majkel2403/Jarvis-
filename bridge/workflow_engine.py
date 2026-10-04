@@ -155,6 +155,23 @@ def render_deep(v: Any, ctx: dict) -> Any:
     return v
 
 
+def clean(v: Any) -> Any:
+    """Usuwa samotne połówki par zastępczych (np. ucięte emoji z odpowiedzi modelu) — inaczej zapis UTF-8 stanu przebiegu
+    się wywraca („surrogates not allowed”; test na żywo 2026-10-04, krok „Szkielety plików”)."""
+    if isinstance(v, str):
+        return v.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    if isinstance(v, list):
+        return [clean(x) for x in v]
+    if isinstance(v, dict):
+        return {clean(k): clean(x) for k, x in v.items()}
+    return v
+
+
+def _bytes(text: str) -> bytes:
+    """UTF-8, które nigdy nie rzuca — ostatnia linia obrony zapisu stanu i zdarzeń."""
+    return text.encode("utf-8", "replace")
+
+
 def parse_json_reply(text: str) -> Any:
     t = str(text or "").strip()
     t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t, flags=re.I).strip()
@@ -255,17 +272,17 @@ class WorkflowEngine:
     def _save(self, run: dict) -> None:
         p = self._path(run["id"])
         tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(run, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.write_bytes(_bytes(json.dumps(run, ensure_ascii=False, indent=1)))
         os.replace(tmp, p)
 
     def _event(self, run: dict, type_: str, **extra: Any) -> None:
         evt = {"v": 1, "type": type_, "ts": time.time(), "run_id": run["id"], "workflow": run["workflow"], "name": run["name"],
                "state": run["state"], "total": len(run["steps"]), **extra}
         try:
-            with (self.runs_dir / f"{run['id']}.events.jsonl").open("a", encoding="utf-8") as f:
-                f.write(json.dumps(evt, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
+            with (self.runs_dir / f"{run['id']}.events.jsonl").open("ab") as f:
+                f.write(_bytes(json.dumps(evt, ensure_ascii=False) + "\n"))
+        except Exception as e:  # noqa: BLE001 — zapis historii nie może zatrzymać przebiegu
+            self.log("workflow zapis zdarzenia:", e)
         try:
             self.emit(evt)
         except Exception as e:  # noqa: BLE001 — zdarzenie dla karty nie może zatrzymać przebiegu
@@ -290,7 +307,7 @@ class WorkflowEngine:
         keys = ("id", "workflow", "name", "state", "autonomy", "source", "started", "ended", "cursor", "budget", "budget_used",
                 "pending", "report", "reason", "inputs")
         out = {k: run.get(k) for k in keys}
-        out["steps"] = [{k: s.get(k) for k in ("id", "title", "kind", "state", "attempts", "ms", "preview", "score")} | {"errors": s.get("errors", [])[-2:]}
+        out["steps"] = [{k: s.get(k) for k in ("id", "title", "kind", "state", "attempts", "ms", "preview", "score", "artifact")} | {"errors": s.get("errors", [])[-2:]}
                         for s in run["steps"]]
         return out
 
@@ -408,7 +425,10 @@ class WorkflowEngine:
         if state == "done":
             d = self.definitions().get(run["workflow"]) or {}
             run["report"] = render(d.get("report") or "Workflow „{name}” zakończony.", self._ctx(run) | {"name": run["name"]}).strip()
-        self._save(run)
+        try:
+            self._save(run)
+        except Exception as e:  # noqa: BLE001 — koniec przebiegu MUSI dotrzeć do karty, nawet gdy zapis zawiedzie
+            self.log("workflow zapis stanu:", e)
         self._event(run, "run." + {"done": "completed", "failed": "failed", "stopped": "stopped"}[state],
                     report=run.get("report"), reason=run.get("reason"), budget_used=run["budget_used"])
         self.tasks.pop(run["id"], None)
@@ -497,10 +517,10 @@ class WorkflowEngine:
             if not errs:
                 if step.get("output"):
                     run["outputs"][step["output"]] = out
-                st.update(state="done", preview=self._preview(out))
+                st.update(state="done", preview=self._preview(out), artifact=self._artifact(out))
                 self._save(run)
                 self._event(run, "step.completed", step_id=step["id"], n=i + 1, title=step["title"], kind=step["kind"],
-                            attempt=attempt, ms=st["ms"], preview=st["preview"], score=st.get("score"))
+                            attempt=attempt, ms=st["ms"], preview=st["preview"], score=st.get("score"), artifact=st.get("artifact"))
                 return True
             reason = "; ".join(errs)[:400]
             st["errors"].append(reason)
@@ -514,6 +534,33 @@ class WorkflowEngine:
             self._event(run, "step.failed", step_id=step["id"], n=i + 1, title=step["title"], kind=step["kind"], attempt=attempt, reason=reason)
             return False
         return False
+
+    @staticmethod
+    def _artifact(out: Any) -> dict | None:
+        """Zwięzły podgląd wyniku kroku dla wizualizacji („co powstaje”): pola briefu, nagłówki dokumentu, drzewo plików,
+        zapisany folder. Ograniczony rozmiarem — idzie zdarzeniem do karty i do pliku zdarzeń (powtórka)."""
+        if isinstance(out, dict) and "root" in out and isinstance(out.get("files"), list):
+            return {"kind": "files_written", "root": str(out["root"])[:260], "count": int(out.get("count") or 0),
+                    "files": [str(f)[:160] for f in out["files"][:60]], "commit": str(out.get("commit") or "")[:40]}
+        if isinstance(out, dict) and isinstance(out.get("pliki"), list):
+            items = [f for f in out["pliki"] if isinstance(f, dict)]
+            return {"kind": "tree", "paths": [str(f.get("path", ""))[:160] for f in items[:60]],
+                    "filled": bool(items) and all(str(f.get("content", "")).strip() for f in items),
+                    "notes": {str(f.get("path", ""))[:160]: str(f.get("cel", ""))[:120] for f in items[:60] if f.get("cel")}}
+        if isinstance(out, dict):
+            fields: dict[str, Any] = {}
+            for k, v in list(out.items())[:10]:
+                if isinstance(v, str):
+                    fields[str(k)[:40]] = v[:220]
+                elif isinstance(v, list):
+                    fields[str(k)[:40]] = [str(x)[:120] for x in v[:8]]
+                elif isinstance(v, (int, float, bool)):
+                    fields[str(k)[:40]] = v
+            return {"kind": "fields", "fields": fields}
+        if isinstance(out, str) and out.strip():
+            heads = [ln.lstrip("#").strip()[:80] for ln in out.splitlines() if ln.startswith("#")][:14]
+            return {"kind": "doc", "headings": heads, "chars": len(out), "excerpt": re.sub(r"\s+", " ", out.strip())[:300]}
+        return None
 
     @staticmethod
     def _preview(out: Any) -> str:
@@ -558,7 +605,8 @@ class WorkflowEngine:
             run["budget_used"]["tokens"] += int(tokens or 0)
             if not str(text or "").strip():
                 raise ValueError("pusta odpowiedź Hermesa")
-            return parse_json_reply(text) if step.get("format") == "json" else str(text).strip()
+            text = clean(str(text))
+            return clean(parse_json_reply(text)) if step.get("format") == "json" else text.strip()
         if kind == "check":
             return None
         if kind == "write_files":
@@ -606,7 +654,7 @@ class WorkflowEngine:
             if base_resolved not in target.parents:
                 raise ValueError(f"ścieżka poza folderem projektu: {rel}")
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content if content.endswith("\n") else content + "\n", encoding="utf-8")
+            target.write_bytes(_bytes(content if content.endswith("\n") else content + "\n"))
         commit = await asyncio.to_thread(self._git_commit, root, step.get("git_commit") or f"Workflow {run['name']}")
         return {"root": str(root), "count": len(files), "files": sorted(files), "commit": commit}
 

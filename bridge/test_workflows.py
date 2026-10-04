@@ -100,6 +100,14 @@ async def main():
         check("zdarzenia: start → kroki → koniec", types[0] == "run.started" and types[-1] == "run.completed" and types.count("step.completed") == 6, str(types))
         check("JSON w bloku kodu rozpoznany", e.runs[snap["id"]]["outputs"]["tresc"]["pliki"][1]["path"] == "src/app.js")
         check("zdarzenia zapisane do pliku (powtórka)", len(e.events_of(snap["id"])) == len(events))
+        arts = {ev["step_id"]: ev.get("artifact") for ev in events if ev["type"] == "step.completed"}
+        check("artefakt briefu: pola", arts["brief"]["kind"] == "fields" and arts["brief"]["fields"]["nazwa"] == "Nawyki" and len(arts["brief"]["fields"]["mvp"]) == 3)
+        check("artefakt architektury: nagłówki", arts["architektura"]["kind"] == "doc" and "Komponenty" in arts["architektura"]["headings"])
+        check("artefakt struktury: drzewo z celami", arts["struktura"]["kind"] == "tree" and arts["struktura"]["paths"] == ["index.html", "src/app.js"] and arts["struktura"]["notes"]["src/app.js"] == "logika")
+        check("artefakt treści: drzewo wypełnione", arts["tresc"]["filled"] is True)
+        check("artefakt zapisu: folder, liczba, commit", arts["zapis"]["kind"] == "files_written" and arts["zapis"]["count"] == 6 and arts["zapis"]["commit"])
+        check("artefakt w migawce (wznowienie / karta podłączona później)", run["steps"][0]["artifact"]["kind"] == "fields")
+        check("artefakty mieszczą się w limicie", all(len(json.dumps(a, ensure_ascii=False)) < 12000 for a in arts.values() if a))
 
         # --- drugi przebieg z tą samą nazwą → nowy folder, nie nadpisuje
         snap2 = await e.start("od-pomyslu-do-projektu", {"pomysl": "aplikacja do nawyków"})
@@ -117,6 +125,17 @@ async def main():
         check("druga próba dostaje powód porażki i zmianę", "brak sekcji" in retry_prompt and "nagłówki" in retry_prompt)
         check("zdarzenie step.retry", any(ev["type"] == "step.retry" for ev in events))
         check("osobna sesja Hermesa na krok i próbę", len({sid for sid, _ in h.calls}) == len(h.calls))
+
+        # --- ucięte emoji (samotna połówka pary zastępczej) w odpowiedzi modelu nie wywraca zapisu stanu
+        broken = '{"pliki": [{"path": "index.html", "content": "<!-- strona \\ud83d -->"}, {"path": "src/app.js", "content": "// logika \\ud83d\\ude00"}]}'
+        e, events = engine(tmp / "u", hermes=FakeHermes(script={"Szkielety plików": [broken]}))
+        snap = await e.start("od-pomyslu-do-projektu", {"pomysl": "x"})
+        await finish(e, snap["id"])
+        r = e.status(snap["id"])
+        root = Path(e.runs[snap["id"]]["outputs"]["zapis"]["root"])
+        check("samotna połówka emoji: przebieg done, stan zapisany", r["state"] == "done" and json.loads((tmp / "u" / "runs" / f"{snap['id']}.json").read_text(encoding="utf-8"))["state"] == "done", r.get("reason"))
+        check("pełne emoji zostaje, połówka zamieniona", chr(0x1F600) in (root / "src/app.js").read_text(encoding="utf-8") and chr(0xFFFD) in (root / "index.html").read_text(encoding="utf-8"))
+        check("wf.clean: tylko tekst, struktura bez zmian", wf.clean({"a": ["x" + chr(0xD83D)], "b": 1}) == {"a": ["x" + chr(0xFFFD)], "b": 1})
 
         # --- niebezpieczna ścieżka → odrzucona (po wyczerpaniu prób przebieg failed, nic poza folderem)
         bad = {"pliki": [{"path": "../../evil.txt", "cel": "x"}]}

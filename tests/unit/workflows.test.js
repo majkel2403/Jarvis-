@@ -91,3 +91,31 @@ test('workflow_run z karty: start przez most; brak wymaganego wejścia → INVAL
   await R.run('workflow_stop', {}, { source: 'ui' });
   assert.ok(calls.some(c => /\/workflows\/runs\/all\/stop$/.test(c.url) && c.method === 'POST'));
 });
+
+test('typowy czas kroku z historii, czas do końca, podgląd wyniku w stanie kroku', () => {
+  const { J, ev } = mk(), WF = J.workflows;
+  // ukończony przebieg z historii: brief 20 s, architektura 40 s
+  WF.onEvent({ v: 1, type: 'run.snapshot', run_id: 'old', ts: 1, snapshot: { id: 'old', workflow: DEF.id, name: DEF.name, state: 'done', started: 1, steps: [{ ...STEPS[0], state: 'done', ms: 20000 }, { ...STEPS[1], state: 'done', ms: 40000 }] } });
+  const now = 1000;
+  ev('run.started', { steps: STEPS, ts: now });
+  const r = WF.runs.get('r1');
+  assert.equal(JSON.stringify(WF.expect(r)), JSON.stringify({ brief: 20000, architektura: 40000 }));
+  ev('step.started', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, ts: now });
+  assert.equal(Math.round(WF.eta(r, now + 5)), 55, '15 s z briefu + 40 s architektury');
+  ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 20000, ts: now + 20, artifact: { kind: 'fields', fields: { nazwa: 'Nawyki', mvp: ['a', 'b'] } } });
+  assert.equal(r.steps[0].artifact.fields.nazwa, 'Nawyki', 'podgląd wyniku zapisany w kroku');
+  ev('run.completed', { state: 'done', ts: now + 70 });
+  assert.equal(WF.eta(r), 0, 'po końcu brak czasu do końca');
+  assert.match(WF.cardText(r), /▰▰▱|▰▱/, 'pasek postępu w karcie czatu');
+});
+
+test('bezpiecznik: zgubione zdarzenie końca → stan z mostu domyka przebieg (Process Log, karta czatu)', async () => {
+  const { J, ev, said } = mk(), WF = J.workflows;
+  ev('run.started', { steps: STEPS });
+  const r = WF.runs.get('r1'); r.lastEventAt = Date.now() - 120000;
+  J.agents.api = async path => /\/workflows\/runs$/.test(path) ? { runs: [{ id: 'r1', workflow: DEF.id, name: DEF.name, state: 'failed', started: 1, ended: 2, reason: 'błąd silnika: test', steps: STEPS.map(s => ({ ...s, state: 'done' })) }] } : {};
+  WF.refreshedAt = 0; WF.watchdog();
+  await new Promise(res => setTimeout(res, 30));
+  assert.equal(r.state, 'failed'); assert.equal(J.proc.active, false, 'Process Log zamknięty');
+  assert.ok(said.some(x => /nie powiódł się[\s\S]*błąd silnika: test/.test(x.text)), 'karta w czacie z powodem');
+});
