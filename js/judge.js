@@ -43,6 +43,7 @@ const setState = st => { if (status.state !== st) { status.state = st; J.emit('j
 const brk = { fails: [], openUntil: 0, reason: '', notified: false };
 const breakerOpen = () => Date.now() < brk.openUntil;
 const openBreaker = (ms, why) => {
+  if (!breakerOpen()) brk.notified = false;   // poprzednia pauza minęła bez sukcesu — nowa pauza to nowa informacja dla użytkownika
   brk.openUntil = Date.now() + ms; brk.reason = why; brk.fails = []; setState('down');
   if (!brk.notified) { brk.notified = true; J.notice?.({ title: 'Jev wstrzymany', body: why + ' — polecenia działają bez niego (' + Math.max(1, Math.round(ms / 60000)) + ' min).', kind: 'hermes' }); }
 };
@@ -129,7 +130,8 @@ const sanitize = (questions, answers) => {
 const call = async (questions, state, opts = {}) => {
   const t0 = performance.now(), timeout = opts.timeout || 1500;
   let ck = null;
-  if (opts.cache) { ck = hash(JSON.stringify([questions, state, S().jevModel])); const c = cache.get(ck); if (c && Date.now() - c.ts < CACHE_TTL) { status.cacheHits++; return { ...c.res, cached: true }; } }
+  /* klucz bez godziny: cache żyje 60 s, a zmiana minuty między dwoma wywołaniami dawała chybienie */
+  if (opts.cache) { const { time: _t, ...keyState } = state || {}; ck = hash(JSON.stringify([questions, keyState, S().jevModel])); const c = cache.get(ck); if (c && Date.now() - c.ts < CACHE_TTL) { status.cacheHits++; return { ...c.res, cached: true }; } }
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), timeout);
   let r;
   try {
@@ -160,13 +162,16 @@ const call = async (questions, state, opts = {}) => {
 const conf = a => a == null ? 0 : a.type === 'noul' ? Math.abs((a.noul ?? .5) - .5) * 2 : (a.confidence ?? 0);
 
 /* ---------- pytania ---------- */
+/* kryteria z ~140 poleceń (~20 KB) liczone raz — rejestr nie zmienia się po starcie; klucz = liczba poleceń (gdyby coś doszło) */
+let iqCache = null, iqN = -1;
 const intentQuestion = () => {
+  const nCmd = J.registry.list().length; if (iqCache && iqN === nCmd) return iqCache;
   const criteria = {};
   J.registry.list(c => c.hermes !== false || c.id === 'help').forEach(c => { criteria[c.id] = c.description.replace(/\s+/g, ' ').slice(0, 140) + (c.examples[0] ? ' e.g. "' + c.examples[0].replace(/[{}[\]]/g, '') + '"' : ''); });
   criteria.conversation = 'The user is chatting, asking a general knowledge question, or making small talk that does not map to any command.';
   criteria.multi_step = 'The request needs several different commands or reasoning across steps (e.g. "plan my evening", "check the weather and note it").';
   criteria.unclear = 'The utterance is ambiguous, incomplete, or cannot be mapped confidently.';
-  return { type: 'choice', instructions: 'The user speaks Polish to Jarvis, a desktop assistant. Which single command from the registry best matches the utterance in "utterance", given the desktop state? Pick "conversation" for chat, "multi_step" for compound requests, "unclear" when unsure.', criteria };
+  iqN = nCmd; return (iqCache = { type: 'choice', instructions: 'The user speaks Polish to Jarvis, a desktop assistant. Which single command from the registry best matches the utterance in "utterance", given the desktop state? Pick "conversation" for chat, "multi_step" for compound requests, "unclear" when unsure.', criteria });
 };
 const Q = {
   destructive: { type: 'noul', instructions: 'Would carrying out the utterance delete, overwrite, close, or irreversibly change user data or windows, or open an untrusted website?', criteria: { true: 'The action removes or overwrites notes, tasks, widgets, files, layouts, closes windows, or opens an unknown URL.', false: 'The action is read-only, opens an app, creates something new, or changes a reversible setting.' } },

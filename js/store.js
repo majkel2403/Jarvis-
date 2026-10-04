@@ -37,6 +37,7 @@ const ls = {
   keys: () => { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(LS)) out.push(k.slice(LS.length)); } } catch (e) { } return out; }
 };
 
+const pushQ = new Map();
 J.store = {
   /* czy IndexedDB działa (ustalane przy pierwszym użyciu) */
   ready: false,
@@ -55,8 +56,11 @@ J.store = {
     try { return await tx('readonly', s => s.getAllKeys()); } catch (e) { return ls.keys(); }
   },
   /* lista z limitem: dopisuje element i utrzymuje max N wpisów */
-  async push(key, item, max = 200) {
-    const l = await J.store.get(key, []); l.push(item); while (l.length > max) l.shift(); await J.store.set(key, l); return l;
+  /* kolejka per klucz: dwa równoczesne push (odczyt → dopisanie → zapis) gubiły jeden wpis */
+  push(key, item, max = 200) {
+    const run = (pushQ.get(key) || Promise.resolve()).then(async () => { const l = await J.store.get(key, []); l.push(item); while (l.length > max) l.shift(); await J.store.set(key, l); return l; });
+    pushQ.set(key, run.catch(() => { }));
+    return run;
   },
   /* przybliżony rozmiar danych (do Monitora systemu) */
   async size() {

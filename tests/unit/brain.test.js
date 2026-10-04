@@ -278,3 +278,27 @@ test('konfiguracja przez fragment #: działa, czyści adres, nie ostrzega o serw
   const Q = load({ files: ['core.js'], location: { href: 'http://localhost/?jevKey=sk-or-q', search: '?jevKey=sk-or-q' } });
   assert.equal(Q.state.settings.jevKey, 'sk-or-q'); assert.equal(Q.configViaQuery, true, 'klucz w „?” daje ostrzeżenie');
 });
+test('polityka A0–A3 zgodna z rejestrem: każdy wpis A3/A2 istnieje i naprawdę ma ten poziom', () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  const bad = [];
+  for (const [name, set] of [['A3', K.policy.A3], ['A2', K.policy.A2]]) for (const id of set) { const c = K.registry.get(id); if (!c) bad.push(name + ': brak ' + id); else if (K.policy.level(c, {}) !== name) bad.push(name + ': ' + id + ' → ' + K.policy.level(c, {})); }
+  assert.deepEqual(bad, [], 'martwe albo sprzeczne wpisy: ' + bad.join(', '));
+});
+test('store.push: 50 równoczesnych dopisań do jednego logu — żaden wpis nie ginie, limit działa', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  await Promise.all(Array.from({ length: 50 }, (_, i) => K.store.push('t.log', i)));
+  assert.equal((await K.store.get('t.log', [])).length, 50);
+  await Promise.all(Array.from({ length: 30 }, (_, i) => K.store.push('t.cap', i, 10)));
+  const cap = await K.store.get('t.cap', []); assert.equal(cap.length, 10); assert.equal(cap[9], 29, 'zostają najnowsze');
+});
+test('service worker: każdy plik powłoki istnieje, a każdy skrypt ze strony jest w powłoce offline', () => {
+  const fs = require('fs'), path = require('path'), ROOT = path.join(__dirname, '..', '..');
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const shell = JSON.parse(sw.match(/const SHELL = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  const missing = shell.filter(f => f !== './' && !fs.existsSync(path.join(ROOT, f)));
+  assert.deepEqual(missing, [], 'brakujące pliki w SHELL: ' + missing.join(', '));
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const scripts = [...html.matchAll(/src="(js\/[^"]+)"/g)].map(m => m[1]);
+  const notCached = scripts.filter(s => !shell.includes(s));
+  assert.deepEqual(notCached, [], 'skrypty strony bez wersji offline: ' + notCached.join(', '));
+});

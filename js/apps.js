@@ -27,10 +27,12 @@ J.calc = (src) => {
     if (peek() === '(') { i++; const v = expr(); if (s[i++] !== ')') throw new Error('brak )'); return v; }
     throw new Error('błąd składni');
   };
-  const unary = () => { if (peek() === '-') { i++; return -unary(); } if (peek() === '+') { i++; return unary(); } return postfix(); };
-  const postfix = () => { let v = num(); while (peek() === '%' || peek() === '!') { const c = s[i++]; if (c === '%') v /= 100; else { let f = 1; for (let k = 2; k <= v; k++) f *= k; v = f; } } return v; };
-  const pow = () => { const b = unary(); if (peek() === '^') { i++; return Math.pow(b, pow()); } return b; };
-  const term = () => { let v = pow(); while (peek() === '*' || peek() === '/') { const o = s[i++]; const r = pow(); v = o === '*' ? v * r : v / r; } return v; };
+  /* minus jednoargumentowy słabszy niż potęga: -2^2 = -(2^2) = -4 (konwencja matematyczna; wcześniej wychodziło 4) */
+  const unary = () => { if (peek() === '-') { i++; return -unary(); } if (peek() === '+') { i++; return unary(); } return pow(); };
+  /* silnia: tylko liczby całkowite 0–170 (171! = Infinity); wcześniej pętla do „1000000!” zawieszała kartę */
+  const postfix = () => { let v = num(); while (peek() === '%' || peek() === '!') { const c = s[i++]; if (c === '%') v /= 100; else { if (!Number.isInteger(v) || v < 0) throw new Error('silnia tylko z liczby całkowitej ≥ 0'); if (v > 170) throw new Error('silnia za duża (maks. 170!)'); let f = 1; for (let k = 2; k <= v; k++) f *= k; v = f; } } return v; };
+  const pow = () => { const b = postfix(); if (peek() === '^') { i++; return Math.pow(b, unary()); } return b; };   // wykładnik może być ujemny: 2^-1
+  const term = () => { let v = unary(); while (peek() === '*' || peek() === '/') { const o = s[i++]; const r = unary(); v = o === '*' ? v * r : v / r; } return v; };
   const expr = () => { let v = term(); while (peek() === '+' || peek() === '-') { const o = s[i++]; const r = term(); v = o === '+' ? v + r : v - r; } return v; };
   if (!s) throw new Error('puste wyrażenie');
   const v = expr();
@@ -66,7 +68,8 @@ J.weather = {
     if (!r.ok) { const lk = lastKnown(); if (lk) return lk; throw new Error('Serwis pogody niedostępny'); }
     const j = await r.json();
     const d = { city: l.city, current: j.current, daily: j.daily, hourly: j.hourly || null, units: { temp: s.units?.temp === 'F' ? '°F' : '°C', wind: s.units?.wind === 'ms' ? 'm/s' : 'km/h' } };
-    J.state.ui.lastWeather = { ...(J.state.ui.lastWeather || {}), [J.norm(l.city || '')]: { d, ts: Date.now() } }; J.save();
+    { const lw = { ...(J.state.ui.lastWeather || {}), [J.norm(l.city || '')]: { d, ts: Date.now() } };   // ostatnie 8 miast — bez limitu pamięć rosła z każdym sprawdzanym miastem
+      J.state.ui.lastWeather = Object.fromEntries(Object.entries(lw).sort((a, b) => b[1].ts - a[1].ts).slice(0, 8)); J.save(); }
     if (!loc || loc.city === s.city) { this.data = d; this.ts = Date.now(); J.emit('weather', d); }
     return d;
   },
@@ -934,7 +937,7 @@ J.apps.weather = {
       navigator.geolocation.getCurrentPosition(async p => {
         const s = J.state.settings; s.lat = p.coords.latitude; s.lon = p.coords.longitude; s.city = 'Moja lokalizacja'; J.save();
         try { const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&lat=${s.lat}&lon=${s.lon}`); const j = await r.json(); s.city = j.address?.city || j.address?.town || j.address?.village || s.city; J.save(); } catch (e) { }
-        J.weather.ts = 0; load(); J.toast('Ustawiono lokalizację: ' + s.city);
+        J.weather.ts = 0; load(); J.toast('Ustawiono lokalizację: ' + s.city + ' (nazwę miejscowości podaje OpenStreetMap)');
       }, () => J.toast('Brak zgody na lokalizację'));
     };
     let cityNow = null;
@@ -963,7 +966,7 @@ J.apps.terminal = {
       else if (e.key === 'Tab') { e.preventDefault(); const m = cmdNames.filter(k => k.startsWith(inp.value)); if (m.length === 1) inp.value = m[0] + ' '; else if (m.length) print('<span class="d">' + m.join('  ') + '</span>'); }
       else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); out.innerHTML = ''; }
     });
-    body.addEventListener('click', () => inp.focus());
+    body.addEventListener('click', () => { if (!String(window.getSelection?.() || '')) inp.focus(); });   // nie kradnij zaznaczenia — użytkownik kopiuje wynik
     print('<span class="c">Jarvis OS 2.1</span> — terminal. Wpisz <span class="c">help</span>, aby zobaczyć polecenia.');
     ctx.prefill = t => { inp.value = String(t || ''); inp.focus(); };   // tylko wpisuje — wykonanie wymaga Enter
     ctx.dirty = () => !!inp.value.trim();

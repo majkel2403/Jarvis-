@@ -42,6 +42,8 @@ test('calc: parser wyrażeń', () => {
   assert.equal(J.calc('2+2*2'), 6);
   assert.equal(J.calc('15/100*2400'), 360);
   assert.equal(J.calc('sqrt(16)+2^3'), 12);
+  assert.equal(J.calc('-2^2'), -4, 'minus słabszy niż potęga'); assert.equal(J.calc('(-2)^2'), 4); assert.equal(J.calc('2^-1'), 0.5); assert.equal(J.calc('2^3^2'), 512); assert.equal(J.calc('2*-3'), -6);
+  assert.throws(() => J.calc('1000000!'), /za duża/, 'duża silnia nie wiesza karty'); assert.throws(() => J.calc('2.5!'), /całkowitej/);
   assert.equal(J.calc('10%'), 0.1);
   assert.throws(() => J.calc('2+'));
   assert.throws(() => J.calc('foo'));
