@@ -20,7 +20,7 @@ def run(label):
     check("dyski: co najmniej jeden, z polami", bool(d["disks"]) and {"drive", "total_gb", "free_gb", "used_pct"} <= set(d["disks"][0]), str(d["disks"]))
     check("dysk: wolne ≤ całość, procent 0–100", all(0 <= k["free_gb"] <= k["total_gb"] and 0 <= k["used_pct"] <= 100 for k in d["disks"]))
     check("pamięć: wolne ≤ całość", bool(d["memory"]) and 0 < d["memory"]["free_gb"] <= d["memory"]["total_gb"], str(d["memory"]))
-    check("czas działania dodatni", (d["uptime_h"] or 0) > 0, str(d["uptime_h"]))
+    check("czas działania odczytany i nieujemny (świeży serwer CI może mieć < 3 min)", d["uptime_h"] is not None and d["uptime_h"] >= 0, str(d["uptime_h"]))
     txt = si.describe(d)
     check("opis po polsku z przecinkiem dziesiętnym", "wolne" in txt and "GB" in txt and "," in txt, txt[:200])
     return d
@@ -33,6 +33,8 @@ if si.psutil:
     saved, si.psutil = si.psutil, None
     try:
         run("Bez psutil (tylko biblioteka standardowa)")
+        if sys.platform == "win32":   # ścieżka ctypes ma dawać to samo co psutil (łapie przekręcanie 32-bitowe po 24,8 dnia działania)
+            check("czas działania: ctypes ≈ psutil (różnica < 0,2 godz.)", abs((si.uptime_hours() or -99) - (with_psutil["uptime_h"] or 99)) < 0.2, f'{si.uptime_hours()} vs {with_psutil["uptime_h"]}')
         check("bez psutil: brak procesów, ale bez wyjątku", si.snapshot()["top_processes"] == [])
     finally:
         si.psutil = saved

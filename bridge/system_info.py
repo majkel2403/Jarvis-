@@ -91,7 +91,9 @@ def uptime_hours() -> float | None:
             return round((time.time() - psutil.boot_time()) / 3600, 1)
         if os.name == "nt":
             import ctypes
-            return round(ctypes.windll.kernel32.GetTickCount64() / 3_600_000, 1)  # type: ignore[attr-defined]
+            k = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            k.GetTickCount64.restype = ctypes.c_ulonglong   # domyślny typ (32-bit int) przekręcałby się po 24,8 dnia działania komputera
+            return round(k.GetTickCount64() / 3_600_000, 1)
     except Exception:  # noqa: BLE001
         pass
     return None
