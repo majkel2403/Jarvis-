@@ -67,17 +67,64 @@ def cheatsheet() -> str:
     return "\n".join(lines)
 
 
-def inject_cheatsheet(skill: Path) -> bool:
+def inject_block(skill: Path, begin: str, end: str, block: str) -> bool:
+    """Podmienia blok między znacznikami (begin bez dopisku w nawiasie identyfikuje blok), a gdy go nie ma — dokleja na końcu."""
     if not skill.exists():
         return False
     s = skill.read_text(encoding="utf-8")
-    block = cheatsheet()
-    if CHEAT_BEGIN.split(" (")[0] in s:
-        s = re.sub(re.escape(CHEAT_BEGIN.split(" (")[0]) + r".*?" + re.escape(CHEAT_END), lambda _m: block, s, flags=re.S)
+    key = begin.split(" (")[0]
+    if key in s:
+        s = re.sub(re.escape(key) + r".*?" + re.escape(end), lambda _m: block, s, flags=re.S)
     else:
         s = s.rstrip() + "\n\n" + block + "\n"
     skill.write_text(s, encoding="utf-8")
     return True
+
+
+def inject_cheatsheet(skill: Path) -> bool:
+    return inject_block(skill, CHEAT_BEGIN, CHEAT_END, cheatsheet())
+
+
+CAT_BEGIN, CAT_END = "<!-- JARVIS-CATALOG:BEGIN (z hermes/skills/jarvis-os-catalog.md — nie edytuj ręcznie) -->", "<!-- JARVIS-CATALOG:END -->"
+
+
+def inject_catalog(skill: Path) -> bool:
+    """Katalog możliwości pulpitu (dawny SOUL §4) — wiedza na żądanie w skillu, nie w tożsamości."""
+    src = HERE / "skills" / "jarvis-os-catalog.md"
+    return src.exists() and inject_block(skill, CAT_BEGIN, CAT_END, CAT_BEGIN + "\n" + src.read_text(encoding="utf-8").strip() + "\n" + CAT_END)
+
+
+GUARD_HOOK_MATCHER = "terminal|execute_code"
+
+
+def guard_hook_command(pdir: Path) -> str:
+    return f"{sys.executable} {pdir / 'scripts' / 'guard_tools.py'}"
+
+
+def set_guard_hook(cfg: dict, cmd: str) -> None:
+    """Twarde blokady (hak pre_tool_call) zamiast próśb w SOUL: wpis tylko dla guard_tools.py, inne haki zostają."""
+    hooks = cfg.get("hooks") or {}
+    cfg["hooks"] = hooks
+    lst = [h for h in (hooks.get("pre_tool_call") or []) if not (isinstance(h, dict) and "guard_tools.py" in str(h.get("command", "")))]
+    lst.append({"matcher": GUARD_HOOK_MATCHER, "command": cmd, "timeout": 10})
+    hooks["pre_tool_call"] = lst
+
+
+def approve_guard_hook(pdir: Path, cmd: str) -> bool:
+    """Zgoda pierwszego użycia TYLKO dla naszego haka (to samo co --accept-hooks, ale bez akceptowania obcych haków).
+    Gateway działa bez terminala — bez wpisu w shell-hooks-allowlist.json hak po cichu by się nie zarejestrował."""
+    import subprocess
+    env = dict(os.environ, HERMES_HOME=str(pdir))
+    code = "import sys; from agent.shell_hooks import _record_approval; _record_approval('pre_tool_call', sys.argv[1])"
+    return subprocess.run([sys.executable, "-c", code, cmd], env=env, capture_output=True).returncode == 0
+
+
+def context_dir(cfg: dict) -> Path:
+    """Katalog, z którego Hermes czyta pliki projektu (HERMES.md): terminal.cwd; „.” = katalog startowy gatewaya
+    (run-service.ps1 uruchamia go w %USERPROFILE%)."""
+    raw = str(((cfg.get("terminal") or {}).get("cwd")) or ".").strip()
+    p = Path(raw).expanduser()
+    return p if p.is_absolute() and p.is_dir() else Path.home()
 
 
 def read_env(p: Path) -> list[str]:
@@ -125,6 +172,7 @@ def main() -> int:
     }
     pt = cfg.setdefault("platform_toolsets", {})
     pt["api_server"] = list(ENABLED)
+    set_guard_hook(cfg, guard_hook_command(pdir))
 
     env = read_env(env_path)
     # Najmniejsze uprawnienia: usuń sekrety kanałów, których ten profil nie obsługuje (Telegram ZOSTAJE — to kanał tego profilu).
@@ -165,14 +213,21 @@ def main() -> int:
     for old_soul in sorted(pdir.glob("SOUL.md.bak-jarvis-desktop-*"))[:-3]:
         old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
-    sdir = pdir / "scripts"   # skrypty cronów no-agent (np. raport poranny) — źródło w repo: hermes/scripts/
+    sdir = pdir / "scripts"   # skrypty cronów no-agent i haków (raport poranny, guard_tools) — źródło w repo: hermes/scripts/
     for src in sorted((HERE / "scripts").glob("*.py")):
         sdir.mkdir(exist_ok=True)
         shutil.copy2(src, sdir / src.name)
-        print(f"  skrypt cron -> scripts\\{src.name}")
+        print(f"  skrypt -> scripts\\{src.name}")
     skill = pdir / "skills" / "jarvis-os-management" / "SKILL.md"
     if inject_cheatsheet(skill):
         print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")
+    if inject_catalog(skill):
+        print(f"  katalog możliwości -> {skill.relative_to(pdir)}")
+    hmd = context_dir(cfg) / "HERMES.md"
+    shutil.copy2(HERE / "HERMES.md", hmd)   # kontekst projektu (instrukcja pracy); pierwszeństwo przed AGENTS.md/CLAUDE.md
+    print(f"  instrukcja pracy -> {hmd}")
+    ok_hook = approve_guard_hook(pdir, guard_hook_command(pdir))
+    print(f"  hak blokad (pre_tool_call: {GUARD_HOOK_MATCHER}) -> " + ("zatwierdzony" if ok_hook else "NIE zatwierdzony: uruchom raz `hermes -p " + a.name + " --accept-hooks hooks list`"))
     if key:
         print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS → Ustawienia → klucz API): {key}")
     else:
