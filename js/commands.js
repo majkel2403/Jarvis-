@@ -376,6 +376,10 @@ R.add({ id: 'desktop_open', group: 'Interfejs', label: 'Uruchom Jarvis OS', desc
     return ok({ booted: !!J.booted || !J.bootEnter, entered_now: entered, visible: typeof document === 'undefined' || document.visibilityState !== 'hidden', windows: wins.length, chat_panel: !!J.chatPanel?.visible?.() },
       (entered ? 'Wszedłem do systemu (ekran startowy zdjęty). ' : 'Jarvis OS działa. ') + (wins.length ? 'Otwarte okna: ' + wins.length + '.' : 'Pulpit bez otwartych okien (czat to panel boczny, nie okno).'));
   } });
+/* zrzut ekranu Jarvisa robi most (Windows: okno przeglądarki); strona sama siebie nie sfotografuje */
+R.add({ id: 'desktop_screenshot', group: 'Interfejs', label: 'Zrzut ekranu Jarvis OS', description: 'Robi zrzut ekranu okna przeglądarki z Jarvis OS (scope=window, domyślnie) albo całego monitora, na którym stoi (scope=monitor), i zwraca ścieżkę PNG. Żeby wysłać obraz użytkownikowi (np. na Telegram), odpowiedz linią MEDIA:<ścieżka>. Używaj na prośby „pokaż / daj screena / załącz obraz z Jarvisa”.', idempotent: true, palette: false, voice: false,
+  args: { type: 'object', properties: { scope: { type: 'string', enum: ['window', 'monitor'] } } },
+  run() { return fail('UNSUPPORTED', 'Zrzut ekranu robi most Jarvisa (Hermes) — w samej przeglądarce użyj klawisza Print Screen.'); } });
 R.add({ id: 'ui_highlight', group: 'Interfejs', label: 'Wskaż element', description: 'Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).', idempotent: true, hermes: true, voice: false, palette: false,
   args: { type: 'object', properties: { target: { type: 'string' }, text: { type: 'string', description: 'krótki podpis' } }, required: ['target'] },
   run({ target, text }) { const r = J.ui.highlight(target, text); return r ? ok({ target }, 'Wskazałem ' + target + '.') : fail('NOT_FOUND', 'Nie ma elementu „' + target + '”.'); } });

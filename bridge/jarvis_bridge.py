@@ -486,6 +486,32 @@ async def _bridge_desktop_open(args: dict) -> CallToolResult:
     return env("OK", True, data, " ".join(p for p in parts if p))
 
 
+SCREENS_KEEP = 20
+
+
+async def _bridge_desktop_screenshot(args: dict) -> CallToolResult:
+    """Zrzut okna Jarvisa do %USERPROFILE%\\.jarvis-os\\screens (zostaje SCREENS_KEEP ostatnich); Hermes odsyła go jako MEDIA:<ścieżka>."""
+    import winfocus
+
+    def env(code, ok, data, text):
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps({"ok": ok, "code": code, "data": data, "text": text}, ensure_ascii=False, default=str))], is_error=not ok)
+
+    if os.name != "nt":
+        return env("UNSUPPORTED", False, None, "Zrzut ekranu działa tylko na Windows.")
+    scope = "monitor" if (args or {}).get("scope") == "monitor" else "window"
+    d = agents_mod.home() / "screens"
+    path = d / f"jarvis-{time.strftime('%Y%m%d-%H%M%S')}.png"
+    try:
+        r = await asyncio.to_thread(winfocus.capture, str(path), scope=scope)
+    except Exception as e:  # noqa: BLE001
+        return env("INTERNAL", False, None, f"Zrzut ekranu nie udał się: {e}")
+    if not r.get("found"):
+        return env("NOT_FOUND", False, None, "Nie znalazłem okna przeglądarki z Jarvis OS — najpierw desktop_open.")
+    for old in sorted(d.glob("jarvis-*.png"))[:-SCREENS_KEEP]:
+        old.unlink(missing_ok=True)
+    return env("OK", True, r, f"Zrobiłem zrzut ({r['size'][0]}×{r['size'][1]}, {r['browser']}). Wyślij go użytkownikowi linią: MEDIA:{r['path']}")
+
+
 
 
 INSTRUCTIONS = (
@@ -554,6 +580,8 @@ class DesktopMCP(MCPServer):
             return await _bridge_handle_media(name, args, CB)
         if name == "desktop_open":   # narzędzie naprawcze: bez bezpiecznika (CB) i bez wymogu połączonej karty
             return await _bridge_desktop_open(args)
+        if name == "desktop_screenshot":
+            return await _bridge_desktop_screenshot(args)
         # Circuit breaker: przed relay() sprawdź czy to narzędzie nie jest w trakcie cooldown.
         # Chroni przed pętlą OFFLINE/INTERNAL/TIMEOUT — model widzi jawny kod THROTTLED zamiast cichego odrzucenia.
         allow, retry_after = CB.check(name)

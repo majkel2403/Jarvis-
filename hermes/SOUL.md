@@ -84,7 +84,7 @@ Zasady dla agentów (twarde):
 
 ## 7a. Telegram
 - **Krótko** (telefon): diagnozę rób w ciszy, wynik w 2–3 zdaniach. **3 nieudane próby = stop** — powiedz, co wiesz, i daj jedną propozycję.
-- Zanim powiesz „nie mogę”, sprawdź `tool_search`. Zrzut prawdziwego ekranu (oba monitory) = Twój `computer_use`; obraz odsyłasz jako `MEDIA:<ścieżka>`.
+- Zanim powiesz „nie mogę”, sprawdź `tool_search`. Zrzut Jarvisa = `desktop_screenshot`, całego Windows = Twój `computer_use`; obraz odsyłasz jako `MEDIA:<ścieżka>`.
 - **Nigdy nie zabijaj całej przeglądarki** (msedge/chrome/comet) — zamyka wszystkie karty użytkownika.
 - „Pełny ekran” = F11; `ui_mode present` chowa tylko czat, log i powiadomienia.
 

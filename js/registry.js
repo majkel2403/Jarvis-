@@ -108,10 +108,32 @@ const resolveEnum = (prop, key, val) => {
   const pre = prop.enum.filter(e => norm(e).startsWith(n) || n.startsWith(norm(e))); if (pre.length === 1) return pre[0];
   return undefined;
 };
+/* Typowe pomyłki modeli w nazwach pól (z prawdziwych rozmów: id→widget, theme→color, selector→target).
+   Alias wypełnia pole TYLKO gdy brakuje prawdziwego, a sam alias nie jest polem tego polecenia. */
+const SYN = { color: ['theme', 'colour', 'kolor', 'motyw', 'accent'], target: ['selector', 'element', 'el', 'id'], text: ['message', 'msg', 'body', 'content'], content: ['text', 'body', 'note_content'],
+  query: ['q', 'search', 'term', 'phrase'], url: ['link', 'href', 'address', 'adres'], title: ['name', 'heading'], app: ['application', 'name', 'id', 'window'], expression: ['expr', 'formula', 'equation'],
+  seconds: ['duration', 'secs', 'time_seconds'], fact: ['memory', 'text', 'content'], wallpaper: ['background', 'tapeta', 'name'], mode: ['layout_mode', 'arrangement'] };
+const ENTITY_KEYS = ['id', 'name', 'title', 'target', 'value', 'item'];
+const nk = k => String(k).toLowerCase().replace(/[_\-\s]/g, '');
+const alias = (props, required, input) => {
+  const keys = Object.keys(input), out = { ...input };
+  for (const k of Object.keys(props)) {
+    if (out[k] !== undefined) continue;
+    const exact = keys.find(x => !(x in props) && [nk(k), nk(k) + 'id', nk(k) + 'name', nk(k) + 'title'].includes(nk(x)));   // Widget / widget_id / widgetId / noteTitle → widget, note
+    const syn = exact || (SYN[k] || []).find(x => !(x in props) && out[x] !== undefined);
+    if (syn !== undefined) out[k] = out[syn];
+  }
+  /* jedno brakujące wymagane pole „obiektu” (widget, note, task…) + jeden nieznany klucz typu id/name → to ten obiekt */
+  const missing = required.filter(r => out[r] === undefined && props[r]?.type !== 'boolean');
+  const strays = keys.filter(x => !(x in props) && ENTITY_KEYS.includes(x));
+  if (missing.length === 1 && strays.length === 1) out[missing[0]] = out[strays[0]];
+  return out;
+};
 const coerce = (cmd, input) => {
   const schema = cmd.args || { type: 'object', properties: {} }, props = schema.properties || {}, out = {};
   if (input == null) input = {};
   if (typeof input !== 'object') return fail('INVALID_ARGS', 'Argumenty muszą być obiektem JSON.');
+  if (!Array.isArray(input)) input = alias(props, schema.required || [], input);
   for (const [k, p] of Object.entries(props)) {
     let v = input[k];
     if (v === undefined || v === null || v === '') continue;

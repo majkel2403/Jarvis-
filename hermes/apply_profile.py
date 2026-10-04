@@ -12,6 +12,7 @@ Zmienia WYŁĄCZNIE profil docelowy: config.yaml (z kopią zapasową), .env, SOU
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import secrets
 import shutil
@@ -31,6 +32,51 @@ HERE = Path(__file__).resolve().parent
 ENABLED = ["browser", "clarify", "code_execution", "computer_use", "connections", "cronjob", "delegation",
            "file", "memory", "session_search", "skills", "terminal", "todo", "vision", "web", "jarvis_desktop"]
 ORIGINS = "http://localhost:4000,http://127.0.0.1:4000,https://majkel2403.github.io"
+
+
+CHEAT_TOOLS = ["desktop_open", "desktop_screenshot", "get_status", "open_app", "close_app", "wm_list", "wm_focus", "wm_arrange", "wm_minimize",
+               "create_widget", "widgets_list", "widgets_update", "widgets_remove", "create_note", "notes_list", "notes_read", "notes_append",
+               "notes_delete", "add_task", "tasks_list", "tasks_complete", "tasks_remove", "start_timer", "timer_control", "set_theme",
+               "set_wallpaper", "ui_mode", "ui_toast", "ui_ask", "ui_highlight", "speak", "e2e_cleanup", "media_play", "web_task", "computer_use"]
+CHEAT_BEGIN, CHEAT_END = "<!-- JARVIS-TOOLS:BEGIN (generowane przez hermes/apply_profile.py z bridge/tools.json — nie edytuj ręcznie) -->", "<!-- JARVIS-TOOLS:END -->"
+
+
+def cheatsheet() -> str:
+    """Najczęstsze narzędzia z DOKŁADNYMI nazwami pól — modele myliły id/widget, theme/color, selector/target."""
+    tools = {t["name"]: t for t in json.loads((HERE.parent / "bridge" / "tools.json").read_text(encoding="utf-8"))}
+    lines = [CHEAT_BEGIN, "## Najczęstsze narzędzia — dokładne pola (`*` = wymagane)", "",
+             "Wołaj przez `tool_call` **jedno narzędzie na wywołanie** (kilka naraz → błąd „mixed and multi-local batches”).", ""]
+    for n in CHEAT_TOOLS:
+        t = tools.get(n)
+        if not t:
+            continue
+        p = t.get("parameters") or {}
+        req = set(p.get("required") or [])
+        args = []
+        for k, v in (p.get("properties") or {}).items():
+            if k == "user_confirmed_in_chat":
+                continue
+            a = k + ("*" if k in req else "")
+            if v.get("enum"):
+                a += "=" + "|".join(map(str, v["enum"][:8])) + ("|…" if len(v["enum"]) > 8 else "")
+            args.append(a)
+        conf = " · zgoda: pulpit albo rozmowa (`user_confirmed_in_chat`)" if "user_confirmed_in_chat" in (p.get("properties") or {}) else (" · zgoda tylko na pulpicie" if "Wymaga potwierdzenia" in t.get("description", "") else "")
+        lines.append(f"- `mcp__jarvis_desktop__{n}`({', '.join(args)}){conf}")
+    lines += ["", CHEAT_END]
+    return "\n".join(lines)
+
+
+def inject_cheatsheet(skill: Path) -> bool:
+    if not skill.exists():
+        return False
+    s = skill.read_text(encoding="utf-8")
+    block = cheatsheet()
+    if CHEAT_BEGIN.split(" (")[0] in s:
+        s = re.sub(re.escape(CHEAT_BEGIN.split(" (")[0]) + r".*?" + re.escape(CHEAT_END), lambda _m: block, s, flags=re.S)
+    else:
+        s = s.rstrip() + "\n\n" + block + "\n"
+    skill.write_text(s, encoding="utf-8")
+    return True
 
 
 def read_env(p: Path) -> list[str]:
@@ -118,6 +164,9 @@ def main() -> int:
     for old_soul in sorted(pdir.glob("SOUL.md.bak-jarvis-desktop-*"))[:-3]:
         old_soul.unlink(missing_ok=True)
     shutil.copy2(HERE / "SOUL.md", soul_path)
+    skill = pdir / "skills" / "jarvis-os-management" / "SKILL.md"
+    if inject_cheatsheet(skill):
+        print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")
     if key:
         print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS → Ustawienia → klucz API): {key}")
     else:

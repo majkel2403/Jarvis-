@@ -150,6 +150,23 @@ test('zgoda z rozmowy NIE działa dla nieodwracalnych, przy manipulacji ani dla 
   assert.ok(names('widgets_remove').includes('user_confirmed_in_chat'));
   assert.ok(!names('computer_use').includes('user_confirmed_in_chat')); assert.ok(!names('files_write').includes('user_confirmed_in_chat'));
 });
+test('aliasy pól: pomyłki modelu z prawdziwej rozmowy działają zamiast INVALID_ARGS', async () => {
+  const K = load({ state: { settings: { hermesOn: false } } });
+  const R = K.registry;
+  // set_theme {theme} → color
+  let r = await R.run('set_theme', { theme: 'złoty' }, { source: 'local' }); assert.equal(r.ok, true, r.text);
+  // ui_highlight {selector} → target (tylko koercja — bez DOM)
+  let c = R.coerce('ui_highlight', { selector: 'dock', text: 'tu' }); assert.equal(c.ok, true, c.text); assert.equal(c.args.target, 'dock');
+  // widgets_remove {id} → widget
+  c = R.coerce('widgets_remove', { id: 'uc0lal8oi7y' }); assert.equal(c.ok, true, c.text); assert.equal(c.args.widget, 'uc0lal8oi7y');
+  // create_note {title, text} → content; prawdziwe pole ma pierwszeństwo przed aliasem
+  c = R.coerce('create_note', { title: 'A', text: 'treść' }); assert.equal(c.ok, true, c.text); assert.equal(c.args.content, 'treść');
+  c = R.coerce('create_note', { title: 'A', content: 'prawdziwa', text: 'alias' }); assert.equal(c.args.content, 'prawdziwa');
+  // widgetId (camelCase) → widget
+  c = R.coerce('widgets_remove', { widgetId: 'x1' }); assert.equal(c.args.widget, 'x1');
+  // brak jakiegokolwiek dopasowania → nadal czytelny błąd
+  c = R.coerce('widgets_remove', { foo: 'x' }); assert.equal(c.ok, false); assert.match(c.text, /widget/);
+});
 test('desktop_open: karta wchodzi do systemu bez kliknięcia i raportuje stan', async () => {
   const K = load({ state: { settings: { hermesOn: false } } });
   let entered = 0; K.bootEnter = () => { entered++; K.booted = true; K.bootVia = 'bridge'; K.bootAt = Date.now(); K.bootEnter = null; };

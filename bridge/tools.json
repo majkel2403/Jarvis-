@@ -1031,6 +1031,22 @@
   }
  },
  {
+  "name": "desktop_screenshot",
+  "description": "Robi zrzut ekranu okna przeglądarki z Jarvis OS (scope=window, domyślnie) albo całego monitora, na którym stoi (scope=monitor), i zwraca ścieżkę PNG. Żeby wysłać obraz użytkownikowi (np. na Telegram), odpowiedz linią MEDIA:<ścieżka>. Używaj na prośby „pokaż / daj screena / załącz obraz z Jarvisa”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "scope": {
+     "type": "string",
+     "enum": [
+      "window",
+      "monitor"
+     ]
+    }
+   }
+  }
+ },
+ {
   "name": "ui_highlight",
   "description": "Podświetla element interfejsu, żeby pokazać go użytkownikowi: aplikację (np. notes), dock, rail, deck, chat, log, core, widget (w:id) lub skrót (sc:id).",
   "parameters": {
