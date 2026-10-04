@@ -45,19 +45,6 @@ class FakeHermes:
                 "Struktura plików": json.dumps(STRUKTURA), "Szkielety plików": "```json\n" + json.dumps(TRESC) + "\n```"}[title], 1000
 
 
-class StreamingHermes(FakeHermes):
-    """Jak FakeHermes, ale z podglądem pisania (jak most ze strumieniem): tekst kawałkami + jedno narzędzie."""
-    async def __call__(self, messages, session_id, timeout, on_text=None, on_tool=None):
-        text, tokens = await FakeHermes.__call__(self, messages, session_id, timeout)
-        if on_tool:
-            on_tool({"tool": "skill_view", "label": "michal-project-preferences", "status": "running"})
-        for k in range(1, 6):
-            if on_text:
-                on_text(text[: len(text) * k // 5])
-            await asyncio.sleep(0.01)
-        return text, tokens
-
-
 async def judge_ok(question, content):
     return 0.9, "w porządku"
 
@@ -252,19 +239,7 @@ async def main():
             check("brak wymaganego wejścia → błąd", True)
         await e.stop("all")
 
-        # --- podgląd pisania na żywo: step.progress dla kart, bez zapisu w historii; raport z odmianą liczby plików
-        e, events = engine(tmp / "s", hermes=StreamingHermes())
-        snap = await e.start("od-pomyslu-do-projektu", {"pomysl": "aplikacja do nawyków"})
-        await finish(e, snap["id"])
-        prog = [ev for ev in events if ev["type"] == "step.progress"]
-        check("strumień: przebieg kończy się tak samo", e.status(snap["id"])["state"] == "done")
-        check("strumień: podgląd tekstu z ogonem i licznikiem znaków", any(ev.get("tail") and ev.get("chars", 0) > 0 and ev["step_id"] == "brief" for ev in prog), str(prog[:2]))
-        check("strumień: narzędzie w podglądzie", any(ev.get("tool") == "skill_view" and ev.get("label") == "michal-project-preferences" for ev in prog))
-        check("strumień: podgląd nie trafia do historii (powtórka)", not any(ev["type"] == "step.progress" for ev in e.events_of(snap["id"])))
-        check("strumień: najwyżej co 0,6 s na krok (bez zalewu)", sum(1 for ev in prog if ev["step_id"] == "brief" and ev.get("tail")) <= 2, str(len(prog)))
-        check("raport: „2 pliki” zamiast „2 plików”", "2 pliki," in (e.status(snap["id"])["report"] or "") or "6 plików," in (e.status(snap["id"])["report"] or ""), e.status(snap["id"])["report"])
         check("filtr odmiany", [wf.render("{n|n:plik:pliki:plików}", {"n": k}) for k in (1, 3, 12, 22, 25)] == ["1 plik", "3 pliki", "12 plików", "22 pliki", "25 plików"])
-        check("atrapa bez podglądu dalej działa", engine(tmp / "s2")[0]._streams is False and e._streams is True)
 
         # --- pomocnicze
         check("slugify polskich znaków", wf.slugify("Żółta Łódź — plan!") == "zolta-lodz-plan")

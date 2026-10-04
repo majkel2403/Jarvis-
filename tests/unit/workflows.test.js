@@ -25,8 +25,7 @@ test('zdania → polecenia workflow; poziomy autonomii', () => {
   assert.equal(JSON.stringify(m('Zrób projekt z pomysłu aplikacja do nawyków i treningów').args), JSON.stringify({ workflow: 'od-pomyslu-do-projektu', inputs: { pomysl: 'aplikacja do nawyków i treningów' } }));
   assert.equal(m('od pomysłu do projektu: bot do przypomnień').args.inputs.pomysl, 'bot do przypomnień');
   assert.equal(m('stop wszystko').id, 'workflow_stop'); assert.equal(m('stop').id, 'plan_control', 'samo „stop” bez zmian');
-  assert.equal(m('status workflow').id, 'workflow_status'); assert.equal(m('pokaż mapę pracy').id, 'open_app');
-  assert.equal(R.coerce('open_app', { app: 'mapę pracy' }).args.app, 'workflows');
+  assert.equal(m('status workflow').id, 'workflow_status');
   for (const id of ['workflow_list', 'workflow_status', 'workflow_stop']) assert.equal(J.policy.level(id), 'A3', id);
   assert.equal(J.policy.level('workflow_run'), 'A1', 'uruchomienie: Jev bez parsera pyta');
 });
@@ -92,23 +91,6 @@ test('workflow_run z karty: start przez most; brak wymaganego wejścia → INVAL
   assert.ok(calls.some(c => /\/workflows\/runs\/all\/stop$/.test(c.url) && c.method === 'POST'));
 });
 
-test('typowy czas kroku z historii, czas do końca, podgląd wyniku w stanie kroku', () => {
-  const { J, ev } = mk(), WF = J.workflows;
-  // ukończony przebieg z historii: brief 20 s, architektura 40 s
-  WF.onEvent({ v: 1, type: 'run.snapshot', run_id: 'old', ts: 1, snapshot: { id: 'old', workflow: DEF.id, name: DEF.name, state: 'done', started: 1, steps: [{ ...STEPS[0], state: 'done', ms: 20000 }, { ...STEPS[1], state: 'done', ms: 40000 }] } });
-  const now = 1000;
-  ev('run.started', { steps: STEPS, ts: now });
-  const r = WF.runs.get('r1');
-  assert.equal(JSON.stringify(WF.expect(r)), JSON.stringify({ brief: 20000, architektura: 40000 }));
-  ev('step.started', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, ts: now });
-  assert.equal(Math.round(WF.eta(r, now + 5)), 55, '15 s z briefu + 40 s architektury');
-  ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 20000, ts: now + 20, artifact: { kind: 'fields', fields: { nazwa: 'Nawyki', mvp: ['a', 'b'] } } });
-  assert.equal(r.steps[0].artifact.fields.nazwa, 'Nawyki', 'podgląd wyniku zapisany w kroku');
-  ev('run.completed', { state: 'done', ts: now + 70 });
-  assert.equal(WF.eta(r), 0, 'po końcu brak czasu do końca');
-  assert.match(WF.cardText(r), /▰▰▱|▰▱/, 'pasek postępu w karcie czatu');
-});
-
 test('bezpiecznik: zgubione zdarzenie końca → stan z mostu domyka przebieg (Process Log, karta czatu)', async () => {
   const { J, ev, said } = mk(), WF = J.workflows;
   ev('run.started', { steps: STEPS });
@@ -118,20 +100,4 @@ test('bezpiecznik: zgubione zdarzenie końca → stan z mostu domyka przebieg (P
   await new Promise(res => setTimeout(res, 30));
   assert.equal(r.state, 'failed'); assert.equal(J.proc.active, false, 'Process Log zamknięty');
   assert.ok(said.some(x => /nie powiódł się[\s\S]*błąd silnika: test/.test(x.text)), 'karta w czacie z powodem');
-});
-
-test('pisanie Hermesa na żywo (step.progress): stan kroku bez wpisu na osi czasu, licznik w karcie czatu', () => {
-  const { J, said, ev } = mk();
-  ev('run.started', { steps: STEPS, autonomy: 'L3' });
-  ev('step.started', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1 });
-  const r = J.workflows.runs.get('r1'), before = r.timeline.length;
-  ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, chars: 1240, tail: '{"nazwa": "Nawyki"' });
-  ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, tool: 'skill_view', label: 'michal-project-preferences', status: 'running' });
-  const s = r.steps[0];
-  assert.equal(s.live.chars, 1240); assert.equal(s.live.tool, 'skill_view'); assert.equal(s.live.tail, '{"nazwa": "Nawyki"');
-  assert.equal(r.timeline.length, before, 'podgląd nie zaśmieca osi czasu'); assert.equal(r.state, 'running');
-  r._cardAt = 0; ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, chars: 2000, tail: 'x' });
-  assert.match(said.find(x => /Workflow: Od pomysłu/.test(x.text)).text, /pisze… 2\s?000 znaków/);
-  ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 900 });
-  assert.equal(s.live, null, 'po ukończeniu podgląd znika');
 });

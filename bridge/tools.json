@@ -1,7 +1,7 @@
 [
  {
   "name": "open_app",
-  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki, workflows=Mapa pracy. Np.: „otworz app”.",
+  "description": "Otwiera aplikację Jarvis OS: chat=Czat, notes=Notatnik, market=Monitor rynku, schedule=Harmonogram, monitor=Monitor systemu, terminal=Terminal, weather=Pogoda, calc=Kalkulator, timer=Minutnik, settings=Ustawienia, library=Biblioteka aplikacji, files=Pliki. Np.: „otworz app”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -19,8 +19,7 @@
       "timer",
       "settings",
       "library",
-      "files",
-      "workflows"
+      "files"
      ]
     }
    },
@@ -50,7 +49,6 @@
       "settings",
       "library",
       "files",
-      "workflows",
       "all",
       "current"
      ]
@@ -94,7 +92,6 @@
       "settings",
       "library",
       "files",
-      "workflows",
       "next"
      ]
     }
@@ -125,7 +122,6 @@
       "settings",
       "library",
       "files",
-      "workflows",
       "all",
       "current"
      ]
@@ -787,8 +783,7 @@
       "timer",
       "settings",
       "library",
-      "files",
-      "workflows"
+      "files"
      ]
     },
     "url": {
@@ -1363,8 +1358,7 @@
       "timer",
       "settings",
       "library",
-      "files",
-      "workflows"
+      "files"
      ]
     },
     "view": {
@@ -1426,8 +1420,7 @@
       "timer",
       "settings",
       "library",
-      "files",
-      "workflows"
+      "files"
      ]
     }
    }
@@ -1526,8 +1519,7 @@
       "timer",
       "settings",
       "library",
-      "files",
-      "workflows"
+      "files"
      ]
     },
     "icon": {
@@ -2823,7 +2815,7 @@
  },
  {
   "name": "workflow_run",
-  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie i w Mapie pracy. Np.: „zrob projekt z pomyslu pomysl”.",
+  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie. Np.: „zrob projekt z pomyslu pomysl”.",
   "parameters": {
    "type": "object",
    "properties": {

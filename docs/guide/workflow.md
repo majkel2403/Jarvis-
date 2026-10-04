@@ -6,13 +6,10 @@ każdy krok, ponawia go ze zmianą podejścia, liczy budżet i zapisuje stan (sz
 ## Jak uruchomić
 
 - **Pulpit / głos:** „zrób projekt z pomysłu aplikacja do nawyków”, „od pomysłu do projektu: bot do przypomnień”,
-  „uruchom workflow …”, „status workflow”, „stop wszystko”. Okno: „pokaż mapę pracy”.
+  „uruchom workflow …”, „status workflow”, „stop wszystko”.
 - **Telegram:** to samo zdanie do Hermesa — uruchamia `workflow_run` (działa także bez otwartej karty).
-- **Mapa pracy → „Nowy…”:** wybór workflow i dane wejściowe.
 
-Postęp widać na żywo: karta przebiegu w czacie (✓ zrobione · ⟳ trwa · ⏸ czeka na Ciebie · ✗ błąd · ⤼ pominięte), Mapa pracy
-(kroki, ponowienia ↻, czasy, oceny, oś czasu, historia), Orb i Process Log. Gdy Hermes pisze krok, w panelu „Co powstaje”
-widać jego tekst na żywo (i narzędzie, po które sięga), a karta w czacie pokazuje licznik znaków.
+Postęp: karta przebiegu w czacie (✓ zrobione · ⟳ trwa · ⏸ czeka na Ciebie · ✗ błąd · ⤼ pominięte), Orb i Process Log.
 
 ## Dostępne workflow
 

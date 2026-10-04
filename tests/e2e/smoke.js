@@ -248,27 +248,6 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     const st = cards.find(c => c.dataset.id === 'status'); st.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     return { live: t.getAttribute('aria-live'), n: cards.length, buttons: cards.every(c => c.getAttribute('role') === 'button' && c.tabIndex === 0), inertOk: hud.inert === !hud.classList.contains('show'), monitor: J.wm.isOpen('monitor') }; });
   assert(hudA.live === 'polite' && hudA.n === 10 && hudA.buttons && hudA.inertOk && hudA.monitor, 'dostępność pulpitu: ' + JSON.stringify(hudA));
-  // Mapa pracy (workflow, ADR 0007): otwiera się z rejestru, bez mostu pokazuje stan pusty, karta przebiegu ze zdarzeń
-  const wfA = await p.evaluate(async () => { J.uiRun('open_app', { app: 'mapę pracy' }); await new Promise(r => setTimeout(r, 300));
-    J.workflows.onEvent({ v: 1, type: 'run.started', run_id: 'e2e1', workflow: 'x', name: 'Test e2e', ts: Date.now() / 1000, state: 'running', total: 1, steps: [{ id: 'a', title: 'Krok A', kind: 'check' }] });
-    J.workflows.onEvent({ v: 1, type: 'step.completed', run_id: 'e2e1', workflow: 'x', name: 'Test e2e', ts: Date.now() / 1000, state: 'running', total: 1, step_id: 'a', n: 1, kind: 'check', title: 'Krok A', ms: 5 });
-    J.workflows.onEvent({ v: 1, type: 'run.completed', run_id: 'e2e1', workflow: 'x', name: 'Test e2e', ts: Date.now() / 1000, state: 'done', total: 1, report: 'gotowe' });
-    await new Promise(r => setTimeout(r, 100));
-    const nodes = [...document.querySelectorAll('.wf-node')]; const out = { open: J.wm.isOpen('workflows'), nodes: nodes.length, done: nodes[0]?.dataset.s, aria: nodes[0]?.getAttribute('aria-label') || '' };
-    J.wm.close('workflows'); return out; });
-  assert(wfA.open && wfA.nodes === 1 && wfA.done === 'done' && /Krok 1: Krok A/.test(wfA.aria), 'Mapa pracy: ' + JSON.stringify(wfA));
-  // pigułka na pulpicie przy zamkniętej mapie + „Co powstaje”: drzewo plików z podglądu wyniku kroku
-  const wfB = await p.evaluate(async () => {
-    const E = (type, x = {}) => J.workflows.onEvent({ v: 1, type, run_id: 'e2e2', workflow: 'y', name: 'Test drzewa', ts: Date.now() / 1000, state: 'running', total: 2, ...x });
-    E('run.started', { steps: [{ id: 'a', title: 'Struktura', kind: 'hermes' }, { id: 'b', title: 'Zapis', kind: 'write_files' }] });
-    await new Promise(r => setTimeout(r, 120)); const pill = document.querySelector('.wf-pill')?.classList.contains('show');
-    J.wm.open('workflows'); await new Promise(r => setTimeout(r, 300));
-    E('step.started', { step_id: 'a', n: 1, kind: 'hermes', title: 'Struktura', attempt: 1 });
-    E('step.completed', { step_id: 'a', n: 1, kind: 'hermes', title: 'Struktura', ms: 900, artifact: { kind: 'tree', paths: ['src/app.js', 'src/ui/view.js', 'README.md'], filled: false, notes: {} } });
-    await new Promise(r => setTimeout(r, 300));
-    const out = { pill, rows: document.querySelectorAll('#wfArt .wf-tr').length, pillHiddenWithMap: !document.querySelector('.wf-pill')?.classList.contains('show') };
-    E('run.stopped', { state: 'stopped', reason: 'test' }); J.wm.close('workflows'); return out; });
-  assert(wfB.pill && wfB.rows === 5 && wfB.pillHiddenWithMap, 'pigułka i drzewo plików: ' + JSON.stringify(wfB));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });

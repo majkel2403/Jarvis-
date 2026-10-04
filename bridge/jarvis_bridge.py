@@ -847,77 +847,26 @@ def wf_emit(evt: dict) -> None:
         c.queue.put_nowait({"_sse": "workflow", **evt})
 
 
-def _wf_call(fn, arg) -> None:
-    try:
-        fn(arg)
-    except Exception as e:  # noqa: BLE001 — podgląd na żywo nie może przerwać kroku
-        print("[jarvis-bridge] workflow podgląd:", e, file=sys.stderr)
-
-
-async def _wf_read_stream(r, on_text, on_tool) -> tuple[str, int]:
-    """Odpowiedź Hermesa strumieniem (SSE): tekst z delta.content, narzędzia z „event: hermes.tool.progress”,
-    tokeny z ostatniego kawałka (stream_options.include_usage). Tekst końcowy jest ten sam co bez strumienia."""
-    text, tokens, event, data = "", 0, "message", []
-
-    def dispatch() -> None:
-        nonlocal text, tokens
-        payload = "\n".join(data)
-        if not payload or payload == "[DONE]":
-            return
-        try:
-            j = json.loads(payload)
-        except ValueError:
-            return
-        if not isinstance(j, dict):
-            return
-        if event == "hermes.tool.progress":
-            if on_tool:
-                _wf_call(on_tool, j)
-            return
-        if isinstance(j.get("usage"), dict):
-            tokens = int(j["usage"].get("total_tokens") or 0)
-        delta = "".join(str((c.get("delta") or {}).get("content") or "") for c in (j.get("choices") or []) if isinstance(c, dict))
-        if delta:
-            text += delta
-            _wf_call(on_text, text)
-
-    async for raw in r.content:
-        line = raw.decode("utf-8", "replace").rstrip("\r\n")
-        if not line:
-            dispatch()
-            event, data = "message", []
-        elif line.startswith("event:"):
-            event = line[6:].strip()
-        elif line.startswith("data:"):
-            data.append(line[5:].lstrip(" "))
-    dispatch()
-    return text, tokens
-
-
-async def wf_hermes(messages: list, session_id: str, timeout: float, on_text=None, on_tool=None) -> tuple[str, int]:
-    """Jedna tura Hermesa dla kroku workflow: osobna sesja na krok i próbę; ponowienia tylko przy 429/5xx/zerwanym połączeniu.
-    Z on_text odpowiedź przychodzi strumieniem — karta widzi pisanie na żywo (Mapa pracy, Film)."""
+async def wf_hermes(messages: list, session_id: str, timeout: float) -> tuple[str, int]:
+    """Jedna tura Hermesa dla kroku workflow: osobna sesja na krok i próbę; ponowienia tylko przy 429/5xx/zerwanym połączeniu."""
     import aiohttp
     t = writer_proxy.hermes_target()
     if not t:
         raise RuntimeError("nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)")
     url, key, model = t
-    stream = on_text is not None
-    body = {"model": model, "stream": stream, "messages": messages, **({"stream_options": {"include_usage": True}} if stream else {})}
+    body = {"model": model, "stream": False, "messages": messages}
     headers = {"Authorization": "Bearer " + key, "X-Hermes-Session-Id": session_id}
     for attempt, delay in enumerate((5, 15, None)):
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
                 async with sess.post(url, json=body, headers=headers) as r:
                     if r.status == 200:
-                        if stream and "text/event-stream" in (r.headers.get("Content-Type") or ""):
-                            return await _wf_read_stream(r, on_text, on_tool)
                         j = await r.json(content_type=None)
                         msg = ((j.get("choices") or [{}])[0].get("message") or {})
                         return str(msg.get("content") or ""), int((j.get("usage") or {}).get("total_tokens") or 0)
                     if r.status not in WF_RETRY_STATUS or delay is None:
                         raise RuntimeError(f"Hermes HTTP {r.status}: {(await r.text())[:200]}")
-        except (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as e:
+        except aiohttp.ClientConnectionError as e:
             if delay is None:
                 raise RuntimeError(f"Hermes niedostępny: {type(e).__name__}") from e
         except asyncio.TimeoutError as e:   # długa generacja — ponawia krok silnik (z podpowiedzią), nie ten klient
@@ -990,7 +939,7 @@ async def _bridge_workflow(name: str, args: dict) -> CallToolResult:
             return env("OK", True, {"workflows": items}, "Dostępne workflow: " + ("; ".join(f"„{i['name']}” ({i['id']}, wejście: {', '.join(i['inputs']) or 'brak'})" for i in items) or "brak") + ".")
         if name == "workflow_run":
             snap = await wf.start(str(args.get("workflow") or ""), args.get("inputs") or {}, args.get("autonomy"), source="hermes")
-            return env("OK", True, snap, f"Uruchomiłem „{snap['name']}” (przebieg {snap['id']}, autonomia {snap['autonomy']}, {len(snap['steps'])} kroków). Postęp: workflow_status — przebieg widać też na pulpicie (Mapa pracy).")
+            return env("OK", True, snap, f"Uruchomiłem „{snap['name']}” (przebieg {snap['id']}, autonomia {snap['autonomy']}, {len(snap['steps'])} kroków). Postęp: workflow_status — przebieg widać też w czacie na pulpicie.")
         if name == "workflow_status":
             snap = wf.status(args.get("run_id") or None)
             return env("OK", True, snap, wf_describe(snap))
