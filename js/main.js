@@ -914,7 +914,8 @@ const askChip = (() => {
   const el = $('#askChip'); let timer = null, prog = null;
   return {
     show(question, options, onPick, ms) {
-      el.innerHTML = '<div class="ac-q"></div><div class="ac-opts"></div><i class="ac-bar"></i>';
+      el.inert = false;   // przed treścią: czytnik ogłasza pytanie, a focus() na przycisku działa (w inert by nie zadziałał)
+      el.innerHTML = '<div class="ac-q" id="askQ"></div><div class="ac-opts"></div><i class="ac-bar"></i>';
       $('.ac-q', el).textContent = question;
       options.forEach(op => { const b = h('button', { class: 'btn sm' + (op.primary ? ' primary' : op.danger ? ' ghost danger' : ' ghost') }); b.textContent = op.label; b.onclick = () => onPick(op.value); $('.ac-opts', el).appendChild(b); });
       el.classList.add('show'); const bar = $('.ac-bar', el); if (bar && ms) { bar.style.transition = 'none'; bar.style.width = '100%'; requestAnimationFrame(() => { bar.style.transition = 'width ' + ms + 'ms linear'; bar.style.width = '0%'; }); }
@@ -976,7 +977,7 @@ const confirm0 = async req => {
   const chip = $('#undoChip'); let t = null, cur = null;
   const hide = () => { clearTimeout(t); cur = null; chip.classList.remove('show'); };
   J.on('undo-offer', ({ entry, ms }) => {
-    clearTimeout(t); cur = entry;
+    clearTimeout(t); cur = entry; chip.inert = false;
     chip.innerHTML = '<span></span><button class="btn sm primary">Cofnij</button><i></i>';
     $('span', chip).textContent = entry.text || entry.label || 'Wykonano';
     const bar = $('i', chip); bar.style.transition = 'none'; bar.style.width = '100%';
@@ -986,6 +987,11 @@ const confirm0 = async req => {
   });
   J.on('undo-done', hide);
 }
+/* schowane chipy (pytanie, „Cofnij”, wynik zadania) są tylko przezroczyste — bez inert ich przyciski zostawały w kolejności Tab
+   i w drzewie czytnika ekranu; jeden obserwator klasy „show” zamiast pilnowania każdego miejsca, które je pokazuje */
+if (typeof MutationObserver === 'function') ['#askChip', '#undoChip', '#resultChip'].forEach(s => {
+  const el = $(s); if (el) new MutationObserver(() => { el.inert = !el.classList.contains('show'); }).observe(el, { attributes: true, attributeFilter: ['class'] });
+});
 
 /* =================== WSKAZYWANIE ELEMENTÓW (Jarvis „pokazuje palcem”) =================== */
 J.ui = {

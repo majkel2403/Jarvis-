@@ -104,7 +104,7 @@ komponentów ma jeszcze wartości wpisane ręcznie — nowy kod pisz na tokenach
 | Pole wpisywania `.composer` | mic: zwykły / `.rec` | padding 10, gap 7; textarea 36–136 px wys. (rośnie z treścią); przyciski 40 px | Enter wysyła, Shift+Enter nowa linia; `.rec` = czerwona ramka + pulsowanie |
 | Panel Process Log `.log-panel` | zamknięty / otwarty | top 14, right 16, szer. jak czat, wys. `min(560px, 100% − 28px)` | zakładki Zadanie · Historia; kroki z czasem i podglądem |
 | Okno `.window` | `focused` · `max` · `closing` · `minimizing` | min 280×180, promień 16, `blur(24px)`; nagłówek 42 px (ikona 16, tytuł Rajdhani 12,5 px); przyciski 28×28 (glif 13); treść padding 14 | `max`: 8 px od brzegów, wys. `100% − 100px`; zamknij: hover tło `--err` 22% |
-| Pytanie `.ask-chip` | ukryte / `.show` | bottom 104, środek, min 280 px, max `min(460px, 92%)`, padding 13/16/10, promień 16, ramka i poświata `--warn`; pytanie 12,5 px, max 50vh (przewijane); pasek czasu 2 px | to samo pytanie jest też w czacie jako szybkie odpowiedzi — oba zamykają się razem |
+| Pytanie `.ask-chip` | ukryte (`inert`) / `.show` | bottom 104, środek, min 280 px, max `min(460px, 92%)`, padding 13/16/10, promień 16, ramka i poświata `--warn`; pytanie 12,5 px, max 50vh (przewijane); pasek czasu 2 px | to samo pytanie jest też w czacie jako szybkie odpowiedzi — oba zamykają się razem |
 | Wynik zadania `.result-chip` | ukryte / `.show` | bottom 104, środek, min 250 px, max `min(360px, 90%)`, padding 12×16 | pojawia się 700 ms po zakończeniu (po pulsie rdzenia), znika po 12 s |
 | „Cofnij” `.undo-chip` | ukryte / `.show` | bottom 104, środek, max `min(460px, 92%)`, padding 8/8/8/14; tekst z wielokropkiem; pasek czasu 2 px akcent | znika po 8 s (`OFFER_MS`) |
 | Toast `.toast` | wejście / `.out` | kontener top 108 px, środek, gap 8; toast padding 10×16, promień 12, 12 px; kropka 7 px | domyślnie 2,6 s (`J.toast(text, ms = 2600)`) |
@@ -189,11 +189,14 @@ komponentów ma jeszcze wartości wpisane ręcznie — nowy kod pisz na tokenach
 - **Klawiatura:** `Ctrl+K` / `/` paleta · `Ctrl+Spacja` mów · `Alt+J` czuwanie · `Alt+1/2/3` czat / Process Log / telemetria · `Alt+N`
   powiadomienia · `Alt+W` następne okno · `Alt+strzałki` przyciągnij · `Alt+Enter` maksymalizuj · `Esc` zamknij / anuluj pytanie /
   przerwij mowę · fokus widoczny: obrys 2 px akcent + poświata 4 px.
-- **Braki do uzupełnienia (stan 2026-10-04):**
-  - kontener toastów `#toasts` nie ma `aria-live="polite"` — czytnik nie ogłasza toastów;
-  - `#askChip` nie ma `aria-modal` ani `aria-labelledby` (pytanie `.ac-q` jako etykieta);
-  - przyciski okna mają 28×28 px przy myszy (40×40 tylko przy `pointer: coarse`);
-  - karty HUD są klikalne, ale bez roli przycisku i bez obsługi klawiatury.
+- **Uzupełnione 2026-10-04 (sprawdzane w `tests/e2e/smoke.js`):**
+  - `#toasts` ma `role="status"` + `aria-live="polite"` — czytnik ogłasza toasty;
+  - `#askChip` ma `aria-labelledby="askQ"` (treść pytania). `aria-modal` celowo **nie**: na pytanie można odpowiedzieć
+    także w czacie i głosem, więc reszta strony musi zostać dostępna;
+  - schowane chipy (`#askChip`, `#undoChip`, `#resultChip`) są `inert` — ich przyciski nie zostają w kolejności Tab
+    ani w drzewie czytnika; pokazanie zdejmuje `inert` przed wstawieniem treści (fokus i ogłoszenie działają);
+  - karty HUD mają `role="button"`, `tabindex="0"`, Enter/Spacja = klik; schowany HUD jest `inert`;
+  - przyciski okna 28×28 px przy myszy spełniają WCAG 2.2 AA (2.5.8, min. 24 px); przy dotyku (`pointer: coarse`) 40×40 px.
 
 ## Implementacja — wskazówki
 

@@ -45,8 +45,13 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await p.waitForTimeout(600);
   assert(await p.evaluate(() => document.querySelector('#askChip').classList.contains('show')), 'chip potwierdzenia widoczny');
   assert(await p.evaluate(() => J.engine.mode === 'APPROVAL_REQUIRED'), 'tryb APPROVAL_REQUIRED');
+  // dostępność pytania: widoczne = nie inert, fokus na pierwszym przycisku, etykieta = treść pytania
+  const a11y = await p.evaluate(() => { const c = document.querySelector('#askChip'); return { inert: c.inert, focusIn: c.contains(document.activeElement), label: document.getElementById(c.getAttribute('aria-labelledby'))?.textContent || '' }; });
+  assert(!a11y.inert && a11y.focusIn && a11y.label.length > 3, 'pytanie dostępne z klawiatury i czytnika: ' + JSON.stringify(a11y));
   await p.click('#askChip .btn.primary');
   const cr = await conf; assert(cr.ok && cr.data.closed >= 2, 'zamknięto okna: ' + JSON.stringify(cr));
+  await p.waitForTimeout(100);
+  assert(await p.evaluate(() => document.querySelector('#askChip').inert), 'schowane pytanie poza kolejnością Tab (inert)');
   assert(await p.evaluate(() => J.widgets.list.length === 1), 'widget przetrwał zamknięcie okien');
   // odmowa → DENIED
   const den = p.evaluate(() => J.registry.run('notes_delete', { note: 'kupić mleko' }, { source: 'hermes' }));
@@ -238,6 +243,11 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   // odpowiedź „no dobra” na pytanie tak/nie rozumie Jev, a nie słowo „no”
   const ans = await p.evaluate(async () => { const pr = J.ask('Czy kontynuować?', [{ label: 'Tak', value: 'yes', primary: true }, { label: 'Nie', value: 'no' }], { speak: false, timeout: 8000 }); await new Promise(r => setTimeout(r, 200)); J.ask.answer('no dobra'); return await pr; });
   assert(ans === 'yes', 'D15: „no dobra” → ' + ans);
+  // dostępność pulpitu: toasty ogłaszane, karty HUD to przyciski obsługiwane klawiaturą, schowany HUD poza kolejnością Tab
+  const hudA = await p.evaluate(() => { const hud = document.querySelector('#hud'), cards = [...document.querySelectorAll('#hud .hc')], t = document.querySelector('#toasts');
+    const st = cards.find(c => c.dataset.id === 'status'); st.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    return { live: t.getAttribute('aria-live'), n: cards.length, buttons: cards.every(c => c.getAttribute('role') === 'button' && c.tabIndex === 0), inertOk: hud.inert === !hud.classList.contains('show'), monitor: J.wm.isOpen('monitor') }; });
+  assert(hudA.live === 'polite' && hudA.n === 10 && hudA.buttons && hudA.inertOk && hudA.monitor, 'dostępność pulpitu: ' + JSON.stringify(hudA));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });

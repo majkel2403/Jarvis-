@@ -125,10 +125,10 @@ Katalog wizualizacji (cel · źródło · odświeżanie · interakcja · eksport
 |---|---|
 | kontrast tekstu ≥ 4,5:1 (`--dim` poprawione) | ✅ |
 | `prefers-reduced-motion` | ✅ |
-| role i etykiety: okna `role=dialog` + `aria-label` | ✅ / 🆕 `aria-labelledby`, `aria-modal` dla pytań |
-| obsługa klawiaturą wszystkiego ([03](03-nawigacja.md) §9–10) | 🟡 / 🆕 W2 |
-| komunikaty na żywo: chip pytania `aria-live=assertive` ✅, 🆕 „Cofnij” `polite` ✅, toasty 🆕 `polite` | 🟡 |
-| cele dotyku ≥ 40 × 40 px (dok, przyciski okna) | 🆕 W2 (przyciski okna mają dziś ~28 px) |
+| role i etykiety: okna `role=dialog` + `aria-label`; pytanie `aria-labelledby` (treść pytania), bez `aria-modal` — odpowiedź może przyjść z czatu i głosem; schowane chipy `inert` | ✅ |
+| obsługa klawiaturą wszystkiego ([03](03-nawigacja.md) §9–10); karty HUD jako przyciski (Enter/Spacja) | 🟡 / 🆕 W2 |
+| komunikaty na żywo: chip pytania `aria-live=assertive`, „Cofnij” i toasty `polite` | ✅ |
+| cele dotyku ≥ 40 × 40 px (dok, przyciski okna) przy `pointer: coarse`; myszą 28 px (WCAG 2.2 AA: ≥ 24 px) | ✅ |
 | czytniki ekranu: wykresy z opisem tekstowym | 🆕 W4 |
 | skala interfejsu 80–130 % | 🆕 W2 |
 | praca bez dźwięku (każdy sygnał dźwiękowy ma odpowiednik wizualny) | ✅ |

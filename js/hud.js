@@ -142,7 +142,7 @@ let mounted = false, lastPaint = 0, shown = false;
 const mount = () => {
   const hud = $('#hud'); if (!hud || mounted) return; mounted = true;
   CARDS.forEach((c, i) => {
-    const el = h('div', { class: 'hc', 'data-id': c.id, 'data-tone': c.tone, 'data-s': 'idle' },
+    const el = h('div', { class: 'hc', 'data-id': c.id, 'data-tone': c.tone, 'data-s': 'idle', role: 'button', tabindex: '0' },
       `<span class="hc-ic">${svg(c.ic)}</span><div class="hc-t"><b>${esc(c.title)}</b><small class="hc-sub"></small></div><em class="hc-r"></em>` +
       (c.id === 'model' ? '<canvas class="hc-wave" width="400" height="40"></canvas>' : '<div class="hc-bar"><i></i></div>'));
     c.el = el; c.q = { sub: el.querySelector('.hc-sub'), r: el.querySelector('.hc-r'), bar: el.querySelector('.hc-bar i'), wave: el.querySelector('canvas') };
@@ -150,8 +150,10 @@ const mount = () => {
     el.style.transitionDelay = (i * 45) + 'ms';
     el.title = 'Kliknij: szczegóły w Process Log';
     el.onclick = () => { J.sfx.click(); if (c.id === 'model') { J.wm.open('settings', { view: 'section', target: 'hermes' }); } if (c.id === 'model') J.toast((J.aiReady() ? 'Hermes · ' + J.state.settings.hermesModel + (J.hermes.latency ? ' · ping ' + J.hermes.latency + ' ms' : '') : 'Silnik lokalny') + ' · tury: ' + eg.turns + ' · znaki rozumowania: ' + eg.thinkChars); else if (c.id === 'status') J.wm.open('monitor'); else if (c.id === 'files' && J.apps.files) J.wm.open('files'); else if (c.id === 'done' && eg.last) $('#resultChip')?.classList.add('show'); else J.proc.open(); };
+    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.onclick(); } };   // karta jest przyciskiem także z klawiatury
     hud.appendChild(el);
   });
+  hud.inert = true;   // karty są przezroczyste, dopóki HUD się nie pokaże — wtedy poza kolejnością Tab i czytnikiem
   layout();
 };
 const paint = () => {
@@ -186,7 +188,7 @@ const visible = () => !scene.narrow && (!!eg.taskId || Date.now() < eg.hudUntil)
 const frame = now => {
   if (!mounted) return;
   const v = visible();
-  if (v !== shown) { shown = v; $('#hud').classList.toggle('show', v); $('#workspace').classList.toggle('hud-on', v); if (v) paint(); }
+  if (v !== shown) { shown = v; $('#hud').classList.toggle('show', v); $('#hud').inert = !v; $('#workspace').classList.toggle('hud-on', v); if (v) paint(); }
   $('#hud').classList.toggle('busy', !!eg.taskId);
   if (!v) return;
   if (now - lastPaint > 160) { lastPaint = now; paint(); }

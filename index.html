@@ -99,9 +99,9 @@
     </section>
     <div class="hud" id="hud" aria-label="Przepływ zadania"></div>
 
-    <div class="result-chip" id="resultChip"></div>
-    <div class="ask-chip" id="askChip" role="dialog" aria-live="assertive"></div>
-    <div class="undo-chip" id="undoChip" role="status" aria-live="polite"></div>
+    <div class="result-chip" id="resultChip" inert></div>
+    <div class="ask-chip" id="askChip" role="dialog" aria-live="assertive" aria-labelledby="askQ" inert></div>
+    <div class="undo-chip" id="undoChip" role="status" aria-live="polite" inert></div>
 
     <!-- telemetria (dolny lewy róg): pogoda, zegar, realne metryki systemu i agenta -->
     <section class="deck" id="deck" aria-label="Telemetria">
@@ -183,7 +183,7 @@
     </div>
   </div>
 
-  <div class="toasts" id="toasts"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 </div>
 
 <script src="config.local.js"></script>
