@@ -836,7 +836,7 @@ async def agent_event(request: Request) -> Response:
     return JSONResponse({"ok": True, "clients": len(CLIENTS)})
 
 
-AGENT_HISTORY = agents_mod.home() / "agent-history.jsonl"
+AGENT_HISTORY = Path(os.environ.get("JARVIS_AGENT_HISTORY") or agents_mod.home() / "agent-history.jsonl")   # testy: osobny plik
 
 
 @mcp.custom_route("/bridge/agent-history", methods=["GET", "OPTIONS"])

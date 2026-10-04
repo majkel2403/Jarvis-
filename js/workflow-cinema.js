@@ -117,12 +117,16 @@ const dayScenes = ({ runs = [], tasks = [], history = [], notes = [] }, since, u
     items.push({ ts: r.started, kind: 'workflow', title: r.name + (name ? ': ' + name : ''), state: r.state === 'done' ? 'done' : ACTIVE(r.state) || r.state === 'stopped' ? 'skipped' : 'failed',
       ms: r.steps.reduce((a, s) => a + (s.ms || 0), 0) || null, artifact: fw || { kind: 'fields', fields: { title: name || r.name, Kroki: doneN + ' z ' + r.steps.length } } });
   });
-  tasks.filter(t => inDay(t.started || 0)).forEach(t => {
+  const groups = new Map();   // to samo zadanie wiele razy (np. z harmonogramu) = jedna scena „×N”
+  tasks.filter(t => inDay(t.started || 0)).forEach(t => { const k = (t.platform || '') + '|' + norm(t.title || ''); (groups.get(k) || groups.set(k, []).get(k)).push(t); });
+  groups.forEach(list => {
+    const t = list[list.length - 1], n = list.length, fails = list.filter(x => x.status === 'failed').length;
     seen.add(norm(t.title || ''));
     const where = PLATFORM[t.platform] || 'Hermes';
-    items.push({ ts: t.started, kind: t.platform === 'cron' ? 'cron' : t.platform === 'cli' ? 'cli' : 'telegram', title: t.title || 'Zadanie',
-      state: t.status === 'done' ? 'done' : t.status === 'failed' ? 'failed' : 'skipped', ms: t.ended ? Math.round((t.ended - t.started) * 1000) : null,
-      artifact: { kind: 'fields', fields: { title: t.title || 'Zadanie', Skąd: where, Wynik: String(t.result || (t.status === 'running' ? 'w toku albo przerwane' : '—')).slice(0, 220), ...(t.tools ? { Narzędzia: String(t.tools) } : {}) } } });
+    items.push({ ts: list[0].started, kind: t.platform === 'cron' ? 'cron' : t.platform === 'cli' ? 'cli' : 'telegram', title: (t.title || 'Zadanie') + (n > 1 ? ' (×' + n + ')' : ''),
+      state: fails ? 'failed' : t.status === 'done' ? 'done' : 'skipped', ms: list.reduce((a, x) => a + (x.ended ? Math.round((x.ended - x.started) * 1000) : 0), 0) || null,
+      artifact: { kind: 'fields', fields: { title: t.title || 'Zadanie', Skąd: where, Wynik: String(t.result || (t.status === 'running' ? 'w toku albo przerwane' : '—')).slice(0, 220),
+        ...(n > 1 ? { Razy: n + (fails ? ' (' + fails + ' z błędem)' : '') } : {}), ...(t.tools ? { Narzędzia: String(t.tools) } : {}) } } });
   });
   const small = [];
   history.filter(x => inDay((x.ts || 0) / 1000)).forEach(x => {

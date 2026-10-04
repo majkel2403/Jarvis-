@@ -114,7 +114,7 @@ async def main():
     env = dict(os.environ, JARVIS_BRIDGE_TOKEN=TOKEN, JARVIS_BRIDGE_PORT=str(PORT), JARVIS_BRIDGE_CALL_TIMEOUT="3", JARVIS_BRIDGE_TOOLS_FILE=str(tools_copy),
                JARVIS_HERMES_ENV=str(tmp / "hermes.env"), JARVIS_TASKLOG=str(tmp / "tasks.jsonl"),
                JARVIS_HERMES_URL=f"http://127.0.0.1:{PORT + 1}/v1",
-               JARVIS_WORKFLOW_RUNS=str(tmp / "wf-runs"), JARVIS_PROJECTS_ROOT=str(tmp / "projects"))
+               JARVIS_WORKFLOW_RUNS=str(tmp / "wf-runs"), JARVIS_PROJECTS_ROOT=str(tmp / "projects"), JARVIS_AGENT_HISTORY=str(tmp / "agent-history.jsonl"))
     proc = subprocess.Popen([sys.executable, str(HERE / "jarvis_bridge.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         async with httpx2.AsyncClient() as hc:
@@ -226,6 +226,9 @@ async def main():
                                                                                               "title": "x" * 900, "extra": "nie przechodzi"})
                         check("/bridge/agent-event: przyjęte", r5.status_code == 200 and r5.json().get("ok") is True, r5.text[:120])
                         await hc5.post(f"{BASE}/bridge/agent-event", headers=HT, json={"v": 1, "type": "tool.started", "task_id": "h-s-1", "tool": "web_search", "label": "pogoda"})
+                        hist = (await hc5.get(f"{BASE}/bridge/agent-history", headers=HT)).json().get("tasks", [])
+                        check("dziennik zadań Hermesa (Film dnia): zadanie z dziś, w pliku testu", [t["id"] for t in hist] == ["h-s-1"] and hist[0]["platform"] == "telegram" and (tmp / "agent-history.jsonl").exists(), json.dumps(hist)[:200])
+                        check("/bridge/agent-history bez tokenu = 401", (await hc5.get(f"{BASE}/bridge/agent-history")).status_code == 401)
                     for _ in range(40):
                         if len(seen.get("agent", [])) >= 2:
                             break

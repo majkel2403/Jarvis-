@@ -102,7 +102,8 @@ test('Film dnia: sceny z workflow, dziennika Hermesa, Process Logu i notatek —
   const since = day0.getTime() / 1000, at = (hh, mm) => since + hh * 3600 + mm * 60;
   const runs = [{ ...RUN, started: at(19, 5), steps: STEPS }, { ...RUN, id: 'wczoraj', started: since - 3600, steps: STEPS }];
   const tasks = [{ id: 't1', platform: 'telegram', title: 'Sprawdź pogodę', started: at(8, 10), ended: at(8, 11), status: 'done', result: 'Słonecznie', tools: 2 },
-    { id: 't2', platform: 'cron', title: 'Raport rynku', started: at(9, 0), ended: at(9, 2), status: 'failed', result: 'timeout', tools: 1 }];
+    { id: 't2', platform: 'cron', title: 'Raport rynku', started: at(9, 0), ended: at(9, 2), status: 'failed', result: 'timeout', tools: 1 },
+    { id: 't3', platform: 'cron', title: 'Raport rynku', started: at(9, 30), ended: at(9, 31), status: 'done', result: 'ok', tools: 1 }];
   const history = [{ ts: at(8, 10) * 1000, title: 'Telegram: Sprawdź pogodę', status: 'ok', dur: 60000 }, { ts: at(19, 5) * 1000, title: 'Workflow: Od pomysłu do projektu', status: 'ok', dur: 300000 },
     { ts: at(10, 0) * 1000, title: 'Ustaw minutnik 5 min', status: 'ok', dur: 300 }, { ts: at(10, 5) * 1000, title: 'Pogoda', status: 'ok', dur: 900 }, { ts: at(10, 6) * 1000, title: 'Otwórz notatnik', status: 'ok', dur: 200 },
     { ts: at(12, 0) * 1000, title: 'Przygotuj plan tygodnia', status: 'err', dur: 45000, result: 'brak kalendarza' }];
@@ -110,7 +111,8 @@ test('Film dnia: sceny z workflow, dziennika Hermesa, Process Logu i notatek —
   const steps = arr(T.dayScenes({ runs, tasks, history, notes }, since, since + 86400));
   assert.deepEqual(steps.map(s => s.kind), ['telegram', 'cron', 'task', 'notes', 'task', 'workflow'], JSON.stringify(steps.map(s => s.title)));
   assert.match(steps[0].title, /^08:10 · Sprawdź pogodę$/); assert.equal(steps[0].artifact.fields.Skąd, 'Telegram');
-  assert.equal(steps[1].state, 'failed');
+  assert.equal(steps[1].state, 'failed'); assert.match(steps[1].title, /Raport rynku \(×2\)$/, 'powtarzane zadanie z harmonogramu = jedna scena');
+  assert.equal(steps[1].artifact.fields.Razy, '2 (1 z błędem)');
   assert.match(steps[2].title, /Drobne polecenia \(3\)/, 'krótkie polecenia złączone w jedną scenę');
   assert.match(steps[3].title, /Notatki \(2\)/); assert.equal(steps[4].state, 'failed');
   assert.match(steps[5].title, /Od pomysłu do projektu: Habit Tracker/); assert.equal(steps[5].artifact.kind, 'files_written');
