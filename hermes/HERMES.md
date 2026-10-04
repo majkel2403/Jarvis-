@@ -6,6 +6,8 @@ Kontekst projektu dla Hermesa: zasady pracy na tym komputerze. Tożsamość i st
 - **Pulpit Jarvis OS** (okna, widgety, notatki, zadania, minutnik, motywy, agent WWW, computer_use) → narzędzia `mcp__jarvis_desktop__*`. Przed pierwszym z nich w rozmowie załaduj skill **`jarvis-os-management`** (katalog możliwości i dokładne pola narzędzi).
 - **Zadania systemowe** (pliki, terminal Windows, kod, konfiguracja, Hermes, pakiety) → Twoje narzędzia systemowe; nie potrzebują mostu. Gdy wiadomość nie dotyczy wprost Jarvis OS (okno, notatka, widget, timer, pulpit, motyw), to zadanie systemowe.
 - Usługi: strona Jarvis OS `http://localhost:4000`, most MCP `127.0.0.1:8651`, Twój gateway `127.0.0.1:8643`. Projekt: `C:\Users\majke\Desktop\jarvis-` (NIE archiwalny Mission Control na :8420).
+- Twoje pliki: profil `C:\Users\majke\.hermes\profiles\jarvis-desktop\` (baza rozmów `state.db`, logi `logs\`, `config.yaml`, kopie `*.bak-*`). **Nie przeszukuj rekurencyjnie** `~\.hermes` ani `C:\` (venv, node_modules — trwa minutami i kończy się limitem czasu).
+- Wynik terminala z dopiskiem `[+N hidden: rtk recall ID]` jest skrócony przez wtyczkę RTK; gdy potrzebujesz ukrytych linii — `rtk recall ID`.
 - Operacje Hermesa (restart gatewaya, Telegram, crony, delegowanie kodu, mapa konfiguracji) → najpierw skill **`jarvis-operations`**. Kod delegujesz **tylko do Claude** (`claude-delegate`).
 
 ## 2. Pulpit — jak pracować
@@ -41,11 +43,14 @@ Każdy wynik to `{ok, code, data, text}`; `ok=false` = nie udało się.
 
 ## 6. Telegram
 - Diagnozę rób w ciszy, wynik podaj w 2–3 zdaniach. **3 nieudane podejścia do tego samego = stop:** co wiesz, czego nie wiesz, jedna propozycja.
+- Tekst pisany obok wywołań narzędzi **też trafia do użytkownika** — nie pisz raportów w trakcie pracy; jedno podsumowanie na końcu, bez nagłówków i tabel.
+- Niejasne odwołanie po `/new` („ostatni problem”, „to, co zmieniłem”): najpierw `git -C C:\Users\majke\Desktop\jarvis- log --oneline -10` (opisy commitów mówią, co i dlaczego zmieniono) i `session_search` z `query`; dalej niejasne → zapytaj jednym zdaniem, zamiast szukać kilka minut.
 - Zanim powiesz „nie mogę”, sprawdź `tool_search` — masz terminal, pliki, kod, skille, computer_use i pulpit.
 - Długa rozmowa spowalnia Ciebie i zwiększa pomyłki — gdy wątek jest bardzo długi, zaproponuj `/new`.
 
 ## 7. Dowody
 - Opisując stan, pliki lub konfigurację, podaj ścieżkę albo wynik polecenia, które to pokazało.
+- Zanim powiesz, że coś „nie zostało zrestartowane / nie działa / zapyta o zgodę”, sprawdź: start gatewaya — `logs\agent.log` i czas startu procesu; haki — `hermes -p jarvis-desktop hooks doctor`. Liczby (rozmiary, czasy) podawaj zmierzone, nie szacowane.
 - Ogólne polecenia („sprawdź wszystko”) nie mają kryterium końca — wypisz, co sprawdziłeś, a czego nie, zamiast ogłaszać „zakończone”.
 
 ## 8. Twarde blokady (haki — nie da się ich obejść)
