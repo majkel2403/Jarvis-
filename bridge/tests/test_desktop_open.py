@@ -59,7 +59,13 @@ class Fake:
 
 
 def call(args=None):
-    r = asyncio.run(jb._bridge_desktop_open(args or {}))
+    # własna pętla zamiast asyncio.run(): run() zeruje pętlę głównego wątku, a test_media_fallback (uruchamiany później
+    # w tym samym procesie) korzysta z asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    try:
+        r = loop.run_until_complete(jb._bridge_desktop_open(args or {}))
+    finally:
+        loop.close()
     return r.is_error, json.loads(r.content[0].text)
 
 
