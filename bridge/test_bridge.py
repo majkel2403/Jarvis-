@@ -204,6 +204,7 @@ async def main():
                     async with httpx2.AsyncClient() as hc5:
                         HT = {"X-Bridge-Token": TOKEN}
                         check("/bridge/agent-event bez tokenu = 401", (await hc5.post(f"{BASE}/bridge/agent-event", json={"type": "task.created", "task_id": "t1"})).status_code == 401)
+                        check("/bridge/agent-event: uszkodzony JSON = 400 (nie 500)", (await hc5.post(f"{BASE}/bridge/agent-event", content=b"{zly json", headers=HT)).status_code == 400)
                         check("/bridge/agent-event: nieznany typ = 400", (await hc5.post(f"{BASE}/bridge/agent-event", json={"type": "rm -rf", "task_id": "t1"}, headers=HT)).status_code == 400)
                         r5 = await hc5.post(f"{BASE}/bridge/agent-event", headers=HT, json={"v": 1, "type": "task.created", "task_id": "h-s-1", "platform": "telegram",
                                                                                               "title": "x" * 900, "extra": "nie przechodzi"})

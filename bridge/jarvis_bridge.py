@@ -818,7 +818,10 @@ def agent_replay() -> list[dict]:
 async def agent_event(request: Request) -> Response:
     if not authorized(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    evt = clean_agent_event(await read_json(request))
+    try:
+        evt = clean_agent_event(await read_json(request))
+    except agents_mod.AgentError as e:   # zły JSON / za duże ciało → 400/413, nie 500
+        return JSONResponse({"error": str(e)}, status_code=getattr(e, "status", 400))
     if not evt:
         return JSONResponse({"error": "nieznany typ zdarzenia albo brak task_id"}, status_code=400)
     AGENT_LOG.append(evt)
