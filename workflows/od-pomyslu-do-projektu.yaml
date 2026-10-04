@@ -15,7 +15,7 @@ examples:
   - od pomysłu do projektu bot do przypomnień
   - zaprojektuj projekt z pomysłu
 report: |
-  Projekt „{brief.nazwa}” gotowy: {zapis.root} ({zapis.count} plików, commit {zapis.commit}).
+  Projekt „{brief.nazwa}” gotowy: {zapis.root} ({zapis.count|n:plik:pliki:plików}, commit {zapis.commit}).
   Cel: {brief.cel}
   Następny krok: przejrzyj docs/ARCHITEKTURA.md i STRUKTURA.md, potem poproś o implementację pierwszej funkcji MVP.
 

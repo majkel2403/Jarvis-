@@ -20,7 +20,9 @@ Użytkownik chce powtarzalnych procesów pracy z wizualizacją na żywo i pętla
   most sam (jak `media_play`), więc workflow można uruchomić z Telegrama bez otwartej karty.
 - Zdarzenia `event: workflow` (SSE) zasilają kartę przebiegu w czacie (chat-first), aplikację „Mapa pracy”, Orb, karty HUD
   i Process Log. Zadanie z czatu karty ma pierwszeństwo, tak jak przy zadaniach z Telegrama (ADR 0004). Karta podłączona
-  w trakcie przebiegu dostaje jego migawkę.
+  w trakcie przebiegu dostaje jego migawkę. Krok `hermes` odbiera odpowiedź strumieniem: `step.progress` (ostatnie ~900
+  znaków, licznik, narzędzie, po które Hermes sięga; najwyżej co 0,6 s) idzie tylko do kart — nie do `.events.jsonl` —
+  a tekst końcowy i tokeny są te same co bez strumienia. Film / Film dnia: `docs/guide/workflow.md`.
 - Limity: maks. 2 równoległe przebiegi, jeden przebieg danego workflow naraz. Krok `tool` nie uruchamia `workflow_*`, a krok
   `hermes` dostaje zakaz wołania narzędzi workflow i pulpitu (brak zagnieżdżeń).
 

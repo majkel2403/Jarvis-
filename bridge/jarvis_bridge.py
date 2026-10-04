@@ -28,6 +28,7 @@ from urllib.parse import quote
 
 import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
 import writer_proxy           # bridge/writer_proxy.py: model pomocniczy (darmowe modele → Hermes)
+import day_history            # bridge/day_history.py: dziennik zadań Hermesa na dysku („Film dnia”)
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -827,9 +828,30 @@ async def agent_event(request: Request) -> Response:
     if not evt:
         return JSONResponse({"error": "nieznany typ zdarzenia albo brak task_id"}, status_code=400)
     AGENT_LOG.append(evt)
+    if evt["type"] in day_history.TYPES:
+        tools = sum(1 for e in AGENT_LOG if e.get("task_id") == evt["task_id"] and e["type"] == "tool.started")
+        day_history.record(AGENT_HISTORY, evt, tools)
     for c in list(CLIENTS.values()):
         c.queue.put_nowait({"_sse": "agent", **evt})
     return JSONResponse({"ok": True, "clients": len(CLIENTS)})
+
+
+AGENT_HISTORY = agents_mod.home() / "agent-history.jsonl"
+
+
+@mcp.custom_route("/bridge/agent-history", methods=["GET", "OPTIONS"])
+async def agent_history(request: Request) -> Response:
+    """Zadania Hermesa (Telegram, cron, konsola) od `since` (epoch s; domyślnie północ) — także te sprzed otwarcia karty."""
+    if (g := await agents_guard(request)) is not None:
+        return g
+    try:
+        since = float(request.query_params.get("since") or 0)
+    except ValueError:
+        since = 0.0
+    if since <= 0:
+        lt = time.localtime()
+        since = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    return cors(request, JSONResponse({"since": since, "tasks": day_history.tasks(AGENT_HISTORY, since)[-200:]}))
 
 
 # ---------------------------------------------------------------- workflow (ADR 0007): silnik w moście, zdarzenia „event: workflow”
@@ -847,26 +869,77 @@ def wf_emit(evt: dict) -> None:
         c.queue.put_nowait({"_sse": "workflow", **evt})
 
 
-async def wf_hermes(messages: list, session_id: str, timeout: float) -> tuple[str, int]:
-    """Jedna tura Hermesa dla kroku workflow: osobna sesja na krok i próbę; ponowienia tylko przy 429/5xx/zerwanym połączeniu."""
+def _wf_call(fn, arg) -> None:
+    try:
+        fn(arg)
+    except Exception as e:  # noqa: BLE001 — podgląd na żywo nie może przerwać kroku
+        print("[jarvis-bridge] workflow podgląd:", e, file=sys.stderr)
+
+
+async def _wf_read_stream(r, on_text, on_tool) -> tuple[str, int]:
+    """Odpowiedź Hermesa strumieniem (SSE): tekst z delta.content, narzędzia z „event: hermes.tool.progress”,
+    tokeny z ostatniego kawałka (stream_options.include_usage). Tekst końcowy jest ten sam co bez strumienia."""
+    text, tokens, event, data = "", 0, "message", []
+
+    def dispatch() -> None:
+        nonlocal text, tokens
+        payload = "\n".join(data)
+        if not payload or payload == "[DONE]":
+            return
+        try:
+            j = json.loads(payload)
+        except ValueError:
+            return
+        if not isinstance(j, dict):
+            return
+        if event == "hermes.tool.progress":
+            if on_tool:
+                _wf_call(on_tool, j)
+            return
+        if isinstance(j.get("usage"), dict):
+            tokens = int(j["usage"].get("total_tokens") or 0)
+        delta = "".join(str((c.get("delta") or {}).get("content") or "") for c in (j.get("choices") or []) if isinstance(c, dict))
+        if delta:
+            text += delta
+            _wf_call(on_text, text)
+
+    async for raw in r.content:
+        line = raw.decode("utf-8", "replace").rstrip("\r\n")
+        if not line:
+            dispatch()
+            event, data = "message", []
+        elif line.startswith("event:"):
+            event = line[6:].strip()
+        elif line.startswith("data:"):
+            data.append(line[5:].lstrip(" "))
+    dispatch()
+    return text, tokens
+
+
+async def wf_hermes(messages: list, session_id: str, timeout: float, on_text=None, on_tool=None) -> tuple[str, int]:
+    """Jedna tura Hermesa dla kroku workflow: osobna sesja na krok i próbę; ponowienia tylko przy 429/5xx/zerwanym połączeniu.
+    Z on_text odpowiedź przychodzi strumieniem — karta widzi pisanie na żywo (Mapa pracy, Film)."""
     import aiohttp
     t = writer_proxy.hermes_target()
     if not t:
         raise RuntimeError("nie znaleziono profilu jarvis-desktop (API_SERVER_KEY)")
     url, key, model = t
-    body = {"model": model, "stream": False, "messages": messages}
+    stream = on_text is not None
+    body = {"model": model, "stream": stream, "messages": messages, **({"stream_options": {"include_usage": True}} if stream else {})}
     headers = {"Authorization": "Bearer " + key, "X-Hermes-Session-Id": session_id}
     for attempt, delay in enumerate((5, 15, None)):
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
                 async with sess.post(url, json=body, headers=headers) as r:
                     if r.status == 200:
+                        if stream and "text/event-stream" in (r.headers.get("Content-Type") or ""):
+                            return await _wf_read_stream(r, on_text, on_tool)
                         j = await r.json(content_type=None)
                         msg = ((j.get("choices") or [{}])[0].get("message") or {})
                         return str(msg.get("content") or ""), int((j.get("usage") or {}).get("total_tokens") or 0)
                     if r.status not in WF_RETRY_STATUS or delay is None:
                         raise RuntimeError(f"Hermes HTTP {r.status}: {(await r.text())[:200]}")
-        except aiohttp.ClientConnectionError as e:
+        except (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as e:
             if delay is None:
                 raise RuntimeError(f"Hermes niedostępny: {type(e).__name__}") from e
         except asyncio.TimeoutError as e:   # długa generacja — ponawia krok silnik (z podpowiedzią), nie ten klient
@@ -1017,6 +1090,19 @@ async def workflows_run_action(request: Request) -> Response:
     except Exception as e:  # noqa: BLE001
         return agent_error(request, e)
     return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
+
+
+@mcp.custom_route("/workflows/runs/{run_id}/file", methods=["GET"])
+async def workflows_run_file(request: Request) -> Response:
+    """Plik projektu zapisanego przez przebieg (czytnik README w Filmie); ?path=README.md, tylko wewnątrz folderu projektu."""
+    if (g := await agents_guard(request)) is not None:
+        return g
+    try:
+        return cors(request, JSONResponse(get_workflows().project_file(request.path_params["run_id"], request.query_params.get("path") or "README.md")))
+    except KeyError as e:
+        return cors(request, JSONResponse({"error": str(e).strip("'\"")}, status_code=404))
+    except ValueError as e:
+        return cors(request, JSONResponse({"error": str(e)}, status_code=400))
 
 
 def tasklog_path() -> Path:

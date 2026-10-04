@@ -28,12 +28,15 @@ const cardText = r => {
   const done = r.steps.filter(s => s.state === 'done' || s.state === 'skipped').length;
   const head = '**Workflow: ' + r.name + '** — ' + (ACTIVE(r.state) ? 'krok ' + Math.min(r.steps.length, done + 1) + '/' + r.steps.length : STATE_PL[r.state] || r.state)
     + '\n' + '▰'.repeat(done) + '▱'.repeat(Math.max(0, r.steps.length - done)) + ' ' + (r.steps.length ? Math.round(done / r.steps.length * 100) : 0) + '%';
-  const lines = r.steps.map(s => MARK[s.state] + ' ' + s.title + (s.state === 'running' && s.attempts > 1 ? ' (próba ' + s.attempts + ')' : '') + (s.ms != null && s.state === 'done' ? ' · ' + fmtS(s.ms) + (s.attempts > 1 ? ' · ' + s.attempts + ' próby' : '') : ''));
+  const lines = r.steps.map(s => MARK[s.state] + ' ' + s.title + (s.state === 'running' && s.attempts > 1 ? ' (próba ' + s.attempts + ')' : '') + (s.state === 'running' && s.live?.chars ? ' · pisze… ' + s.live.chars.toLocaleString('pl-PL') + ' znaków' : '') + (s.ms != null && s.state === 'done' ? ' · ' + fmtS(s.ms) + (s.attempts > 1 ? ' · ' + s.attempts + ' próby' : '') : ''));
   const tail = r.state === 'waiting' && r.pending ? '\n\n⏸ ' + r.pending.question : r.state === 'done' ? '\n\n' + (r.report || '') : r.reason ? '\n\n' + r.reason : '\n\nPrzebieg na żywo: „pokaż mapę pracy”.';
   return head + '\n' + lines.join('\n') + tail;
 };
 
-const touch = (r, e) => { if (r.chat) r.chat.set(cardText(r)); J.emit('workflows', { id: r.id, e }); pill.render(); };
+const touch = (r, e) => {
+  if (r.chat && (e?.type !== 'step.progress' || Date.now() - (r._cardAt || 0) > 3000)) { r._cardAt = Date.now(); r.chat.set(cardText(r)); }
+  J.emit('workflows', { id: r.id, e }); pill.render();
+};
 /* typowy czas kroku: mediana z ukończonych przebiegów tego samego workflow (do 10), inaczej domyślny dla rodzaju kroku */
 const DEF_MS = { hermes: 60000, check: 3000, write_files: 3000, tool: 2000, ask: 30000 };
 const expect = r => {
@@ -84,14 +87,21 @@ const pill = (() => {
 })();
 /* stan przebiegu z jednego zdarzenia — bez efektów ubocznych (używa go też powtórka w Mapie pracy) */
 const reduce = (r, e) => {
+  if (e.type === 'step.progress') {   // podgląd pisania Hermesa na żywo — stan kroku, bez wpisu na osi czasu
+    const s = r.steps.find(x => x.id === e.step_id); if (!s) return s;
+    const lv = s.live || {};
+    if (typeof e.tail === 'string') Object.assign(lv, { tail: e.tail, chars: e.chars || e.tail.length, at: e.ts });
+    if (e.tool) Object.assign(lv, { tool: e.tool, label: e.label || '', toolState: e.status || '' });
+    s.live = lv; return s;
+  }
   r.state = e.state || r.state;
   r.timeline.push({ ts: e.ts, type: e.type, title: e.title || '', text: e.reason || e.preview || e.question || '' }); if (r.timeline.length > 60) r.timeline.shift();
   const s = r.steps.find(x => x.id === e.step_id);
   switch (e.type) {
     case 'run.started': r.autonomy = e.autonomy; break;
-    case 'step.started': if (s) Object.assign(s, { state: 'running', attempts: e.attempt || 1, startedAt: e.ts }); break;
+    case 'step.started': if (s) Object.assign(s, { state: 'running', attempts: e.attempt || 1, startedAt: e.ts, live: null }); break;
     case 'step.retry': if (s) s.errors.push(e.reason); break;
-    case 'step.completed': case 'step.skipped': if (s) Object.assign(s, { state: e.type === 'step.completed' ? 'done' : 'skipped', ms: e.ms ?? s.ms, preview: e.preview || '', score: e.score ?? s.score, artifact: e.artifact || s.artifact || null }); break;
+    case 'step.completed': case 'step.skipped': if (s) Object.assign(s, { state: e.type === 'step.completed' ? 'done' : 'skipped', ms: e.ms ?? s.ms, preview: e.preview || '', score: e.score ?? s.score, artifact: e.artifact || s.artifact || null, live: null }); break;
     case 'step.failed': if (s) { s.state = e.reason === 'DENIED' ? 'denied' : 'failed'; if (e.reason) s.errors.push(e.reason); } break;
     case 'ask.waiting': r.pending = { question: e.question, options: e.options || [] }; break;
     case 'ask.answered': r.pending = null; break;
@@ -121,7 +131,7 @@ const WF = J.workflows = {
     r.lastEventAt = Date.now();
     reduce(r, e);
     switch (e.type) {
-      case 'run.started': r.chat = J.chat.add('jarvis', cardText(r)); adopt(r); break;
+      case 'run.started': r.chat = J.chat.add('jarvis', cardText(r)); adopt(r); WF.cinema?.offer?.(r, 'start'); break;
       case 'run.resumed': J.proc.active || J.toast?.('Workflow „' + r.name + '” wznowiony po restarcie mostu', 4000); break;
       case 'step.started':
         adopt(r);
@@ -141,6 +151,7 @@ const WF = J.workflows = {
         const st = e.type === 'run.completed' ? 'ok' : e.type === 'run.failed' ? 'err' : 'abort';
         if (ownsProc(r)) { J.proc.step('reply', 'Wynik workflow', [['Treść', r.report || r.reason || '']], { preview: String(r.report || r.reason || '').slice(0, 70) }); J.proc.end(st, r.report || r.reason || ''); J.ev.emit(st === 'ok' ? 'task.completed' : st === 'err' ? 'task.failed' : 'task.cancelled', { task_id: r.id, result: String(r.report || r.reason || '').slice(0, 300) }, 'workflow'); }
         r.proc = null; J.sfx?.[st === 'ok' ? 'notify' : 'error']?.();
+        WF.cinema?.offer?.(r, 'end');
         break;
       }
     }
@@ -308,8 +319,8 @@ const renderArt = a => {
 
 J.apps.workflows = {
   title: 'Mapa pracy', icon: 'flow', minW: 460, minH: 420, w: 980, h: 660,
-  mount(body, ctx) {
-    let sel = null, built = null, prev = {}, replay = null, raf = 0, last = 0, edges = [], parts = [], bursts = [], waves = [], confetti = [], tsec = 0, artKey = '', focusStep = null, shown = 0;
+  mount(body, ctx, arg) {
+    let sel = (arg && typeof arg === 'object' && arg.run) || null, built = null, prev = {}, replay = null, raf = 0, last = 0, edges = [], parts = [], bursts = [], waves = [], confetti = [], tsec = 0, artKey = '', focusStep = null, shown = 0;
     body.innerHTML = '<div class="wf">' +
       '<div class="wf-head">' +
         '<div class="wf-prog" aria-hidden="true"><svg viewBox="0 0 72 72"><defs><linearGradient id="wfGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent2)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient></defs><circle class="tr" cx="36" cy="36" r="30"/><circle class="pg" id="wfPg" cx="36" cy="36" r="30"/></svg><b id="wfPct">0%</b><small id="wfPctL">postęp</small></div>' +
@@ -391,14 +402,27 @@ J.apps.workflows = {
       const withArt = r.steps.filter(s => s.artifact && s.kind !== 'tool'), pick = r.steps.find(s => s.id === focusStep && s.artifact) || withArt[withArt.length - 1];
       const cur = r.steps.find(s => s.state === 'running');
       const key = (pick ? pick.id + ':' + pick.state : '-') + '|' + (cur ? cur.id + cur.attempts : '');
-      if (key === artKey) return; artKey = key;
+      const lv = cur && !focusStep && (!pick || r.steps.indexOf(cur) > r.steps.indexOf(pick)) ? cur.live : null;
+      if (key === artKey) { if (lv) liveText(lv); return; }
+      artKey = key;
       const box = $b('#wfArt'); box.innerHTML = '';
       $b('#wfArtStep').textContent = pick ? 'krok: ' + pick.title : '';
-      if (cur && (!pick || r.steps.indexOf(cur) > r.steps.indexOf(pick)) && !focusStep) box.appendChild(h('div', { class: 'wf-art-wip' }, '<i></i><i></i><i></i><span></span>')).querySelector('span').textContent = 'Hermes pracuje nad: ' + cur.title;
+      if (cur && (!pick || r.steps.indexOf(cur) > r.steps.indexOf(pick)) && !focusStep) {
+        box.appendChild(h('div', { class: 'wf-art-wip' }, '<i></i><i></i><i></i><span></span>')).querySelector('span').textContent = 'Hermes pracuje nad: ' + cur.title;
+        box.appendChild(h('div', { class: 'wf-live-txt', 'aria-hidden': 'true' }, '<em></em><pre></pre>'));
+        if (lv) liveText(lv);
+      }
       if (!pick) { if (!cur) box.appendChild(h('div', { class: 'dim' }, 'Wyniki kroków pojawią się tutaj na żywo.')); return; }
       box.appendChild(renderArt(pick.artifact));
     };
 
+    /* tekst, który Hermes właśnie pisze (zdarzenia step.progress z mostu), i narzędzie, po które sięga */
+    const liveText = lv => {
+      const w = $b('#wfArt .wf-live-txt'); if (!w) return;
+      w.classList.toggle('on', !!(lv.tail || lv.tool));
+      w.querySelector('em').textContent = [lv.chars ? 'pisze · ' + lv.chars.toLocaleString('pl-PL') + ' znaków' : '', lv.tool && lv.toolState !== 'completed' ? 'sięga po: ' + lv.tool + (lv.label ? ' · ' + lv.label : '') : ''].filter(Boolean).join(' · ');
+      const pre = w.querySelector('pre'); pre.textContent = String(lv.tail || '').slice(-700); pre.scrollTop = pre.scrollHeight;
+    };
     const timeline = r => {
       const box = $b('#wfTime'), list = r.timeline;
       if (shown > list.length) { box.innerHTML = ''; shown = 0; }

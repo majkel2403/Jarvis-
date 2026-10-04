@@ -119,3 +119,34 @@ test('bezpiecznik: zgubione zdarzenie końca → stan z mostu domyka przebieg (P
   assert.equal(r.state, 'failed'); assert.equal(J.proc.active, false, 'Process Log zamknięty');
   assert.ok(said.some(x => /nie powiódł się[\s\S]*błąd silnika: test/.test(x.text)), 'karta w czacie z powodem');
 });
+
+test('pisanie Hermesa na żywo (step.progress): stan kroku bez wpisu na osi czasu, licznik w karcie czatu', () => {
+  const { J, said, ev } = mk();
+  ev('run.started', { steps: STEPS, autonomy: 'L3' });
+  ev('step.started', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1 });
+  const r = J.workflows.runs.get('r1'), before = r.timeline.length;
+  ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, chars: 1240, tail: '{"nazwa": "Nawyki"' });
+  ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, tool: 'skill_view', label: 'michal-project-preferences', status: 'running' });
+  const s = r.steps[0];
+  assert.equal(s.live.chars, 1240); assert.equal(s.live.tool, 'skill_view'); assert.equal(s.live.tail, '{"nazwa": "Nawyki"');
+  assert.equal(r.timeline.length, before, 'podgląd nie zaśmieca osi czasu'); assert.equal(r.state, 'running');
+  r._cardAt = 0; ev('step.progress', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', attempt: 1, chars: 2000, tail: 'x' });
+  assert.match(said.find(x => /Workflow: Od pomysłu/.test(x.text)).text, /pisze… 2\s?000 znaków/);
+  ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 900 });
+  assert.equal(s.live, null, 'po ukończeniu podgląd znika');
+});
+
+test('propozycja filmu w czacie: wg ustawienia, bez propozycji po zatrzymaniu', () => {
+  const { J, ev } = mk({ wfFilm: 'ask' }), asked = [];
+  J.chat.quick = (q, o) => { asked.push(q); return { remove() { } }; };
+  ev('run.started', { steps: STEPS, autonomy: 'L3' });
+  assert.match(asked[0], /Oglądać „Od pomysłu do projektu” na żywo/);
+  ev('run.completed', { state: 'done', report: 'gotowe' });
+  assert.match(asked[1], /Film z przebiegu „Od pomysłu do projektu” jest gotowy\./);
+  const b = mk({ wfFilm: 'off' }), asked2 = []; b.J.chat.quick = q => { asked2.push(q); return null; };
+  b.ev('run.started', { steps: STEPS, autonomy: 'L3' }); b.ev('run.stopped', { state: 'stopped', reason: 'stop' });
+  assert.equal(asked2.length, 0, '„nie proponuj” — cisza');
+  const c = mk(), asked3 = []; c.J.chat.quick = q => { asked3.push(q); return null; };
+  c.ev('run.started', { steps: STEPS, autonomy: 'L3' }); c.ev('run.stopped', { state: 'stopped', reason: 'stop' });
+  assert.equal(asked3.length, 1, 'po zatrzymaniu nie ma „filmu gotowego”');
+});
