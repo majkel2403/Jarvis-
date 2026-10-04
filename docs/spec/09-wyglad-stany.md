@@ -22,8 +22,8 @@ Zasady tekstów: bez żargonu („Brak połączenia z serwisem pogody”, nie �
 
 ✅ Zdefiniowane w `css/jarvis.css` (`:root`): `--accent` (#33d6ff) i `--accent2` (#a25cff) z wariantami `-rgb`, `--bg` #03060f, `--bg2`, `--text` #eaf6ff, `--muted`, `--dim` (kontrast ≥ 5:1), `--ok` #3ef0a3, `--warn` #ffb84d, `--err` #ff5d7a, czcionki `--font` (Inter), `--hud` (Rajdhani), `--mono` (JetBrains Mono). Motywy (`J.THEMES`): jarvis, cyjan, niebieski, fiolet, zielony, złoty, czerwony, różowy. Tapety: photo, aurora, void.
 
-🆕 W2:
-- **Skala odstępów**: 4, 8, 12, 16, 24, 32 px jako `--s1…--s6` (dziś liczby wpisane ręcznie).
+✅ W2 (tokeny są w `:root`; 🟡 większość komponentów ma jeszcze wartości wpisane ręcznie — nowy kod pisz na tokenach, dokładne wartości komponentów: [18 · handoff pulpitu](18-handoff-pulpit.md)):
+- **Skala odstępów**: 4, 8, 12, 16, 24, 32 px jako `--s1…--s6`.
 - **Promienie**: `--r-sm` 8, `--r-md` 12, `--r-lg` 16.
 - **Warstwy (z-index)** jako tokeny: pulpit 1, karty HUD 20, okna 30–9 999, przypięte 10 000+, panele 20 000, menu 99 000, chipy pytań 99 990+, toasty 99 995, start/boot 100 000.
 - **Skala interfejsu** (`ui_scale`, 80–130 %): zmienna `--ui-scale` mnożąca rozmiar czcionki i odstępy; okna przeliczają pozycje proporcjonalnie.

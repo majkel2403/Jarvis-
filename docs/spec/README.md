@@ -32,6 +32,7 @@ Pisane prostym językiem. Tam, gdzie trzeba było coś zdecydować, a decyzji w�
 | 15 | [15-bezpieczenstwo.md](15-bezpieczenstwo.md) | zaufanie, zgody, prywatność, spis danych, klucze |
 | 16 | [16-testy.md](16-testy.md) | testy automatyczne i ręczne, kryteria akceptacji |
 | 17 | [17-wdrozenie.md](17-wdrozenie.md) | fale W1–W5, zadania z plikami, zależności, definicja „gotowe” |
+| 18 | [18-handoff-pulpit.md](18-handoff-pulpit.md) | handoff ekranu głównego: dokładne wymiary, tokeny, stany, ruch, RWD, dostępność (z kodu) |
 
 ## Pliki generowane i maszynowe
 
