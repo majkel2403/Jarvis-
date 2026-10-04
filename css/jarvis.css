@@ -1055,3 +1055,138 @@ label.mini{font-size:10.5px;display:flex;gap:4px;align-items:center;color:var(--
 .lowfx .wf-3d{transform:none}
 @media (max-width:900px){.wf-head{grid-template-columns:64px minmax(0,1fr)}.wf-gauges,.wf-acts{grid-column:1/-1;justify-content:flex-start}.wf-cols{grid-template-columns:1fr}.wf-pill{top:60px;right:10px;max-width:calc(100% - 20px)}}
 @media (max-width:640px){.wf-graph{flex-direction:column;align-items:stretch;gap:26px}.wf-node{width:auto}.wf-3d{transform:none}.wf-banner b{font-size:16px;letter-spacing:5px}}
+/* ===== Tryb kinowy workflow (js/workflow-cinema.js): poza #app, więc ruch steruje sam (data-r = poziom efektów) ===== */
+body.cin-under #app{visibility:hidden}
+.cin{position:fixed;inset:0;z-index:2147483000;background:#01030a;color:#eaf6ff;overflow:hidden;font-family:var(--font);outline:none;--bar:11vh;animation:cinIn .6s ease both}
+.cin.out{animation:cinOut .55s ease forwards;pointer-events:none}
+@keyframes cinIn{from{opacity:0}}
+@keyframes cinOut{to{opacity:0}}
+.cin-stage{position:absolute;inset:0;will-change:transform}
+.cin-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cin-world{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.cin-node{position:absolute;left:0;top:0;width:120px;height:120px;will-change:transform,filter}
+.cin-core{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 50% 38%,rgba(34,56,100,.96),rgba(4,8,20,.96) 70%);border:2px solid rgba(160,190,240,.3);box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 24px rgba(0,0,0,.6);transition:border-color .6s,box-shadow .6s,background .6s}
+.cin-ring{position:absolute;left:-12px;top:-12px;width:144px;height:144px;opacity:0;transition:opacity .4s;transform-origin:50% 50%}
+.cin-ring circle{fill:none;stroke:rgba(var(--accent-rgb),.95);stroke-width:2.2;stroke-dasharray:14 10;filter:drop-shadow(0 0 4px rgba(var(--accent-rgb),1))}
+.cin-ic{display:grid;place-items:center;color:rgba(200,220,255,.5);transition:color .5s,opacity .5s,transform .5s}
+.cin-ic svg{width:46px;height:46px}
+.cin-ok{position:absolute;font-size:58px;line-height:1;color:var(--ok);opacity:0;transform:scale(.3);transition:opacity .4s,transform .7s cubic-bezier(.2,1.7,.4,1);text-shadow:0 0 18px rgba(var(--ok-rgb),.95)}
+.cin-node[data-s="running"] .cin-core{border-color:rgba(var(--accent-rgb),.95);box-shadow:0 0 40px rgba(var(--accent-rgb),.7),0 0 90px rgba(var(--accent-rgb),.35),inset 0 0 30px rgba(var(--accent-rgb),.35);animation:cinBeat 1.6s ease-in-out infinite}
+.cin-node[data-s="running"] .cin-ring{opacity:1;animation:cinSpin 3s linear infinite}
+.cin-node[data-s="running"] .cin-ic{color:#fff;transform:scale(1.08)}
+.cin-node[data-s="done"] .cin-core{border-color:rgba(var(--ok-rgb),.95);background:radial-gradient(circle at 50% 38%,rgba(22,86,64,.96),rgba(3,14,12,.96) 70%);box-shadow:0 0 34px rgba(var(--ok-rgb),.6),inset 0 0 26px rgba(var(--ok-rgb),.3)}
+.cin-node[data-s="done"] .cin-ic{opacity:0}
+.cin-node[data-s="done"] .cin-ok{opacity:1;transform:scale(1)}
+.cin-node[data-s="failed"] .cin-core,.cin-node[data-s="denied"] .cin-core{border-color:var(--err);box-shadow:0 0 40px rgba(var(--err-rgb),.7),inset 0 0 26px rgba(var(--err-rgb),.3)}
+.cin-node[data-s="skipped"] .cin-core{opacity:.45}
+@keyframes cinBeat{50%{box-shadow:0 0 60px rgba(var(--accent-rgb),.9),0 0 130px rgba(var(--accent-rgb),.45),inset 0 0 40px rgba(var(--accent-rgb),.5)}}
+@keyframes cinSpin{to{transform:rotate(360deg)}}
+.cin-lbl{position:absolute;left:0;top:0;transform-origin:50% 0;text-align:center;white-space:nowrap;pointer-events:none;will-change:transform,opacity}
+.cin-lbl em{display:block;font-style:normal;font-family:var(--hud);font-weight:600;font-size:12px;letter-spacing:.35em;color:rgba(var(--accent-rgb),.9)}
+.cin-lbl b{display:block;font-family:var(--hud);font-size:21px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#f2f8ff;text-shadow:0 0 12px rgba(0,0,0,.95),0 0 2px #000}
+.cin-lbl small{display:block;font-size:12px;color:rgba(220,235,255,.7);letter-spacing:.06em;text-shadow:0 0 8px #000}
+/* plansze tytułowe */
+.cin-title{position:absolute;left:0;right:0;top:var(--bar);bottom:var(--bar);display:grid;place-items:center;pointer-events:none;z-index:5}
+.cin-t{grid-area:1/1;text-align:center;max-width:86vw;animation:cinTIn .8s ease both}
+.cin-t.out{animation:cinTOut .7s ease forwards}
+@keyframes cinTIn{from{opacity:0;transform:scale(1.04)}}
+@keyframes cinTOut{to{opacity:0;transform:scale(.97);filter:blur(6px)}}
+.cin-t small{display:block;font-family:var(--hud);font-weight:600;letter-spacing:.55em;text-indent:.55em;font-size:clamp(12px,1.3vw,18px);text-transform:uppercase;color:rgba(220,240,255,.78)}
+.cin-t b{display:block;font-family:var(--display);font-weight:700;font-size:clamp(34px,6vw,96px);line-height:1.08;letter-spacing:.14em;text-indent:.14em;text-transform:uppercase;color:#f4fbff;text-shadow:-2px 0 rgba(255,40,90,.55),2px 0 rgba(40,220,255,.6),0 0 40px rgba(var(--accent-rgb),.55)}
+.cin-t em{display:block;min-height:1.4em;margin:20px auto 0;max-width:62vw;font-style:normal;font-size:clamp(15px,1.6vw,23px);color:rgba(225,240,255,.88);text-shadow:0 2px 8px #000}
+.cin-t.intro small{font-size:clamp(14px,1.7vw,24px);animation:cinPresent 2.5s ease both}
+@keyframes cinPresent{0%{opacity:0;letter-spacing:.2em}30%,75%{opacity:1}100%{opacity:0;letter-spacing:.8em}}
+.cin-t.main b{animation:cinTrack 3.2s cubic-bezier(.2,.7,.1,1) both}
+@keyframes cinTrack{from{letter-spacing:.7em;filter:blur(16px);opacity:0}to{letter-spacing:.14em;filter:blur(0);opacity:1}}
+.cin-t.act small{color:rgba(var(--accent-rgb),1);letter-spacing:.7em;animation:cinTIn 1s .1s ease both}
+.cin-t.act b{font-size:clamp(28px,4.6vw,70px);animation:cinTrack 1.6s cubic-bezier(.2,.7,.1,1) both}
+.cin-t.act em{font-family:var(--hud);letter-spacing:.3em;text-transform:uppercase;font-size:clamp(12px,1.1vw,16px);color:rgba(220,235,255,.7)}
+.cin-t .streak{display:block;height:2px;width:62vw;margin:18px auto 0;background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),1) 30%,#fff 50%,rgba(var(--accent-rgb),1) 70%,transparent);box-shadow:0 0 18px rgba(var(--accent-rgb),.9);animation:cinStreak 1.4s cubic-bezier(.7,0,.2,1) both}
+@keyframes cinStreak{from{transform:scaleX(0);opacity:0}40%{opacity:1}to{transform:scaleX(1);opacity:.8}}
+.cin-t.warn b{color:var(--warn);text-shadow:-4px 0 rgba(255,40,90,.8),4px 0 rgba(40,220,255,.8),0 0 40px rgba(var(--warn-rgb),.6);animation:cinJitter .14s steps(2) infinite}
+.cin-t.warn small{color:var(--warn)}
+.cin-t.err b{color:var(--err);text-shadow:-3px 0 rgba(255,40,90,.7),3px 0 rgba(40,220,255,.5),0 0 50px rgba(var(--err-rgb),.7)}
+@keyframes cinJitter{0%{transform:translate(-2px,1px)}50%{transform:translate(3px,-1px) skewX(-4deg)}100%{transform:translate(0)}}
+.cin-t.big b{font-size:clamp(36px,6.6vw,108px);animation:cinTrack 2.4s cubic-bezier(.2,.7,.1,1) both}
+.cin-t.big.ok b{color:#f2fff9;text-shadow:-2px 0 rgba(255,40,90,.45),2px 0 rgba(40,220,255,.6),0 0 50px rgba(var(--ok-rgb),.75),0 0 120px rgba(var(--ok-rgb),.35)}
+.cin-t.end b{font-size:clamp(40px,7vw,110px);letter-spacing:.4em;text-indent:.4em;animation:cinTrack 3s cubic-bezier(.2,.7,.1,1) both}
+.cin-endb{display:flex;gap:12px;justify-content:center;margin-top:34px;pointer-events:auto;animation:cinTIn 1s 1.2s ease both}
+/* błysk, ziarno, winieta, alarm */
+.cin-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6}
+.cin-flash.on{animation:cinFlash .55s ease-out}
+@keyframes cinFlash{0%{opacity:var(--fa,.6)}100%{opacity:0}}
+.cin-grain{position:absolute;inset:-50%;pointer-events:none;z-index:7;opacity:.085;background-image:var(--grain);mix-blend-mode:overlay;animation:cinGrain .5s steps(6) infinite}
+@keyframes cinGrain{0%{transform:translate(0,0)}20%{transform:translate(-8%,4%)}40%{transform:translate(6%,-6%)}60%{transform:translate(-4%,8%)}80%{transform:translate(8%,2%)}100%{transform:translate(0,0)}}
+.cin-leak{position:absolute;inset:0;pointer-events:none;z-index:6;mix-blend-mode:screen;opacity:.5}
+.cin-leak i{position:absolute;width:70vw;height:70vh;border-radius:50%;filter:blur(60px);opacity:0;animation:cinLeak 17s ease-in-out infinite}
+.cin-leak i:first-child{left:-25vw;top:-20vh;background:radial-gradient(circle,rgba(255,140,60,.55),rgba(255,60,90,.25) 45%,transparent 70%)}
+.cin-leak i:last-child{right:-30vw;bottom:-25vh;background:radial-gradient(circle,rgba(var(--accent2-rgb),.5),rgba(var(--accent-rgb),.2) 45%,transparent 70%);animation-delay:-8s;animation-duration:21s}
+@keyframes cinLeak{0%,100%{opacity:0;transform:translate(0,0) scale(.9)}35%{opacity:.55;transform:translate(8vw,5vh) scale(1.1)}60%{opacity:.15;transform:translate(14vw,-3vh) scale(1)}}
+.cin[data-r="1"] .cin-leak{display:none}
+.cin-vig{position:absolute;inset:0;pointer-events:none;z-index:7;background:radial-gradient(ellipse at center,transparent 48%,rgba(0,0,0,.78) 100%)}
+.cin.alarm .cin-vig{animation:cinAlarm .8s ease-in-out 3}
+@keyframes cinAlarm{50%{box-shadow:inset 0 0 220px rgba(var(--err-rgb),.85)}}
+.cin.glitch .cin-stage{animation:cinGlitch .7s steps(2) both}
+.cin.glitch .cin-grain{opacity:.4}
+@keyframes cinGlitch{10%{transform:translate(-14px,3px) skewX(-6deg);filter:hue-rotate(80deg) saturate(3)}20%{transform:translate(10px,-4px);clip-path:inset(20% 0 40% 0)}30%{transform:translate(-6px,2px);filter:hue-rotate(-60deg) saturate(2)}45%{transform:translate(8px,0) skewX(4deg);clip-path:inset(55% 0 10% 0)}60%{transform:translate(-3px,0);filter:none;clip-path:none}100%{transform:none}}
+/* pasy kinowe z HUD i napisami */
+.cin-bar{position:absolute;left:0;right:0;height:var(--bar);background:#000;z-index:8;display:flex;align-items:center;justify-content:space-between;gap:2vw;padding:0 3vw;font-family:var(--hud);font-weight:600;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:rgba(220,235,255,.72)}
+.cin-bar.top{top:0;animation:cinBarT 1.3s cubic-bezier(.7,0,.2,1) both}
+.cin-bar.bot{bottom:0;animation:cinBarB 1.3s cubic-bezier(.7,0,.2,1) both}
+@keyframes cinBarT{from{transform:translateY(-100%)}}
+@keyframes cinBarB{from{transform:translateY(100%)}}
+.cin-rec{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.cin-rec i{width:10px;height:10px;border-radius:50%;background:#ff2b4a;box-shadow:0 0 10px #ff2b4a;animation:cinRec 1.2s steps(2) infinite}
+.cin.cin-film .cin-rec i{background:var(--accent);box-shadow:0 0 10px var(--accent);border-radius:0;clip-path:polygon(0 0,100% 50%,0 100%);animation:none}
+@keyframes cinRec{50%{opacity:.15}}
+.cin-act{flex:1;text-align:center;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cin-tc{font-family:var(--mono);font-weight:400;letter-spacing:.08em;color:#fff;font-variant-numeric:tabular-nums}
+.cin-eta{min-width:15vw;white-space:nowrap;color:rgba(220,235,255,.6)}
+.cin-sub{flex:1;margin:0;text-align:center;text-transform:none;letter-spacing:.01em;font-family:var(--font);font-weight:500;font-size:clamp(15px,1.5vw,21px);line-height:1.35;color:#fff;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .45s;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cin-sub.on{opacity:1}
+.cin-ctl{display:flex;gap:8px;align-items:center;justify-content:flex-end;min-width:15vw}
+.cin-opts{display:flex;gap:6px;flex-wrap:wrap}
+.cin-b{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:999px;padding:7px 13px;font:inherit;font-size:13px;letter-spacing:.08em;cursor:pointer;transition:background .2s,border-color .2s}
+.cin-b:hover,.cin-b:focus-visible{background:rgba(var(--accent-rgb),.25);border-color:rgba(var(--accent-rgb),.8);outline:none}
+.cin-b.pri{background:rgba(var(--accent-rgb),.22);border-color:rgba(var(--accent-rgb),.7)}
+.cin-b:disabled{opacity:.4;cursor:default}
+.cin-opts .cin-b{text-transform:none;letter-spacing:0}
+/* hologram z wynikiem kroku */
+.cin-holo{position:absolute;right:5vw;top:calc(var(--bar) + 4vh);width:min(520px,36vw);max-height:calc(100vh - 2 * var(--bar) - 8vh);overflow:hidden;z-index:4;padding:16px 18px;border-radius:14px;
+  background:linear-gradient(160deg,rgba(var(--accent-rgb),.16),rgba(5,12,30,.86));-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);border:1px solid rgba(var(--accent-rgb),.55);box-shadow:0 0 40px rgba(var(--accent-rgb),.25),inset 0 0 30px rgba(var(--accent-rgb),.12);
+  opacity:0;transform:perspective(900px) rotateY(-14deg) scaleY(.02);transform-origin:0 50%;pointer-events:none;transition:opacity .35s,transform .55s cubic-bezier(.2,.9,.2,1)}
+.cin-holo.show{opacity:1;transform:perspective(900px) rotateY(-14deg) scaleY(1);animation:cinHolo 1s linear both}
+@keyframes cinHolo{0%{opacity:0}8%{opacity:1}12%{opacity:.25}18%{opacity:1}24%{opacity:.6}30%,100%{opacity:1}}
+.cin-holo:after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.045) 0 1px,transparent 1px 3px)}
+.cin-holo:before{content:"";position:absolute;left:0;right:0;height:30%;top:-30%;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(var(--accent-rgb),.16),transparent);animation:cinHoloScan 3.2s linear infinite}
+@keyframes cinHoloScan{to{top:100%}}
+.cin-holo-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-family:var(--hud);font-weight:600;font-size:12px;letter-spacing:.25em;text-transform:uppercase;color:var(--accent)}
+.cin-holo-h i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.cin-holo-b .wf-a{font-size:14px}
+/* napisy końcowe */
+.cin-credits{position:absolute;left:0;right:0;top:var(--bar);bottom:var(--bar);overflow:hidden;z-index:5;pointer-events:none;opacity:0;transition:opacity .8s;-webkit-mask-image:linear-gradient(transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(transparent,#000 14%,#000 86%,transparent)}
+.cin-credits.on{opacity:1}
+.cin-credits.gone{opacity:0}
+.cin-roll{position:absolute;left:0;right:0;top:100%;text-align:center;padding:0 8vw}
+.cin-roll.go{animation:cinRoll 16s linear forwards}
+@keyframes cinRoll{to{transform:translateY(calc(-1 * var(--dist,2000px)))}}
+.cin-roll section{margin:0 0 7vh}
+.cin-roll h4{margin:0 0 12px;font-family:var(--hud);font-weight:600;font-size:13px;letter-spacing:.42em;text-transform:uppercase;color:rgba(var(--accent-rgb),.95)}
+.cin-roll p{margin:5px 0;font-size:clamp(15px,1.5vw,21px);color:#f2f7ff}
+.cin-roll .mono p{font-family:var(--mono);font-size:13px;color:#bfe6ff}
+.cin-roll .big{font-family:var(--display);font-weight:700;font-size:clamp(30px,4.6vw,66px);letter-spacing:.12em;text-transform:uppercase;color:#fff;text-shadow:0 0 30px rgba(var(--accent-rgb),.6)}
+/* poziomy ruchu: 0 = bez animacji (napisy do przewinięcia), 1 = bez ziarna w ruchu */
+.cin[data-r="0"],.cin[data-r="0"] *{animation:none!important;transition:none!important}
+.cin[data-r="0"] .cin-grain{display:none}
+.cin[data-r="0"] .cin-credits{pointer-events:auto;overflow:auto;-webkit-mask-image:none;mask-image:none}
+.cin[data-r="0"] .cin-roll{position:static;padding-top:4vh}
+.cin[data-r="0"] .cin-roll .cin-endb{pointer-events:auto}
+.cin[data-r="1"] .cin-grain{animation:none}
+@media (max-width:760px){
+  .cin{--bar:9vh}
+  .cin-holo{left:4vw;right:4vw;width:auto;top:auto;bottom:calc(var(--bar) + 2vh);max-height:38vh;transform:none}
+  .cin-holo.show{transform:none}
+  .cin-bar{font-size:11px;padding:0 3vw}
+  .cin-eta,.cin-act{display:none}
+  .cin-sub{font-size:14px}
+}

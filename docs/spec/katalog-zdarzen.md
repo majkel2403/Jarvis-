@@ -30,6 +30,7 @@
 | ui | `app-view` | apps-settings.js, apps.js, commands-ext.js |
 | ui | `attach` | commands-w4.js |
 | ui | `bridge` | bridge.js |
+| ui | `cinema` | workflow-cinema.js |
 | ui | `dictation` | commands-w4.js |
 | ui | `ear` | core.js |
 | ui | `ear-standby` | core.js |

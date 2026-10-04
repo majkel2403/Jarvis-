@@ -20,7 +20,7 @@ const blank = e => ({ id: e.run_id, workflow: e.workflow, name: e.name, state: e
   pending: null, steps: (e.steps || []).map(s => ({ ...s, state: 'pending', attempts: 0, ms: null, preview: '', score: null, errors: [] })), timeline: [], chat: null, proc: null, handles: {} });
 const fromSnapshot = (s, prev) => Object.assign(prev || blank({ run_id: s.id, workflow: s.workflow, name: s.name, ts: s.started }), {
   id: s.id, workflow: s.workflow, name: s.name, state: s.state, started: s.started, ended: s.ended, report: s.report, reason: s.reason, pending: s.pending,
-  autonomy: s.autonomy, budget: s.budget, budget_used: s.budget_used, steps: (s.steps || []).map(x => ({ errors: [], ...x }))
+  autonomy: s.autonomy, budget: s.budget, budget_used: s.budget_used, inputs: s.inputs || prev?.inputs, steps: (s.steps || []).map(x => ({ errors: [], ...x }))
 });
 
 /* tekst karty w czacie — jedna wiadomość Jarvisa aktualizowana przy każdym zdarzeniu */
@@ -228,7 +228,22 @@ R.add({ id: 'workflow_answer', group: 'Workflow', label: 'Workflow: odpowiedz', 
   args: { type: 'object', properties: { run_id: { type: 'string' }, answer: { type: 'string', maxLength: 200 } }, required: ['run_id', 'answer'] },
   run: guard(async ({ run_id, answer }) => { const r = await api('/workflows/runs/' + encodeURIComponent(run_id) + '/answer', { method: 'POST', body: { answer } }); return ok(r, 'Przekazałem odpowiedź: „' + answer + '”.'); }) });
 
-['workflow_list', 'workflow_status', 'workflow_stop'].forEach(id => J.policy?.A3?.add(id));
+R.add({ id: 'workflow_film', group: 'Workflow', label: 'Workflow: film', idempotent: true, reads: ['workflows'],
+  description: 'Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcowe, ścieżka dźwiękowa). Trwający przebieg — na żywo; zakończony — film z zapisu. Esc zamyka.',
+  args: { type: 'object', properties: { run_id: { type: 'string', description: 'id przebiegu; domyślnie trwający albo ostatni' }, film: { type: 'boolean', description: 'true = od początku z zapisu, także gdy przebieg trwa' } } },
+  examples: ['pokaz film z workflow', 'pokaz film', 'odtworz film z pracy', 'workflow jak film'],
+  parse(raw, n) { return /^(?:pokaz|odtworz|pusc|wlacz)\s+film(?:\s+(?:z\s+)?(?:workflow|przebiegu|pracy))?$|^(?:workflow|przebieg|praca)\s+jak\s+film$|^(?:kino|film|tryb\s+kinowy)\s+(?:z\s+)?(?:workflow|przebiegu|pracy|mapy\s+pracy)$/.test(n) ? { args: {}, score: 45 } : null; },
+  run: guard(async ({ run_id, film }) => {
+    if (!WF.cinema || typeof document === 'undefined' || !document.body?.appendChild) return fail('OFFLINE', 'Tryb kinowy działa tylko na pulpicie Jarvis OS.');
+    if (!run_id && !WF.list.length) await WF.refresh();
+    const r = run_id ? runs.get(run_id) || { id: run_id, name: run_id, state: 'done' } : WF.current();
+    if (!r) return fail('NOT_FOUND', 'Żaden workflow jeszcze nie działał — nie ma czego pokazać.');
+    const live = !film && ACTIVE(r.state);
+    if (!await WF.cinema.open(r.id, { film: !!film })) return fail('NOT_FOUND', 'Nie udało się otworzyć przebiegu „' + r.name + '”.');
+    return ok({ id: r.id, live }, 'Film: „' + r.name + '”' + (live ? ' na żywo' : ' — film z zapisu') + '. Esc zamyka.');
+  }) });
+
+['workflow_list', 'workflow_status', 'workflow_stop', 'workflow_film'].forEach(id => J.policy?.A3?.add(id));
 
 /* ---------- aplikacja „Mapa pracy” — centrum dowodzenia przebiegiem ----------
    Scena (zorza, siatka, promień skanera, przechył 3D za myszą), węzły-przyciski z pierścieniem wypełnianym według typowego czasu
@@ -259,6 +274,38 @@ const treeOf = paths => {
   walk(root, 0, ''); return rows;
 };
 
+/* wynik kroku jako animowany element (Mapa pracy i hologram trybu kinowego) */
+const renderArt = a => {
+  const wrap = h('div', { class: 'wf-a wf-a-' + a.kind });
+  if (a.kind === 'fields') {
+    const f = a.fields || {}, title = f.nazwa || f.title;
+    if (title) { const t = h('div', { class: 'wf-a-title' }); wrap.appendChild(t); typeText(t, title, 700); }
+    let i = 0;
+    Object.entries(f).forEach(([k, v]) => {
+      if (k === 'nazwa' || k === 'title' || /^(id|updated|created|ts|words)$/.test(k)) return;   // pola techniczne nie są „tym, co powstaje”
+      const row = h('div', { class: 'wf-a-row', style: '--i:' + (i++) }, '<em></em><div></div>'); row.querySelector('em').textContent = FIELD_PL[k] || k;
+      const val = row.querySelector('div');
+      if (Array.isArray(v)) v.forEach((x, j) => { const c = h('span', { class: 'wf-chipx', style: '--j:' + j }); c.textContent = x; val.appendChild(c); });
+      else if (k === 'cel') typeText(val, v, 1200); else val.textContent = String(v);
+      wrap.appendChild(row);
+    });
+  } else if (a.kind === 'doc') {
+    const head = h('div', { class: 'wf-a-meta' }, '<b>0</b> znaków · <span></span> ' + J.pl((a.headings || []).length, 'sekcja', 'sekcje', 'sekcji')); wrap.appendChild(head); countUp(head.querySelector('b'), a.chars || 0); head.querySelector('span').textContent = (a.headings || []).length;
+    const ol = h('ol', { class: 'wf-a-heads' }); (a.headings || []).forEach((t, i) => { const li = h('li', { style: '--i:' + i }); li.textContent = t; ol.appendChild(li); }); wrap.appendChild(ol);
+    if (a.excerpt) { const ex = h('div', { class: 'wf-a-ex' }); ex.textContent = a.excerpt; wrap.appendChild(ex); }
+  } else if (a.kind === 'tree') {
+    const rows = treeOf(a.paths || []), head = h('div', { class: 'wf-a-meta' }, '<b>0</b> ' + J.pl((a.paths || []).length, 'plik', 'pliki', 'plików') + (a.filled ? ' · <span class="ok">treść gotowa</span>' : ' · plan struktury')); wrap.appendChild(head); countUp(head.querySelector('b'), (a.paths || []).length);
+    const ul = h('div', { class: 'wf-tree' + (a.filled ? ' filled' : '') });
+    rows.forEach((x, i) => { const row = h('div', { class: 'wf-tr ' + (x.dir ? 'dir' : 'file'), style: '--i:' + i + ';--d:' + x.depth, title: a.notes?.[x.path] || '' }, '<i></i><span></span>'); row.querySelector('span').textContent = x.name + (x.dir ? '/' : ''); ul.appendChild(row); });
+    wrap.appendChild(ul);
+  } else if (a.kind === 'files_written') {
+    const big = h('div', { class: 'wf-a-big' }, '<b>0</b><span>' + J.pl(a.count || 0, 'plik zapisany', 'pliki zapisane', 'plików zapisanych') + '</span>'); wrap.appendChild(big); countUp(big.querySelector('b'), a.count || 0, 1400);
+    const path = h('div', { class: 'wf-a-path' }, '📁 <code></code>' + (a.commit ? ' <span class="wf-commit"></span>' : '')); path.querySelector('code').textContent = a.root; if (a.commit) path.querySelector('.wf-commit').textContent = 'git ' + a.commit; wrap.appendChild(path);
+    const grid = h('div', { class: 'wf-dots' }); (a.files || []).forEach((f, i) => { const d = h('i', { style: '--i:' + i, title: f }); grid.appendChild(d); }); wrap.appendChild(grid);
+  }
+  return wrap;
+};
+
 J.apps.workflows = {
   title: 'Mapa pracy', icon: 'flow', minW: 460, minH: 420, w: 980, h: 660,
   mount(body, ctx) {
@@ -269,7 +316,7 @@ J.apps.workflows = {
         '<div class="wf-title"><select class="input" id="wfRun" aria-label="Przebieg"></select>' +
           '<div class="wf-stats"><span class="wf-chip" id="wfState"><i></i><em></em></span><span id="wfClock" title="czas przebiegu">⏱ 0:00</span><span id="wfEta" class="wf-eta" title="szacowany czas do końca (z poprzednich przebiegów)"></span><span id="wfAut" title="samodzielność"></span></div></div>' +
         '<div class="wf-gauges" aria-hidden="true">' + ['czas', 'kroki', 'tokeny'].map(g => '<div class="wf-g" data-g="' + g + '"><svg viewBox="0 0 32 32"><circle class="tr" cx="16" cy="16" r="13"/><circle class="pg" cx="16" cy="16" r="13"/></svg><b>0</b><small>' + g + '</small></div>').join('') + '</div>' +
-        '<div class="wf-acts"><button class="btn sm ghost" id="wfReplay" title="Odtwórz przebieg jak film">▶ Powtórka</button><button class="btn sm ghost danger" id="wfStop">Stop</button><button class="btn sm ghost" id="wfNew">Nowy…</button></div>' +
+        '<div class="wf-acts"><button class="btn sm primary" id="wfFilm" title="Tryb kinowy: przebieg jak scena z filmu (na żywo albo z zapisu)">🎬 Film</button><button class="btn sm ghost" id="wfReplay" title="Odtwórz przebieg jak film">▶ Powtórka</button><button class="btn sm ghost danger" id="wfStop">Stop</button><button class="btn sm ghost" id="wfNew">Nowy…</button></div>' +
       '</div>' +
       '<div class="wf-new hidden" id="wfForm"><select class="input" id="wfDef" aria-label="Workflow"></select><textarea class="input" id="wfIn" rows="2" placeholder="Pomysł / dane wejściowe…"></textarea><button class="btn sm primary" id="wfGo">Uruchom</button></div>' +
       '<div class="wf-stage" id="wfStage"><div class="wf-3d" id="wfTilt"><canvas class="wf-cv" id="wfCv" aria-hidden="true"></canvas><div class="wf-graph" id="wfGraph" role="list" aria-label="Kroki workflow"></div></div><div class="wf-banner" id="wfBanner" aria-hidden="true"><b></b><small></small></div></div>' +
@@ -349,33 +396,7 @@ J.apps.workflows = {
       $b('#wfArtStep').textContent = pick ? 'krok: ' + pick.title : '';
       if (cur && (!pick || r.steps.indexOf(cur) > r.steps.indexOf(pick)) && !focusStep) box.appendChild(h('div', { class: 'wf-art-wip' }, '<i></i><i></i><i></i><span></span>')).querySelector('span').textContent = 'Hermes pracuje nad: ' + cur.title;
       if (!pick) { if (!cur) box.appendChild(h('div', { class: 'dim' }, 'Wyniki kroków pojawią się tutaj na żywo.')); return; }
-      const a = pick.artifact, wrap = h('div', { class: 'wf-a wf-a-' + a.kind }); box.appendChild(wrap);
-      if (a.kind === 'fields') {
-        const f = a.fields || {}, title = f.nazwa || f.title;
-        if (title) { const t = h('div', { class: 'wf-a-title' }); wrap.appendChild(t); typeText(t, title, 700); }
-        let i = 0;
-        Object.entries(f).forEach(([k, v]) => {
-          if (k === 'nazwa' || k === 'title' || /^(id|updated|created|ts|words)$/.test(k)) return;   // pola techniczne nie są „tym, co powstaje”
-          const row = h('div', { class: 'wf-a-row', style: '--i:' + (i++) }, '<em></em><div></div>'); row.querySelector('em').textContent = FIELD_PL[k] || k;
-          const val = row.querySelector('div');
-          if (Array.isArray(v)) v.forEach((x, j) => { const c = h('span', { class: 'wf-chipx', style: '--j:' + j }); c.textContent = x; val.appendChild(c); });
-          else if (k === 'cel') typeText(val, v, 1200); else val.textContent = String(v);
-          wrap.appendChild(row);
-        });
-      } else if (a.kind === 'doc') {
-        const head = h('div', { class: 'wf-a-meta' }, '<b>0</b> znaków · <span></span> sekcji'); wrap.appendChild(head); countUp(head.querySelector('b'), a.chars || 0); head.querySelector('span').textContent = (a.headings || []).length;
-        const ol = h('ol', { class: 'wf-a-heads' }); (a.headings || []).forEach((t, i) => { const li = h('li', { style: '--i:' + i }); li.textContent = t; ol.appendChild(li); }); wrap.appendChild(ol);
-        if (a.excerpt) { const ex = h('div', { class: 'wf-a-ex' }); ex.textContent = a.excerpt; wrap.appendChild(ex); }
-      } else if (a.kind === 'tree') {
-        const rows = treeOf(a.paths || []), head = h('div', { class: 'wf-a-meta' }, '<b>0</b> plików' + (a.filled ? ' · <span class="ok">treść gotowa</span>' : ' · plan struktury')); wrap.appendChild(head); countUp(head.querySelector('b'), (a.paths || []).length);
-        const ul = h('div', { class: 'wf-tree' + (a.filled ? ' filled' : '') });
-        rows.forEach((x, i) => { const row = h('div', { class: 'wf-tr ' + (x.dir ? 'dir' : 'file'), style: '--i:' + i + ';--d:' + x.depth, title: a.notes?.[x.path] || '' }, '<i></i><span></span>'); row.querySelector('span').textContent = x.name + (x.dir ? '/' : ''); ul.appendChild(row); });
-        wrap.appendChild(ul);
-      } else if (a.kind === 'files_written') {
-        const big = h('div', { class: 'wf-a-big' }, '<b>0</b><span>plików zapisanych</span>'); wrap.appendChild(big); countUp(big.querySelector('b'), a.count || 0, 1400);
-        const path = h('div', { class: 'wf-a-path' }, '📁 <code></code>' + (a.commit ? ' <span class="wf-commit"></span>' : '')); path.querySelector('code').textContent = a.root; if (a.commit) path.querySelector('.wf-commit').textContent = 'git ' + a.commit; wrap.appendChild(path);
-        const grid = h('div', { class: 'wf-dots' }); (a.files || []).forEach((f, i) => { const d = h('i', { style: '--i:' + i, title: f }); grid.appendChild(d); }); wrap.appendChild(grid);
-      }
+      box.appendChild(renderArt(pick.artifact));
     };
 
     const timeline = r => {
@@ -535,6 +556,7 @@ J.apps.workflows = {
     const refreshView = e => { renderList(); const r = view(); if (!r) { build(null); draw(0); return; } update(r, e); };
     $b('#wfRun').onchange = ev => { stopReplay(); sel = ev.target.value; built = null; focusStep = null; refreshView(); };
     $b('#wfStop').onclick = () => sel && J.uiRun('workflow_stop', { run_id: sel });
+    $b('#wfFilm').onclick = () => { const r = sel && runs.get(sel); if (r) WF.cinema?.open(r.id); };
     $b('#wfNew').onclick = async () => { const f = $b('#wfForm'); f.classList.toggle('hidden'); const d = await WF.defs(); $b('#wfDef').innerHTML = d.map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join(''); };
     $b('#wfGo').onclick = async () => {
       const d = (WF.defList || []).find(x => x.id === $b('#wfDef').value), text = $b('#wfIn').value.trim(); if (!d) return;
@@ -549,4 +571,5 @@ J.apps.workflows = {
     WF.refresh().then(() => refreshView()); refreshView();
   }
 };
+WF.ui = { renderArt, KIND_IC, KIND_PL, fxRank, clock, typeText, countUp, ACTIVE, STATE_PL, fmtS, blank, api };
 })();

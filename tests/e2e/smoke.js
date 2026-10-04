@@ -269,6 +269,16 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     const out = { pill, rows: document.querySelectorAll('#wfArt .wf-tr').length, pillHiddenWithMap: !document.querySelector('.wf-pill')?.classList.contains('show') };
     E('run.stopped', { state: 'stopped', reason: 'test' }); J.wm.close('workflows'); return out; });
   assert(wfB.pill && wfB.rows === 5 && wfB.pillHiddenWithMap, 'pigułka i drzewo plików: ' + JSON.stringify(wfB));
+  // film (tryb kinowy workflow): bez mostu scenariusz ze stanu przebiegu; plansza otwarcia, przewinięcie do finału, Esc zamyka i pulpit wraca
+  const cin = await p.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms)), res = await J.uiRun('workflow_film', { run_id: 'e2e1' }); await wait(1200);
+    const el = document.querySelector('.cin'), out = { ok: res?.ok, dialog: el?.getAttribute('role'), nodes: el?.querySelectorAll('.cin-node').length, intro: !!el?.querySelector('.cin-t.intro, .cin-t.main'), hidden: getComputedStyle(document.querySelector('#app')).visibility, cv: el?.querySelector('.cin-cv')?.width > 0, full: el?.getBoundingClientRect().width === innerWidth && el?.getBoundingClientRect().height === innerHeight };
+    el.querySelector('[data-a=skip]').click(); await wait(1600);
+    out.done = el.querySelector('.cin-node')?.dataset.s; out.act = el.querySelector('.cin-act')?.textContent;
+    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(800);
+    return { ...out, closed: !document.querySelector('.cin') && !J.workflows.cinema.active, back: getComputedStyle(document.querySelector('#app')).visibility };
+  });
+  assert(cin.ok && cin.dialog === 'dialog' && cin.nodes === 1 && cin.intro && cin.hidden === 'hidden' && cin.cv && cin.full && cin.done === 'done' && cin.act === 'Finał' && cin.closed && cin.back === 'visible', 'film workflow: ' + JSON.stringify(cin));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });
