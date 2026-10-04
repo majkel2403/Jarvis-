@@ -300,7 +300,13 @@ J.apps.workflows = {
     /* ---------- aktualizacja ---------- */
     const update = (r, e) => {
       if (!r) return;
-      if (built !== r.id) build(r);
+      if (built !== r.id) {
+        build(r);
+        if (!replay && !r.timeline.length && !r._tlLoading) {
+          r._tlLoading = true;
+          api('/workflows/runs/' + encodeURIComponent(r.id) + '?events=1').then(j => { if (r.timeline.length) return; r.timeline = (j.events || []).filter(x => x.type !== 'run.snapshot').slice(-60).map(x => ({ ts: x.ts, type: x.type, title: x.title || '', text: x.reason || x.preview || x.question || '' })); if (view() === r) timeline(r); }).catch(() => { });
+        }
+      }
       const total = r.steps.length, done = r.steps.filter(s => s.state === 'done' || s.state === 'skipped').length, pct = total ? done / total : 0;
       $b('#wfPg').style.strokeDashoffset = String(BIG * (1 - pct)); $b('#wfPct').textContent = Math.round(pct * 100) + '%';
       $b('#wfPctL').textContent = done + ' z ' + total;
@@ -335,7 +341,7 @@ J.apps.workflows = {
 
     /* ---------- „Co powstaje”: wynik kroku animowany ---------- */
     const artifact = r => {
-      const withArt = r.steps.filter(s => s.artifact), pick = r.steps.find(s => s.id === focusStep && s.artifact) || withArt[withArt.length - 1];
+      const withArt = r.steps.filter(s => s.artifact && s.kind !== 'tool'), pick = r.steps.find(s => s.id === focusStep && s.artifact) || withArt[withArt.length - 1];
       const cur = r.steps.find(s => s.state === 'running');
       const key = (pick ? pick.id + ':' + pick.state : '-') + '|' + (cur ? cur.id + cur.attempts : '');
       if (key === artKey) return; artKey = key;
@@ -349,7 +355,7 @@ J.apps.workflows = {
         if (title) { const t = h('div', { class: 'wf-a-title' }); wrap.appendChild(t); typeText(t, title, 700); }
         let i = 0;
         Object.entries(f).forEach(([k, v]) => {
-          if (k === 'nazwa' || k === 'title') return;
+          if (k === 'nazwa' || k === 'title' || /^(id|updated|created|ts|words)$/.test(k)) return;   // pola techniczne nie są „tym, co powstaje”
           const row = h('div', { class: 'wf-a-row', style: '--i:' + (i++) }, '<em></em><div></div>'); row.querySelector('em').textContent = FIELD_PL[k] || k;
           const val = row.querySelector('div');
           if (Array.isArray(v)) v.forEach((x, j) => { const c = h('span', { class: 'wf-chipx', style: '--j:' + j }); c.textContent = x; val.appendChild(c); });
@@ -389,7 +395,8 @@ J.apps.workflows = {
       box.innerHTML = fs ? '<b>' + esc(fs.title) + '</b> · ' + esc(KIND_PL[fs.kind] || fs.kind) + ' · ' + esc(fs.state) + (fs.errors?.length ? '<div class="wf-err">' + fs.errors.map(esc).join('<br>') + '</div>' : '') : '';
     };
     const gauges = r => {
-      const b = r.budget || {}, u = r.budget_used || {}, now = nowOf(r), secs = (r.ended || now) - (r.started || now);
+      const b = r.budget || {}, u = r.budget_used || {}, now = nowOf(r);
+      const secs = r.steps.reduce((a, s) => a + (s.state === 'running' ? Math.max(0, now - (s.startedAt || now)) : (s.ms || 0) / 1000), 0);   // czas pracy kroków — jak budżet w silniku
       const steps = r.steps.reduce((a, s) => a + (s.attempts || 0), 0) || u.steps || 0;
       const set = (g, frac, label) => { const el = $b('.wf-g[data-g="' + g + '"]'); if (!el) return; el.querySelector('.pg').style.strokeDashoffset = String(GAUGE * (1 - Math.min(1, frac || 0))); el.querySelector('b').textContent = label; el.classList.toggle('hot', frac > .85); };
       set('czas', b.minutes ? secs / (b.minutes * 60) : 0, clock(secs));
@@ -437,7 +444,7 @@ J.apps.workflows = {
     const finale = r => {
       const ban = $b('#wfBanner'), ok = r.state === 'done';
       ban.dataset.s = r.state; ban.querySelector('b').textContent = ok ? 'MISJA ZAKOŃCZONA' : r.state === 'stopped' ? 'MISJA ZATRZYMANA' : 'MISJA PRZERWANA'; ban.querySelector('small').textContent = r.name;
-      flash(ban, 'show'); setTimeout(() => ban.classList.remove('show'), 4200);
+      ban.classList.remove('show'); void ban.offsetWidth; ban.classList.add('show'); clearTimeout(ban._t); ban._t = setTimeout(() => ban.classList.remove('show'), 4300);
       if (!ok || fxRank() < 2) return;
       flash($b('.wf-prog'), 'pop');
       nodes().forEach((el, i) => setTimeout(() => { wave(i, rgb('--ok-rgb')); burst(i, i % 2 ? rgb('--accent-rgb') : rgb('--ok-rgb'), 10); }, i * 110));

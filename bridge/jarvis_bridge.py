@@ -1291,6 +1291,11 @@ class BearerGate:
         self.app = app
 
     async def __call__(self, scope, receive, send):
+        if WF is None and scope["type"] == "http":   # pierwszy ruch po starcie (np. ping Hermesa co ~45 s): wznów przerwane workflow
+            try:
+                get_workflows()
+            except Exception as e:  # noqa: BLE001 — zła definicja nie może zablokować mostu
+                print("[jarvis-bridge] workflow start:", e, file=sys.stderr)
         if scope["type"] == "http" and scope["path"].startswith("/mcp"):
             auth = dict(scope["headers"]).get(b"authorization", b"").decode()
             if not (auth.startswith("Bearer ") and secrets.compare_digest(auth[7:], TOKEN)):
