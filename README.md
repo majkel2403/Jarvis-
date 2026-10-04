@@ -61,7 +61,7 @@ Telegram / cron ──► Hermes Agent (profil jarvis-desktop, :8643) ──MCP�
 - **Most** (`bridge/`) — wystawia polecenia rejestru Hermesowi jako narzędzia MCP, przekazuje je do karty, pośredniczy w czacie z Hermesem i uruchamia agentów Jeva.
 - **Hermes** (`hermes/`) — profil `jarvis-desktop` budowany z repo przez `hermes/apply_profile.py` (konfiguracja, `SOUL.md`, `HERMES.md`, wtyczki, hak blokad, strażnik konfiguracji).
 
-Szczegóły: [Hermes i most MCP](docs/guide/hermes-i-most.md) · [Agenci Jeva — internet i prawdziwy komputer](docs/guide/agenci-jeva.md) · [Sędzia Jev](docs/guide/jev.md) · [Specyfikacja](docs/spec/README.md) · [Plan rozwoju](docs/ROADMAP.md).
+Szczegóły: [Hermes i most MCP](docs/guide/hermes-i-most.md) · [Decyzje architektoniczne](docs/adr/README.md) · [Agenci Jeva — internet i prawdziwy komputer](docs/guide/agenci-jeva.md) · [Sędzia Jev](docs/guide/jev.md) · [Specyfikacja](docs/spec/README.md) · [Plan rozwoju](docs/ROADMAP.md).
 
 ## Hermes — szybki start (Windows, bez WSL)
 
