@@ -112,7 +112,7 @@ async def main():
         types = [ev["type"] for ev in events]
         check("zdarzenia: start → kroki → koniec", types[0] == "run.started" and types[-1] == "run.completed" and types.count("step.completed") == 6, str(types))
         pf = e.project_file(snap["id"], "README.md")
-        check("plik projektu do czytnika (README)", "Nawyki" in pf["text"] and not pf["truncated"] and Path(pf["root"]) == root)
+        check("plik projektu do czytnika (README)", "Nawyki" in pf["text"] and not pf["truncated"] and Path(pf["root"]) == root.resolve(), pf["root"])   # resolve: krótkie nazwy 8.3 na CI
         check("plik projektu: ścieżka poza folderem odrzucona", _raises_any(lambda: e.project_file(snap["id"], "../../x.txt"), ValueError)
               and _raises_any(lambda: e.project_file(snap["id"], "C:/Windows/win.ini"), ValueError) and _raises_any(lambda: e.project_file(snap["id"], "brak.md"), KeyError))
         check("plik projektu: limit rozmiaru", e.project_file(snap["id"], "README.md", limit=10)["truncated"] is True)
