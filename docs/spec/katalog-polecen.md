@@ -2,13 +2,13 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **147** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **145** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
 | poziom | liczba |
 |---|---|
-| A3 sam, po cichu | 69 |
+| A3 sam, po cichu | 67 |
 | A2 sam + Cofnij | 44 |
 | A1 pyta „Chodzi o…?” | 17 |
 | A0 zawsze zgoda | 17 |
@@ -222,6 +222,4 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `workflow_status` | Workflow: status — Stan workflow: bieżący krok, ponowienia, pytania do użytkownika, raport końcowy. Bez run_id — ostatni przebieg. | run_id: string | safe | A3 | — | „status workflow”, „jak idzie workflow”, „co robi workflow” |
 | `workflow_stop` | Workflow: zatrzymaj — Zatrzymuje workflow (run_id) albo wszystkie („stop wszystko”: także bieżące zadanie Jarvisa). Zrobione kroki zostają. | run_id: string | safe | A3 | — | „zatrzymaj workflow”, „stop workflow”, „stop wszystko” |
 | `workflow_answer` | Workflow: odpowiedz — Odpowiedź na pytanie zadane przez workflow (krok ask albo zgoda na krok) — po pytaniu użytkownika w rozmowie. | **run_id**: string; **answer**: string | safe | A1 | — | — |
-| `workflow_film` | Workflow: film — Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcow | run_id: string; film: boolean | safe | A3 | — | „pokaz film z workflow”, „pokaz film”, „odtworz film z pracy” |
-| `day_film` | Film dnia — Film dnia: montaż tego, co Jarvis i Hermes zrobili dziś (workflow, zadania z Telegrama i harmonogramu, zadania na pulpicie, notatki) — na cały ekran, z lektorem | date: string | safe | A3 | — | „film dnia”, „pokaz film dnia”, „podsumuj dzien jako film” |
 

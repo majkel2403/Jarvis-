@@ -26,7 +26,6 @@ SCRIPTS = [
     (BRIDGE / "test_web_task.py", ["aiohttp"], "unit"),
     (BRIDGE / "test_writer_proxy.py", ["aiohttp"], "unit"),
     (BRIDGE / "test_workflows.py", ["yaml"], "unit"),
-    (BRIDGE / "test_day_history.py", [], "unit"),
     (BRIDGE / "test_agents.py", ["aiohttp", "mcp", "uvicorn"], "integration"),
     (BRIDGE / "test_bridge.py", ["aiohttp", "mcp", "httpx2", "uvicorn"], "integration"),
 ]

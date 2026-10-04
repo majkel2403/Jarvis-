@@ -269,24 +269,6 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     const out = { pill, rows: document.querySelectorAll('#wfArt .wf-tr').length, pillHiddenWithMap: !document.querySelector('.wf-pill')?.classList.contains('show') };
     E('run.stopped', { state: 'stopped', reason: 'test' }); J.wm.close('workflows'); return out; });
   assert(wfB.pill && wfB.rows === 5 && wfB.pillHiddenWithMap, 'pigułka i drzewo plików: ' + JSON.stringify(wfB));
-  // film (tryb kinowy workflow): bez mostu scenariusz ze stanu przebiegu; przesłona z Orba, rozdziały, pauza, przewinięcie do finału,
-  // Esc zamyka i pulpit wraca; potem „Film dnia” z dzisiejszych przebiegów
-  const cin = await p.evaluate(async () => {
-    const wait = ms => new Promise(r => setTimeout(r, ms)), res = await J.uiRun('workflow_film', { run_id: 'e2e1' }); await wait(1500);
-    const el = document.querySelector('.cin'), out = { ok: res?.ok, dialog: el?.getAttribute('role'), nodes: el?.querySelectorAll('.cin-node').length, chapters: [...el.querySelectorAll('.cin-ch')].map(b => b.textContent).join(''),
-      hidden: getComputedStyle(document.querySelector('#app')).visibility, cv: el?.querySelector('.cin-cv')?.width > 0, full: el?.getBoundingClientRect().width === innerWidth && el?.getBoundingClientRect().height === innerHeight, clip: el.style.clipPath };
-    el.querySelector('[data-a=pause]').click(); out.paused = el.classList.contains('paused'); el.querySelector('[data-a=pause]').click(); out.resumed = !el.classList.contains('paused');
-    el.querySelector('[data-a=skip]').click(); await wait(2500);
-    out.done = el.querySelector('.cin-node')?.dataset.s; out.act = el.querySelector('.cin-act')?.textContent; out.title = el.querySelector('.cin-t:not(.out) b')?.textContent || '';
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(1000);
-    out.closed = !document.querySelector('.cin') && !J.workflows.cinema.active; out.back = getComputedStyle(document.querySelector('#app')).visibility;
-    const d = await J.uiRun('day_film', {}); await wait(800);
-    out.day = d?.ok && !!document.querySelector('.cin.cin-day'); out.dayNodes = document.querySelectorAll('.cin-day .cin-node').length;
-    J.workflows.cinema.close(); await wait(1000); out.dayClosed = !document.querySelector('.cin');
-    return out;
-  });
-  assert(cin.ok && cin.dialog === 'dialog' && cin.nodes === 1 && cin.chapters === '▶IF' && cin.hidden === 'hidden' && cin.cv && cin.full && !cin.clip && cin.paused && cin.resumed
-    && cin.done === 'done' && cin.act === 'Finał' && cin.closed && cin.back === 'visible' && cin.day && cin.dayNodes >= 2 && cin.dayClosed, 'film workflow: ' + JSON.stringify(cin));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });

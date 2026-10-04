@@ -143,7 +143,7 @@ const fx = (() => {
     J.quality = J.fx.rank() >= 2 ? 'high' : 'low';
   };
   const loop = now => {
-    if (document.hidden || document.body.classList.contains('cin-under')) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle i pod Filmem nic nie rysujemy
+    if (document.hidden) { setTimeout(() => requestAnimationFrame(loop), 500); return; }   // w tle nic nie rysujemy
     frames++;
     if (now - last >= 1000) { J.fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; adapt(); }
     if (++tick % 3 && resting()) { requestAnimationFrame(loop); return; }

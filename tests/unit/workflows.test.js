@@ -135,18 +135,3 @@ test('pisanie Hermesa na żywo (step.progress): stan kroku bez wpisu na osi czas
   ev('step.completed', { step_id: 'brief', n: 1, kind: 'hermes', title: 'Brief projektu', ms: 900 });
   assert.equal(s.live, null, 'po ukończeniu podgląd znika');
 });
-
-test('propozycja filmu w czacie: wg ustawienia, bez propozycji po zatrzymaniu', () => {
-  const { J, ev } = mk({ wfFilm: 'ask' }), asked = [];
-  J.chat.quick = (q, o) => { asked.push(q); return { remove() { } }; };
-  ev('run.started', { steps: STEPS, autonomy: 'L3' });
-  assert.match(asked[0], /Oglądać „Od pomysłu do projektu” na żywo/);
-  ev('run.completed', { state: 'done', report: 'gotowe' });
-  assert.match(asked[1], /Film z przebiegu „Od pomysłu do projektu” jest gotowy\./);
-  const b = mk({ wfFilm: 'off' }), asked2 = []; b.J.chat.quick = q => { asked2.push(q); return null; };
-  b.ev('run.started', { steps: STEPS, autonomy: 'L3' }); b.ev('run.stopped', { state: 'stopped', reason: 'stop' });
-  assert.equal(asked2.length, 0, '„nie proponuj” — cisza');
-  const c = mk(), asked3 = []; c.J.chat.quick = q => { asked3.push(q); return null; };
-  c.ev('run.started', { steps: STEPS, autonomy: 'L3' }); c.ev('run.stopped', { state: 'stopped', reason: 'stop' });
-  assert.equal(asked3.length, 1, 'po zatrzymaniu nie ma „filmu gotowego”');
-});

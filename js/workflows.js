@@ -20,7 +20,7 @@ const blank = e => ({ id: e.run_id, workflow: e.workflow, name: e.name, state: e
   pending: null, steps: (e.steps || []).map(s => ({ ...s, state: 'pending', attempts: 0, ms: null, preview: '', score: null, errors: [] })), timeline: [], chat: null, proc: null, handles: {} });
 const fromSnapshot = (s, prev) => Object.assign(prev || blank({ run_id: s.id, workflow: s.workflow, name: s.name, ts: s.started }), {
   id: s.id, workflow: s.workflow, name: s.name, state: s.state, started: s.started, ended: s.ended, report: s.report, reason: s.reason, pending: s.pending,
-  autonomy: s.autonomy, budget: s.budget, budget_used: s.budget_used, inputs: s.inputs || prev?.inputs, steps: (s.steps || []).map(x => ({ errors: [], ...x }))
+  autonomy: s.autonomy, budget: s.budget, budget_used: s.budget_used, steps: (s.steps || []).map(x => ({ errors: [], ...x }))
 });
 
 /* tekst karty w czacie — jedna wiadomość Jarvisa aktualizowana przy każdym zdarzeniu */
@@ -131,7 +131,7 @@ const WF = J.workflows = {
     r.lastEventAt = Date.now();
     reduce(r, e);
     switch (e.type) {
-      case 'run.started': r.chat = J.chat.add('jarvis', cardText(r)); adopt(r); WF.cinema?.offer?.(r, 'start'); break;
+      case 'run.started': r.chat = J.chat.add('jarvis', cardText(r)); adopt(r); break;
       case 'run.resumed': J.proc.active || J.toast?.('Workflow „' + r.name + '” wznowiony po restarcie mostu', 4000); break;
       case 'step.started':
         adopt(r);
@@ -151,7 +151,6 @@ const WF = J.workflows = {
         const st = e.type === 'run.completed' ? 'ok' : e.type === 'run.failed' ? 'err' : 'abort';
         if (ownsProc(r)) { J.proc.step('reply', 'Wynik workflow', [['Treść', r.report || r.reason || '']], { preview: String(r.report || r.reason || '').slice(0, 70) }); J.proc.end(st, r.report || r.reason || ''); J.ev.emit(st === 'ok' ? 'task.completed' : st === 'err' ? 'task.failed' : 'task.cancelled', { task_id: r.id, result: String(r.report || r.reason || '').slice(0, 300) }, 'workflow'); }
         r.proc = null; J.sfx?.[st === 'ok' ? 'notify' : 'error']?.();
-        WF.cinema?.offer?.(r, 'end');
         break;
       }
     }
@@ -239,22 +238,7 @@ R.add({ id: 'workflow_answer', group: 'Workflow', label: 'Workflow: odpowiedz', 
   args: { type: 'object', properties: { run_id: { type: 'string' }, answer: { type: 'string', maxLength: 200 } }, required: ['run_id', 'answer'] },
   run: guard(async ({ run_id, answer }) => { const r = await api('/workflows/runs/' + encodeURIComponent(run_id) + '/answer', { method: 'POST', body: { answer } }); return ok(r, 'Przekazałem odpowiedź: „' + answer + '”.'); }) });
 
-R.add({ id: 'workflow_film', group: 'Workflow', label: 'Workflow: film', idempotent: true, reads: ['workflows'],
-  description: 'Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcowe, ścieżka dźwiękowa). Trwający przebieg — na żywo; zakończony — film z zapisu. Esc zamyka.',
-  args: { type: 'object', properties: { run_id: { type: 'string', description: 'id przebiegu; domyślnie trwający albo ostatni' }, film: { type: 'boolean', description: 'true = od początku z zapisu, także gdy przebieg trwa' } } },
-  examples: ['pokaz film z workflow', 'pokaz film', 'odtworz film z pracy', 'workflow jak film'],
-  parse(raw, n) { return /^(?:pokaz|odtworz|pusc|wlacz)\s+film(?:\s+(?:z\s+)?(?:workflow|przebiegu|pracy))?$|^(?:workflow|przebieg|praca)\s+jak\s+film$|^(?:kino|film|tryb\s+kinowy)\s+(?:z\s+)?(?:workflow|przebiegu|pracy|mapy\s+pracy)$/.test(n) ? { args: {}, score: 45 } : null; },
-  run: guard(async ({ run_id, film }) => {
-    if (!WF.cinema || typeof document === 'undefined' || !document.body?.appendChild) return fail('OFFLINE', 'Tryb kinowy działa tylko na pulpicie Jarvis OS.');
-    if (!run_id && !WF.list.length) await WF.refresh();
-    const r = run_id ? runs.get(run_id) || { id: run_id, name: run_id, state: 'done' } : WF.current();
-    if (!r) return fail('NOT_FOUND', 'Żaden workflow jeszcze nie działał — nie ma czego pokazać.');
-    const live = !film && ACTIVE(r.state);
-    if (!await WF.cinema.open(r.id, { film: !!film })) return fail('NOT_FOUND', 'Nie udało się otworzyć przebiegu „' + r.name + '”.');
-    return ok({ id: r.id, live }, 'Film: „' + r.name + '”' + (live ? ' na żywo' : ' — film z zapisu') + '. Esc zamyka.');
-  }) });
-
-['workflow_list', 'workflow_status', 'workflow_stop', 'workflow_film'].forEach(id => J.policy?.A3?.add(id));
+['workflow_list', 'workflow_status', 'workflow_stop'].forEach(id => J.policy?.A3?.add(id));
 
 /* ---------- aplikacja „Mapa pracy” — centrum dowodzenia przebiegiem ----------
    Scena (zorza, siatka, promień skanera, przechył 3D za myszą), węzły-przyciski z pierścieniem wypełnianym według typowego czasu
@@ -319,15 +303,15 @@ const renderArt = a => {
 
 J.apps.workflows = {
   title: 'Mapa pracy', icon: 'flow', minW: 460, minH: 420, w: 980, h: 660,
-  mount(body, ctx, arg) {
-    let sel = (arg && typeof arg === 'object' && arg.run) || null, built = null, prev = {}, replay = null, raf = 0, last = 0, edges = [], parts = [], bursts = [], waves = [], confetti = [], tsec = 0, artKey = '', focusStep = null, shown = 0;
+  mount(body, ctx) {
+    let sel = null, built = null, prev = {}, replay = null, raf = 0, last = 0, edges = [], parts = [], bursts = [], waves = [], confetti = [], tsec = 0, artKey = '', focusStep = null, shown = 0;
     body.innerHTML = '<div class="wf">' +
       '<div class="wf-head">' +
         '<div class="wf-prog" aria-hidden="true"><svg viewBox="0 0 72 72"><defs><linearGradient id="wfGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent2)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient></defs><circle class="tr" cx="36" cy="36" r="30"/><circle class="pg" id="wfPg" cx="36" cy="36" r="30"/></svg><b id="wfPct">0%</b><small id="wfPctL">postęp</small></div>' +
         '<div class="wf-title"><select class="input" id="wfRun" aria-label="Przebieg"></select>' +
           '<div class="wf-stats"><span class="wf-chip" id="wfState"><i></i><em></em></span><span id="wfClock" title="czas przebiegu">⏱ 0:00</span><span id="wfEta" class="wf-eta" title="szacowany czas do końca (z poprzednich przebiegów)"></span><span id="wfAut" title="samodzielność"></span></div></div>' +
         '<div class="wf-gauges" aria-hidden="true">' + ['czas', 'kroki', 'tokeny'].map(g => '<div class="wf-g" data-g="' + g + '"><svg viewBox="0 0 32 32"><circle class="tr" cx="16" cy="16" r="13"/><circle class="pg" cx="16" cy="16" r="13"/></svg><b>0</b><small>' + g + '</small></div>').join('') + '</div>' +
-        '<div class="wf-acts"><button class="btn sm primary" id="wfFilm" title="Tryb kinowy: przebieg jak scena z filmu (na żywo albo z zapisu)">🎬 Film</button><button class="btn sm ghost" id="wfReplay" title="Odtwórz przebieg jak film">▶ Powtórka</button><button class="btn sm ghost danger" id="wfStop">Stop</button><button class="btn sm ghost" id="wfNew">Nowy…</button></div>' +
+        '<div class="wf-acts"><button class="btn sm ghost" id="wfReplay" title="Odtwórz przebieg jak film">▶ Powtórka</button><button class="btn sm ghost danger" id="wfStop">Stop</button><button class="btn sm ghost" id="wfNew">Nowy…</button></div>' +
       '</div>' +
       '<div class="wf-new hidden" id="wfForm"><select class="input" id="wfDef" aria-label="Workflow"></select><textarea class="input" id="wfIn" rows="2" placeholder="Pomysł / dane wejściowe…"></textarea><button class="btn sm primary" id="wfGo">Uruchom</button></div>' +
       '<div class="wf-stage" id="wfStage"><div class="wf-3d" id="wfTilt"><canvas class="wf-cv" id="wfCv" aria-hidden="true"></canvas><div class="wf-graph" id="wfGraph" role="list" aria-label="Kroki workflow"></div></div><div class="wf-banner" id="wfBanner" aria-hidden="true"><b></b><small></small></div></div>' +
@@ -580,7 +564,6 @@ J.apps.workflows = {
     const refreshView = e => { renderList(); const r = view(); if (!r) { build(null); draw(0); return; } update(r, e); };
     $b('#wfRun').onchange = ev => { stopReplay(); sel = ev.target.value; built = null; focusStep = null; refreshView(); };
     $b('#wfStop').onclick = () => sel && J.uiRun('workflow_stop', { run_id: sel });
-    $b('#wfFilm').onclick = () => { const r = sel && runs.get(sel); if (r) WF.cinema?.open(r.id); };
     $b('#wfNew').onclick = async () => { const f = $b('#wfForm'); f.classList.toggle('hidden'); const d = await WF.defs(); $b('#wfDef').innerHTML = d.map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join(''); };
     $b('#wfGo').onclick = async () => {
       const d = (WF.defList || []).find(x => x.id === $b('#wfDef').value), text = $b('#wfIn').value.trim(); if (!d) return;
@@ -595,5 +578,4 @@ J.apps.workflows = {
     WF.refresh().then(() => refreshView()); refreshView();
   }
 };
-WF.ui = { renderArt, KIND_IC, KIND_PL, fxRank, clock, typeText, countUp, ACTIVE, STATE_PL, fmtS, blank, api };
 })();

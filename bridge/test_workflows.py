@@ -111,11 +111,6 @@ async def main():
         check("raport końcowy", "Nawyki" in (run["report"] or "") and str(root) in run["report"], run.get("report"))
         types = [ev["type"] for ev in events]
         check("zdarzenia: start → kroki → koniec", types[0] == "run.started" and types[-1] == "run.completed" and types.count("step.completed") == 6, str(types))
-        pf = e.project_file(snap["id"], "README.md")
-        check("plik projektu do czytnika (README)", "Nawyki" in pf["text"] and not pf["truncated"] and Path(pf["root"]) == root.resolve(), pf["root"])   # resolve: krótkie nazwy 8.3 na CI
-        check("plik projektu: ścieżka poza folderem odrzucona", _raises_any(lambda: e.project_file(snap["id"], "../../x.txt"), ValueError)
-              and _raises_any(lambda: e.project_file(snap["id"], "C:/Windows/win.ini"), ValueError) and _raises_any(lambda: e.project_file(snap["id"], "brak.md"), KeyError))
-        check("plik projektu: limit rozmiaru", e.project_file(snap["id"], "README.md", limit=10)["truncated"] is True)
         check("JSON w bloku kodu rozpoznany", e.runs[snap["id"]]["outputs"]["tresc"]["pliki"][1]["path"] == "src/app.js")
         check("zdarzenia zapisane do pliku (powtórka)", len(e.events_of(snap["id"])) == len(events))
         arts = {ev["step_id"]: ev.get("artifact") for ev in events if ev["type"] == "step.completed"}
@@ -281,14 +276,6 @@ async def main():
 
     print("\n" + ("WSZYSTKO OK" if not fails else f"BŁĘDY ({len(fails)}): " + ", ".join(fails)))
     sys.exit(1 if fails else 0)
-
-
-def _raises_any(fn, exc):
-    try:
-        fn()
-    except exc:
-        return True
-    return False
 
 
 def _raises(fn):

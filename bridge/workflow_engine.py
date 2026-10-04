@@ -359,26 +359,6 @@ class WorkflowEngine:
             raise KeyError(f"nie ma przebiegu {run_id}")
         return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    def project_file(self, run_id: str, rel: str, limit: int = 300_000) -> dict:
-        """Plik z folderu projektu zapisanego przez przebieg (np. README do czytnika w Filmie) — tylko wewnątrz tego folderu."""
-        run = self.runs.get(run_id) or self._load(run_id)
-        if not run:
-            raise KeyError(f"nie ma przebiegu {run_id}")
-        roots = [Path(o["root"]) for o in (run.get("outputs") or {}).values() if isinstance(o, dict) and isinstance(o.get("root"), str)]
-        if not roots:
-            raise KeyError("ten przebieg nie zapisał projektu")
-        why = unsafe_path(rel)
-        if why:
-            raise ValueError(why)
-        base, proj = roots[-1].resolve(), self.projects_root.resolve()
-        p = (base / rel).resolve()
-        if proj not in base.parents or base not in p.parents or not p.is_file():
-            raise KeyError(f"nie ma pliku {rel}")
-        size = p.stat().st_size
-        with p.open("rb") as f:
-            data = f.read(limit)
-        return {"path": rel, "root": str(base), "text": data.decode("utf-8", "replace"), "truncated": size > limit}
-
     def _load(self, rid: str) -> dict | None:
         if not re.fullmatch(r"[0-9a-z-]{8,40}", rid or ""):
             return None

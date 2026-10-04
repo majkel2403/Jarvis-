@@ -2,7 +2,7 @@
 
 > Generuje `node tools/gen-spec.js`. Źródło: `docs/spec/nowe-polecenia.js`. Szczegóły w dokumencie z kolumny „opis w”. „rozszerzenie” = polecenie już istnieje, zmieniają się argumenty.
 
-Planowanych: **0** (nowych 0, rozszerzeń 0). Po wdrożeniu rejestr będzie miał ok. 147 poleceń.
+Planowanych: **0** (nowych 0, rozszerzeń 0). Po wdrożeniu rejestr będzie miał ok. 145 poleceń.
 
 | fala | liczba |
 |---|---|

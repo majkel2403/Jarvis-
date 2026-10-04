@@ -94,7 +94,7 @@ const DEFAULTS = () => ({
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
     openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: '',
-    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, wfFilm: 'ask', flags: {}
+    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, flags: {}
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }

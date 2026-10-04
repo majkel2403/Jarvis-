@@ -2897,36 +2897,6 @@
   }
  },
  {
-  "name": "workflow_film",
-  "description": "Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcowe, ścieżka dźwiękowa). Trwający przebieg — na żywo; zakończony — film z zapisu. Esc zamyka. Np.: „pokaz film z workflow”.",
-  "parameters": {
-   "type": "object",
-   "properties": {
-    "run_id": {
-     "type": "string",
-     "description": "id przebiegu; domyślnie trwający albo ostatni"
-    },
-    "film": {
-     "type": "boolean",
-     "description": "true = od początku z zapisu, także gdy przebieg trwa"
-    }
-   }
-  }
- },
- {
-  "name": "day_film",
-  "description": "Film dnia: montaż tego, co Jarvis i Hermes zrobili dziś (workflow, zadania z Telegrama i harmonogramu, zadania na pulpicie, notatki) — na cały ekran, z lektorem i napisami końcowymi. Esc zamyka. Np.: „film dnia”.",
-  "parameters": {
-   "type": "object",
-   "properties": {
-    "date": {
-     "type": "string",
-     "description": "RRRR-MM-DD; domyślnie dziś"
-    }
-   }
-  }
- },
- {
   "name": "task_report",
   "description": "Zestawienie zadań z czatu, które się nie udały (błąd, nierozpoznane, pół zadania, Hermes niedostępny, narzędzie zawiodło) z ostatnich dni, z przyczynami i drogą wykonania. Np.: „co sie nie udalo”.",
   "parameters": {

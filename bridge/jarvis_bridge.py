@@ -28,7 +28,6 @@ from urllib.parse import quote
 
 import agents as agents_mod   # bridge/agents.py: agent WWW i sterowanie komputerem
 import writer_proxy           # bridge/writer_proxy.py: model pomocniczy (darmowe modele → Hermes)
-import day_history            # bridge/day_history.py: dziennik zadań Hermesa na dysku („Film dnia”)
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -828,30 +827,9 @@ async def agent_event(request: Request) -> Response:
     if not evt:
         return JSONResponse({"error": "nieznany typ zdarzenia albo brak task_id"}, status_code=400)
     AGENT_LOG.append(evt)
-    if evt["type"] in day_history.TYPES:
-        tools = sum(1 for e in AGENT_LOG if e.get("task_id") == evt["task_id"] and e["type"] == "tool.started")
-        day_history.record(AGENT_HISTORY, evt, tools)
     for c in list(CLIENTS.values()):
         c.queue.put_nowait({"_sse": "agent", **evt})
     return JSONResponse({"ok": True, "clients": len(CLIENTS)})
-
-
-AGENT_HISTORY = Path(os.environ.get("JARVIS_AGENT_HISTORY") or agents_mod.home() / "agent-history.jsonl")   # testy: osobny plik
-
-
-@mcp.custom_route("/bridge/agent-history", methods=["GET", "OPTIONS"])
-async def agent_history(request: Request) -> Response:
-    """Zadania Hermesa (Telegram, cron, konsola) od `since` (epoch s; domyślnie północ) — także te sprzed otwarcia karty."""
-    if (g := await agents_guard(request)) is not None:
-        return g
-    try:
-        since = float(request.query_params.get("since") or 0)
-    except ValueError:
-        since = 0.0
-    if since <= 0:
-        lt = time.localtime()
-        since = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
-    return cors(request, JSONResponse({"since": since, "tasks": day_history.tasks(AGENT_HISTORY, since)[-200:]}))
 
 
 # ---------------------------------------------------------------- workflow (ADR 0007): silnik w moście, zdarzenia „event: workflow”
@@ -1090,19 +1068,6 @@ async def workflows_run_action(request: Request) -> Response:
     except Exception as e:  # noqa: BLE001
         return agent_error(request, e)
     return cors(request, JSONResponse({"error": "nie ma takiej akcji"}, status_code=404))
-
-
-@mcp.custom_route("/workflows/runs/{run_id}/file", methods=["GET"])
-async def workflows_run_file(request: Request) -> Response:
-    """Plik projektu zapisanego przez przebieg (czytnik README w Filmie); ?path=README.md, tylko wewnątrz folderu projektu."""
-    if (g := await agents_guard(request)) is not None:
-        return g
-    try:
-        return cors(request, JSONResponse(get_workflows().project_file(request.path_params["run_id"], request.query_params.get("path") or "README.md")))
-    except KeyError as e:
-        return cors(request, JSONResponse({"error": str(e).strip("'\"")}, status_code=404))
-    except ValueError as e:
-        return cors(request, JSONResponse({"error": str(e)}, status_code=400))
 
 
 def tasklog_path() -> Path:
