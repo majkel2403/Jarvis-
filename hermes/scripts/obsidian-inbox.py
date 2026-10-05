@@ -50,14 +50,14 @@ def read_file(path: str | Path) -> str:
         return ""
 
 def extract_frontmatter(content: str) -> dict:
+    """Blok między dwiema pierwszymi liniami `---` (wcześniej czytano tu treść notatki zamiast frontmattera)."""
     fm = {}
-    if content.startswith("---"):
-        parts = content[3:].split("---", 2)
-        if len(parts) >= 2:
-            for line in parts[1].split("\n"):
-                if ":" in line:
-                    k, v = line.split(":", 1)
-                    fm[k.strip()] = v.strip()
+    m = re.match(r"---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)", content, re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            if ":" in line and not line.startswith((" ", "\t", "-")):
+                k, v = line.split(":", 1)
+                fm[k.strip()] = v.strip().strip('"').strip("'")
     return fm
 
 def extract_body(content: str) -> str:
@@ -106,8 +106,8 @@ def get_forai_notes() -> list[tuple[Path, dict, str]]:
 
 def classify_note(fm: dict, body: str) -> str:
     """Klasyfikuje notatkę i zwraca typ."""
-    tags = fm.get("tags", "")
     note_type = fm.get("type", "")
+    tags = fm.get("tags", "") + " " + note_type   # typ z frontmattera („type: task”) liczy się jak tag
     title = body.split("\n")[0] if body else ""
     
     if "memory" in tags.lower() or "fact" in tags.lower():

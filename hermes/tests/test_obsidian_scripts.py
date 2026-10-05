@@ -93,6 +93,40 @@ def test_search_skips_trash(vault):
     assert "Projekt A" in out and "skasowana" not in out
 
 
+def test_frontmatter_is_read_from_header_not_body():
+    """Regresja 2026-10-05: parser czytał treść notatki zamiast frontmattera (typ „?”, lista aktywnych projektów pusta)."""
+    import importlib.util
+    for name in ("obsidian-context.py", "obsidian-inbox.py"):
+        spec = importlib.util.spec_from_file_location(name.replace("-", "_")[:-3], SCRIPTS / name)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        note = '---\ntype: project\nstatus: "active"\ntags: [a, b]\n---\n# Tytuł\nstatus: z treści\n'
+        fm = mod.extract_frontmatter(note)
+        assert fm["type"] == "project" and fm["status"] == "active", name
+        assert mod.extract_frontmatter("# bez frontmattera\nstatus: x\n") == {}, name
+
+
+def test_vault_health_accepts_escaped_table_alias(vault):
+    """`[[Nota\\|alias]]` w tabeli to poprawny link Obsidiana — nie może być liczony jako martwy."""
+    import json
+    (vault / "02 - Projects" / "Tabela.md").write_text(
+        "---\ntype: index\n---\n# T\n\n| Notatka |\n|---|\n| [[Projekt A\\|alias A]] |\n| [[Nie istnieje\\|x]] |\n", encoding="utf-8")
+    out = run(vault, "vault_health.py", "--path", str(vault), "--scope", "core", "--json")
+    broken = [i["broken_link"] for w in json.loads(out)["warnings"] if w["type"] == "broken_links" for i in w["items"]]
+    assert "Nie istnieje" in broken and not any(b.startswith("Projekt A") for b in broken)
+
+
+def test_search_skips_private_archive_and_puts_core_first(vault):
+    arch = vault / "06-AI-Sessions" / "Perplexity"
+    for folder, name in (("Prywatne", "rozmowa-18plus"), ("Krótkie i przypadkowe", "halo"), ("Trading", "rozmowa-trading")):
+        (arch / folder).mkdir(parents=True)
+        (arch / folder / f"{name}.md").write_text("Znacznik-ARCH\n", encoding="utf-8")
+    (vault / "02 - Projects" / "Projekt B.md").write_text("---\nstatus: active\n---\n# B\nZnacznik-ARCH w core\n", encoding="utf-8")
+    out = run(vault, "obsidian-context.py", "search", "Znacznik-ARCH")
+    assert "rozmowa-18plus" not in out and "halo" not in out
+    assert out.index("Projekt B") < out.index("rozmowa-trading")
+
+
 def test_inbox_cron_processes_forai_notes(vault):
     (vault / "00 - Inbox" / "ForAI" / "zadanie.md").write_text("---\ntype: task\n---\n# Zrób coś\n", encoding="utf-8")
     out = run(vault, "obsidian_inbox_wrapper.py")

@@ -50,15 +50,14 @@ def read_file(path: str | Path) -> str:
         return ""
 
 def extract_frontmatter(content: str) -> dict:
-    """Wyciąga frontmatter z notatki."""
+    """Wyciąga frontmatter z notatki — blok między dwiema pierwszymi liniami `---` (wcześniej czytano tu treść notatki)."""
     fm = {}
-    if content.startswith("---"):
-        parts = content[3:].split("---", 2)
-        if len(parts) >= 2:
-            for line in parts[1].split("\n"):
-                if ":" in line:
-                    k, v = line.split(":", 1)
-                    fm[k.strip()] = v.strip()
+    m = re.match(r"---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)", content, re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            if ":" in line and not line.startswith((" ", "\t", "-")):
+                k, v = line.split(":", 1)
+                fm[k.strip()] = v.strip().strip('"').strip("'")
     return fm
 
 def extract_body(content: str, max_lines: int = 50) -> str:
@@ -563,7 +562,10 @@ def search_notes(pattern: str) -> str:
         # Pomijamy ustawienia Obsidiana i kosz (.trash, dawny _trash)
         if {".obsidian", ".trash", "_trash"} & set(md.parts):
             continue
-        
+        # Archiwum Perplexity: rozmów prywatnych (18+) i szumu nie pokazujemy agentowi
+        if "Perplexity" in md.parts and {"Prywatne", "Krótkie i przypadkowe"} & set(md.parts):
+            continue
+
         try:
             content = read_file(md)
             if pattern_lower in content.lower() or pattern_lower in md.stem.lower():
@@ -577,9 +579,12 @@ def search_notes(pattern: str) -> str:
     if not results:
         return f"🔍 Nie znaleziono: {pattern}"
     
+    # Najpierw notatki core, potem archiwum Perplexity (inaczej 1800 rozmów zasłania wiedzę z core)
+    results.sort(key=lambda r: "06-AI-Sessions" in r[0].parts)
+
     lines = [f"# 🔍 Wyniki wyszukiwania: {pattern}", ""]
     lines.append(f"Znaleziono: {len(results)} notatek\n")
-    
+
     for md, created, note_type, content in results[:10]:
         # Pokaż fragment z dopasowaniem
         content_lower = content.lower()

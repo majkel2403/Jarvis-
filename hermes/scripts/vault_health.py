@@ -22,7 +22,8 @@ EXCLUDE_DIRS = {".obsidian", ".trash", "_trash", ".git", "__pycache__"}
 ARCHIVE_DIRS = {"06-AI-Sessions", "05 - Archive"}
 TEMPLATE_DIRS = {"Templates", "templates"}
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
-LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
+# `[[Nota\|alias]]` w tabelach (ukośnik chroni kolumnę) to poprawny link Obsidiana — ukośnika nie wliczamy do nazwy
+LINK_RE = re.compile(r"\[\[([^\]|#\\]+)(?:\\?[|#][^\]]*)?\]\]")
 DATE_RE = re.compile(r"due:\s*(\d{4}-\d{2}-\d{2})")
 TEMPLATE_RE = re.compile(r"<%.*?%>|\{\{[^}]+\}\>")
 
