@@ -46,6 +46,7 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Inne | `units` | `{"temp":"C","wind":"kmh"}` | object | — | — |
 | Inne | `volume` | `60` | number | — | — |
 | Inne | `watchlist` | `["BTC","ETH","SOL","BNB"]` | object | — | — |
+| Inne | `wfFilm` | `"ask"` | string | — | — |
 | OpenRouter | `openrouterKey` | — | string | tak | tak |
 | Sędzia Jev | `jevA2` | `0.92` | number | — | — |
 | Sędzia Jev | `jevA3` | `0.8` | number | — | — |

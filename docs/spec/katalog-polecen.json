@@ -5682,7 +5682,7 @@
   "id": "workflow_run",
   "group": "Workflow",
   "label": "Workflow: uruchom",
-  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie.",
+  "description": "Uruchamia workflow — proces pracy wykonywany krok po kroku przez silnik w moście (Hermes myśli w krokach, każdy krok jest sprawdzany, ponawiany ze zmianą i mieści się w budżecie). Np. workflow=\"od-pomyslu-do-projektu\", inputs={pomysl: \"…\"} zamienia pomysł w brief, architekturę, strukturę i szkielet projektu w JarvisWorkspace\\projects. Postęp widać na żywo w czacie (i jako film: „pokaż film”).",
   "args": {
    "type": "object",
    "properties": {
@@ -5826,6 +5826,72 @@
   "writes": [],
   "hermes": true,
   "examples": [],
+  "needsConfirmText": false
+ },
+ {
+  "id": "workflow_film",
+  "group": "Workflow",
+  "label": "Workflow: film",
+  "description": "Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcowe, ścieżka dźwiękowa). Trwający przebieg — na żywo; zakończony — film z zapisu. Esc zamyka.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "run_id": {
+     "type": "string",
+     "description": "id przebiegu; domyślnie trwający albo ostatni"
+    },
+    "film": {
+     "type": "boolean",
+     "description": "true = od początku z zapisu, także gdy przebieg trwa"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "pokaz film z workflow",
+   "pokaz film",
+   "odtworz film z pracy",
+   "workflow jak film"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "day_film",
+  "group": "Workflow",
+  "label": "Film dnia",
+  "description": "Film dnia: montaż tego, co Jarvis i Hermes zrobili dziś (workflow, zadania z Telegrama i harmonogramu, zadania na pulpicie, notatki) — na cały ekran, z lektorem i napisami końcowymi. Esc zamyka.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "date": {
+     "type": "string",
+     "description": "RRRR-MM-DD; domyślnie dziś"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "film dnia",
+   "pokaz film dnia",
+   "podsumuj dzien jako film",
+   "film z dzisiaj"
+  ],
   "needsConfirmText": false
  },
  {

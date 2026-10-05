@@ -23,7 +23,7 @@ Zasada projektu: **nic „na niby”**. Każda karta HUD, każdy impuls, plan, s
 | **Sygnały i proaktywność** | minutnik, przypomnienia (także zaległe po powrocie do karty), alerty kursów, zmiany połączenia trafiają do **centrum powiadomień** (`Alt+N`) i do następnej rozmowy; w trybie **aktywnym** Jarvis sam zaczyna rozmowę (limit/h, cisza nocna); rutyny: poranny briefing i podsumowanie dnia |
 | **Głos 2.0** | pojedyncze nasłuchiwanie (`Ctrl+Spacja`) albo **czuwanie ze słowem „Jarvis, …”** (`Alt+J`); kolejka mowy z priorytetami, alarm nie ucina odpowiedzi; odpowiedzi na pytania głosem; cichy tryb głosowy |
 | **Okna** | przeciąganie z przyciąganiem do krawędzi (podgląd), kafelkowanie, `Alt+strzałki`, `Alt+Enter`, `Alt+W` (następne), układy zapisane i presety (praca, rynek, skupienie, czysto) |
-| **Workflow** | powtarzalne procesy pracy z kroków (`workflows/*.yaml`): silnik w moście sprawdza każdy krok, ponawia ze zmianą, pilnuje budżetu i wznawia po restarcie; przebieg na żywo w czacie; np. „zrób projekt z pomysłu …” → brief, architektura, struktura i szkielet projektu ([przewodnik](docs/guide/workflow.md)) |
+| **Workflow** | powtarzalne procesy pracy z kroków (`workflows/*.yaml`): silnik w moście sprawdza każdy krok, ponawia ze zmianą, pilnuje budżetu i wznawia po restarcie; przebieg na żywo w czacie i jako **film** na cały ekran („pokaż film”); np. „zrób projekt z pomysłu …” → brief, architektura, struktura i szkielet projektu; **Film** — przebieg na cały ekran jak scena z filmu (na żywo z pisaniem Hermesa albo z zapisu, lektor Jarvis), **Film dnia** — montaż całego dnia ([przewodnik](docs/guide/workflow.md)) |
 | **Process Log** | polecenie, myśli modelu, zapytania, narzędzia z argumentami i wynikami, plan, błędy, czasy; historia z eksportem i **Replay** na Core |
 | **Aplikacje** | Czat (przypinanie odpowiedzi jako widget), Notatnik, Monitor rynku (Binance WebSocket + CoinGecko), Harmonogram (import `.ics`), Pogoda (Open-Meteo), Monitor systemu, Terminal, Kalkulator, Minutnik/Stoper, Ustawienia, Biblioteka |
 | **Pliki** | folder roboczy przez File System Access (Chrome/Edge): lista, odczyt, zapis, eksport notatek do `.md` |
@@ -122,7 +122,7 @@ index.html, css/, js/       interfejs Jarvis OS (bez builda; kolejność skrypt�
   js/agents.js              agenci Jeva (internet, prawdziwy komputer)
   js/main.js, apps*.js      start, pulpit, aplikacje
 sw.js                       service worker (offline; numer wersji CACHE podbijany przy zmianach plików)
-bridge/                     most MCP (Python): jarvis_bridge.py, workflow_engine.py, agents.py, web_task.py, writer_proxy.py, winfocus.py,
+bridge/                     most MCP (Python): jarvis_bridge.py, workflow_engine.py, day_history.py, agents.py, web_task.py, writer_proxy.py, winfocus.py,
                             serve_site.py, skrypty Windows (run-service, install-autostart, redeploy), testy
 workflows/                  definicje workflow (*.yaml) + schemat; silnik: bridge/workflow_engine.py
 integrations/               agenci Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), clicker, łatki, testy

@@ -11,6 +11,7 @@ odwracalne; nieodwracalne i wysyłki na zewnątrz zawsze z pytaniem.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import re
@@ -23,7 +24,7 @@ from typing import Any, Awaitable, Callable
 
 import yaml
 
-Hermes = Callable[[list, str, float], Awaitable[tuple]]      # (messages, session_id, timeout) -> (text, tokens)
+Hermes = Callable[..., Awaitable[tuple]]   # (messages, session_id, timeout[, on_text, on_tool]) -> (text, tokens)
 Judge = Callable[[str, str], Awaitable[tuple]]               # (question, content) -> (score 0..1, why)
 Relay = Callable[[str, dict], Awaitable[dict]]               # (tool, args) -> koperta {ok, code, data, text}
 Emit = Callable[[dict], None]
@@ -147,6 +148,7 @@ def _fmt(v: Any, flt: str | None) -> str:
 
 
 PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_.]*)(?:\|(list|inline|files|n:[^:{}|]+:[^:{}|]+:[^:{}|]+))?\}")
+PROGRESS_EVERY, PROGRESS_TAIL = 0.6, 900   # podgląd pisania Hermesa: zdarzenie najwyżej co 0,6 s, ostatnie ~900 znaków
 
 
 def render(tpl: str, ctx: dict) -> str:
@@ -233,6 +235,10 @@ class WorkflowEngine:
         self.defs_dir, self.runs_dir, self.projects_root = Path(defs_dir), Path(runs_dir), Path(projects_root)
         self.hermes, self.judge, self.relay, self.emit, self.log = hermes, judge, relay, emit, log
         self.max_parallel = max_parallel
+        try:   # Hermes ze strumieniem (most) dostaje podgląd pisania; atrapy w testach — bez
+            self._streams = "on_text" in inspect.signature(hermes).parameters
+        except (TypeError, ValueError):
+            self._streams = False
         self.runs: dict[str, dict] = {}
         self.tasks: dict[str, asyncio.Task] = {}
         self.answers: dict[str, asyncio.Future] = {}
@@ -287,14 +293,15 @@ class WorkflowEngine:
         tmp.write_bytes(_bytes(json.dumps(run, ensure_ascii=False, indent=1)))
         os.replace(tmp, p)
 
-    def _event(self, run: dict, type_: str, **extra: Any) -> None:
+    def _event(self, run: dict, type_: str, persist: bool = True, **extra: Any) -> None:
         evt = {"v": 1, "type": type_, "ts": time.time(), "run_id": run["id"], "workflow": run["workflow"], "name": run["name"],
                "state": run["state"], "total": len(run["steps"]), **extra}
-        try:
-            with (self.runs_dir / f"{run['id']}.events.jsonl").open("ab") as f:
-                f.write(_bytes(json.dumps(evt, ensure_ascii=False) + "\n"))
-        except Exception as e:  # noqa: BLE001 — zapis historii nie może zatrzymać przebiegu
-            self.log("workflow zapis zdarzenia:", e)
+        if persist:   # podgląd na żywo (step.progress) nie trafia do historii — powtórka pokazuje wyniki kroków
+            try:
+                with (self.runs_dir / f"{run['id']}.events.jsonl").open("ab") as f:
+                    f.write(_bytes(json.dumps(evt, ensure_ascii=False) + "\n"))
+            except Exception as e:  # noqa: BLE001 — zapis historii nie może zatrzymać przebiegu
+                self.log("workflow zapis zdarzenia:", e)
         try:
             self.emit(evt)
         except Exception as e:  # noqa: BLE001 — zdarzenie dla karty nie może zatrzymać przebiegu
@@ -351,6 +358,26 @@ class WorkflowEngine:
         if not re.fullmatch(r"[0-9a-z-]{8,40}", run_id or "") or not p.exists():
             raise KeyError(f"nie ma przebiegu {run_id}")
         return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def project_file(self, run_id: str, rel: str, limit: int = 300_000) -> dict:
+        """Plik z folderu projektu zapisanego przez przebieg (np. README do czytnika w Filmie) — tylko wewnątrz tego folderu."""
+        run = self.runs.get(run_id) or self._load(run_id)
+        if not run:
+            raise KeyError(f"nie ma przebiegu {run_id}")
+        roots = [Path(o["root"]) for o in (run.get("outputs") or {}).values() if isinstance(o, dict) and isinstance(o.get("root"), str)]
+        if not roots:
+            raise KeyError("ten przebieg nie zapisał projektu")
+        why = unsafe_path(rel)
+        if why:
+            raise ValueError(why)
+        base, proj = roots[-1].resolve(), self.projects_root.resolve()
+        p = (base / rel).resolve()
+        if proj not in base.parents or base not in p.parents or not p.is_file():
+            raise KeyError(f"nie ma pliku {rel}")
+        size = p.stat().st_size
+        with p.open("rb") as f:
+            data = f.read(limit)
+        return {"path": rel, "root": str(base), "text": data.decode("utf-8", "replace"), "truncated": size > limit}
 
     def _load(self, rid: str) -> dict | None:
         if not re.fullmatch(r"[0-9a-z-]{8,40}", rid or ""):
@@ -601,6 +628,26 @@ class WorkflowEngine:
         self._event(run, "ask.answered", step_id=step["id"], n=i + 1, answer=ans)
         return ans
 
+    def _progress(self, run: dict, step: dict, i: int, attempt: int) -> dict:
+        """Podgląd pracy Hermesa na żywo: tekst w trakcie pisania i narzędzia, po które sięga (zdarzenie step.progress,
+        tylko dla kart — bez zapisu w historii; tekst najwyżej co 0,6 s albo co 400 nowych znaków)."""
+        last = {"t": 0.0, "n": 0}
+        base = {"step_id": step["id"], "n": i + 1, "kind": step["kind"], "title": step["title"], "attempt": attempt}
+
+        def on_text(full: str) -> None:
+            now = time.time()
+            if now - last["t"] < PROGRESS_EVERY and len(full) - last["n"] < 400:
+                return
+            last["t"], last["n"] = now, len(full)
+            self._event(run, "step.progress", persist=False, **base, chars=len(full), tail=clean(full[-PROGRESS_TAIL:]))
+
+        def on_tool(info: dict) -> None:
+            if not isinstance(info, dict):
+                return
+            self._event(run, "step.progress", persist=False, **base, chars=last["n"], tool=clean(str(info.get("tool") or ""))[:60],
+                        label=clean(str(info.get("label") or ""))[:120], status=str(info.get("status") or "")[:20])
+        return {"on_text": on_text, "on_tool": on_tool}
+
     async def _exec(self, run: dict, step: dict, i: int, hint: str, attempt: int) -> Any:
         kind, ctx = step["kind"], self._ctx(run)
         if kind == "hermes":
@@ -612,8 +659,9 @@ class WorkflowEngine:
             if step.get("format") == "json":
                 sys_msg += " Odpowiedz WYŁĄCZNIE poprawnym JSON-em (bez bloku kodu i komentarzy)."
             user = render(step["prompt"], ctx) + (f"\n\n{hint}" if hint else "")
+            live = self._progress(run, step, i, attempt) if self._streams else {}
             text, tokens = await self.hermes([{"role": "system", "content": sys_msg}, {"role": "user", "content": user}],
-                                             f"wf-{run['id']}-{step['id']}-{attempt}", float(step.get("timeout_s", 240)))
+                                             f"wf-{run['id']}-{step['id']}-{attempt}", float(step.get("timeout_s", 240)), **live)
             run["budget_used"]["tokens"] += int(tokens or 0)
             if not str(text or "").strip():
                 raise ValueError("pusta odpowiedź Hermesa")
