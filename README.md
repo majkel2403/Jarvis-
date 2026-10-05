@@ -98,7 +98,7 @@ Jarvis OS łączy się z Hermesem sam (przez most) — w Ustawieniach nie trzeba
 npm test                                  # testy jednostkowe JS (rejestr, silnik lokalny, NLP, most, zdarzenia, kontekst)
 npm run test:e2e                          # test dymny w Chromium (Playwright): boot → polecenia → zgody → trwałość
 npm run test:web-agent                    # agent WWW: prawdziwy Chromium + atrapa Jeva (bez klucza i internetu)
-python -m pytest                          # Python (z venv Hermesa): most, agenci, planista, writer, wtyczka jarvis-events, clicker
+python -m pytest                          # Python (z venv Hermesa): most, agenci, planista, writer, wtyczki jarvis-events i obsidian-brain, clicker
 python -m pytest -m unit                  # tylko testy Pythona bez sieci i bez venv Hermesa (tak jak w CI)
 python bridge/tests/run_e2e.py            # most na żywo z otwartą kartą (sprząta po sobie)
 python hermes/evals/run_evals.py          # evale zachowania Hermesa na żywym gatewayu (polecenia bez skutków ubocznych)
@@ -127,7 +127,7 @@ bridge/                     most MCP (Python): jarvis_bridge.py, workflow_engine
 workflows/                  definicje workflow (*.yaml) + schemat; silnik: bridge/workflow_engine.py
 integrations/               agenci Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), clicker, łatki, testy
 hermes/                     profil Hermesa: SOUL.md, HERMES.md, apply_profile.py, install-profile.ps1,
-                            plugins/jarvis-events, scripts/ (strażnik, hak blokad, health-check, raport poranny), tests/
+                            plugins/ (jarvis-events, obsidian-brain — sejf Obsidian na start rozmowy), scripts/ (strażnik, hak blokad, health-check, raport poranny), tests/
 docs/                       specyfikacja (spec/), przewodniki (guide/), decyzje (adr/), plan Jeva, archiwum planów (archiwum/)
 tests/                      testy jednostkowe (Node), test dymny (Playwright), zbiory zdań
 tools/                      generator katalogów specyfikacji (gen-spec.js) i narzędzia pomocnicze

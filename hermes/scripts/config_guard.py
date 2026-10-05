@@ -94,7 +94,7 @@ if cfg:
           f"agent.disabled_toolsets = {agent.get('disabled_toolsets')} (wyłącza narzędzia także na Telegramie — stary apply_profile?)")
 
     enabled = set(((cfg.get("plugins") or {}).get("enabled")) or [])
-    for plug in ("rtk-rewrite", "security-guidance", "jarvis-events"):
+    for plug in ("rtk-rewrite", "security-guidance", "jarvis-events", "obsidian-brain"):
         check(plug in enabled, f"plugin {plug} włączony", f"plugin {plug} wyłączony")
     # audyt 2026-10-04: te wtyczki doklejały do KAŻDEJ rozmowy sprzeczne instrukcje (superpowers), pusty plan albo losowe skille
     for plug in ("superpowers", "planning-with-files", "skill-retrieval", "ui-review-loop"):
@@ -165,6 +165,11 @@ for repo_plug in sorted((REPO_SOUL.parent / "plugins").glob("*/plugin.yaml")):
                                  and (prof / f.relative_to(repo_plug.parent)).read_bytes().replace(b"\r\n", b"\n") == f.read_bytes().replace(b"\r\n", b"\n")
                                  for f in repo_plug.parent.rglob("*") if f.is_file() and "__pycache__" not in f.parts)
     check(same, f"wtyczka {name} = wersja z repo", f"wtyczka {name} w profilu różni się od repo (uruchom hermes/apply_profile.py)")
+
+# obsidian-brain czyta pliki sterujące sejfu — bez nich Jarvis zaczyna rozmowę bez kontekstu (wtyczka milczy)
+VAULT = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or HOME / "Documents" / "hermes")
+missing = [n for n in ("CRITICAL_FACTS.md", "hot.md", "log.md") if not (VAULT / n).is_file()]
+check(not missing, f"sejf Obsidian: pliki sterujące w {VAULT}", f"sejf Obsidian: brak {', '.join(missing)} w {VAULT} — Jarvis nie dostanie kontekstu na start")
 
 # twarde blokady: hak pre_tool_call z guard_tools.py (zabijanie przeglądarki, restart gatewaya z własnego terminala)
 pre = ((cfg.get("hooks") or {}).get("pre_tool_call") or [])

@@ -10,7 +10,7 @@ Telegram otwarty dla każdego (`TELEGRAM_ALLOW_ALL_USERS=true`) przy stałych zg
 - kompresja przy 120 tys. tokenów (`compression.threshold_tokens`), sesja wygasa po 2 h ciszy;
 - bez zapisów pamięci w tle (`memory.nudge_interval: 0`; zapisywały rozkazy zamiast faktów); tworzenie skilli przez agenta zostaje
   (decyzja użytkownika);
-- wtyczki: `jarvis-events`, `rtk-rewrite`, `security-guidance`, `disk-cleanup`, `hermes-memory-ui`, `web/ddgs`; wyłączone
+- wtyczki: `jarvis-events`, `obsidian-brain` (od 2026-10-05, [ADR 0008](0008-sejf-obsidian-w-kontekscie-hermesa.md)), `rtk-rewrite`, `security-guidance`, `disk-cleanup`, `hermes-memory-ui`, `web/ddgs`; wyłączone
   `superpowers`, `planning-with-files`, `skill-retrieval`, `ui-review-loop`;
 - katalog roboczy `%USERPROFILE%\JarvisWorkspace` z własnym `.git`, tam `HERMES.md`;
 - skille: używane i potrzebne (~80) w profilu, reszta w `~/.hermes/skills-archive/<data>` (odwracalne); strażnik pilnuje, by

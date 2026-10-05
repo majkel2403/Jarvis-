@@ -55,9 +55,10 @@ TARGET = {
                                                  # evale; webhook) natychmiast odrzucają niebezpieczne polecenia zamiast czekać na zgodę; drogą do stanu
                                                  # komputera jest narzędzie `system_info` w moście, nie `powershell -c` (audyt 2026-10-05)
 }
-PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "rtk-rewrite", "security-guidance", "web/ddgs"]
-# Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie
-REPO_PLUGINS = ["jarvis-events"]
+PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "obsidian-brain", "rtk-rewrite", "security-guidance", "web/ddgs"]
+# Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie,
+# obsidian-brain = pliki sterujące sejfu Obsidian (CRITICAL_FACTS, hot, log) w pierwszej turze każdej rozmowy (2026-10-05)
+REPO_PLUGINS = ["jarvis-events", "obsidian-brain"]
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
