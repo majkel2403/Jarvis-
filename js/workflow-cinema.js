@@ -23,9 +23,11 @@ const roman = n => ROMAN[n - 1] || String(n);
 /* kod czasowy jak na planie: GG:MM:SS:KK (24 klatki na sekundę) */
 const timecode = s => { s = Math.max(0, s || 0); const t = Math.floor(s); return [Math.floor(t / 3600), Math.floor(t / 60) % 60, t % 60, Math.floor((s - t) * 24)].map(x => String(x).padStart(2, '0')).join(':'); };
 /* konstelacja kroków w świecie 3D: kręta ścieżka w głąb, przed Orbem */
-const layout = n => Array.from({ length: n }, (_, i) => ({ x: (i - (n - 1) / 2) * GAP, y: Math.sin(i * 1.15 + .4) * 190, z: MEAN_Z + Math.cos(i * .85) * 320 }));
-const KIC = { ...KIND_IC, workflow: 'flow', telegram: 'chat', cron: 'timer', cli: 'terminal', task: 'bolt', notes: 'notes' };
-const KPL = { ...KIND_PL, workflow: 'workflow', telegram: 'zadanie z Telegrama', cron: 'zadanie z harmonogramu', cli: 'zadanie z konsoli', task: 'zadanie na pulpicie', notes: 'notatki' };
+const slot = (i, n, centered = true) => ({ x: (centered ? i - (n - 1) / 2 : i) * GAP, y: Math.sin(i * 1.15 + .4) * 190, z: MEAN_Z + Math.cos(i * .85) * 320 });
+const layout = n => Array.from({ length: n }, (_, i) => slot(i, n));
+const layoutDyn = n => Array.from({ length: n }, (_, i) => slot(i, n, false));   // kroki przybywają w trakcie: pozycje liczone od zera, żeby istniejące nie „skakały”
+const KIC = { ...KIND_IC, workflow: 'flow', telegram: 'chat', cron: 'timer', cli: 'terminal', task: 'bolt', notes: 'notes', server: 'bolt', answer: 'chat' };
+const KPL = { ...KIND_PL, workflow: 'workflow', telegram: 'zadanie z Telegrama', cron: 'zadanie z harmonogramu', cli: 'zadanie z konsoli', task: 'zadanie na pulpicie', notes: 'notatki', server: 'narzędzie Hermesa', hermes: 'Hermes myśli', answer: 'odpowiedź' };
 const PLATFORM = { telegram: 'Telegram', cron: 'Harmonogram', cli: 'Konsola', discord: 'Discord', slack: 'Slack', whatsapp: 'WhatsApp', signal: 'Signal' };
 const TOOL_IC = t => /skill/.test(t) ? '📚' : /terminal|shell|exec/.test(t) ? '💻' : /search|web|browser/.test(t) ? '🔍' : /file|read|write/.test(t) ? '📄' : '🛠';
 /* długości scen (ms przy prędkości 1) — reżyser czeka tyle, a test sprawdza długość filmu */
@@ -36,7 +38,8 @@ const holdMs = gapS => clamp((gapS || 0) * 45, 1300, 3400);
 const hasArt = s => !!(s?.artifact && s.kind !== 'tool');
 /* krótkie sceny (montaż bez planszy aktu): polecenia pulpitu i sprawdzenia; w zapisie także kroki < 4 s (poza zapisem plików);
    w filmie dnia wszystko poza workflow */
-const isQuick = (s, ms, day) => day ? s.kind !== 'workflow' : s.kind === 'tool' || s.kind === 'check' || (ms != null && ms < 4000 && s.kind !== 'write_files');
+const isQuick = (s, ms, day) => day === 'task' ? s.kind === 'tool' || s.kind === 'server' || s.kind === 'check'   // zadanie z Process Logu: narzędzia to montaż, odpowiedź to scena z hologramem
+  : day ? s.kind !== 'workflow' : s.kind === 'tool' || s.kind === 'check' || (ms != null && ms < 4000 && s.kind !== 'write_files');
 const quickMap = (evs, day) => {
   const kinds = {}, m = {};
   (evs.find(e => e.type === 'run.started')?.steps || []).forEach(s => { kinds[s.id] = s.kind; });
@@ -103,7 +106,7 @@ const synth = src => {
       if (a < att) out.push({ ...one, type: 'step.retry', ts, attempt: a, reason: (s.errors || [])[a - 1] || 'sprawdzenie nie przeszło' });
     }
     const end = s.state === 'done' ? 'step.completed' : s.state === 'skipped' ? 'step.skipped' : s.state === 'running' ? null : 'step.failed';
-    if (end) out.push({ ...one, type: end, ts, ms: s.ms, score: s.score, preview: s.preview || '', artifact: s.artifact || null, ...(end === 'step.failed' ? { reason: (s.errors || []).slice(-1)[0] || '' } : {}) });
+    if (end) out.push({ ...one, type: end, ts, ms: s.ms, score: s.score, preview: s.preview || '', artifact: s.artifact || null, ...(end === 'step.failed' ? { reason: (s.errors || []).slice(-1)[0] || '', soft: !!src.scen } : {}) });
   });
   if (src.state && !ACTIVE(src.state)) out.push({ ...base, type: src.state === 'done' ? 'run.completed' : src.state === 'failed' ? 'run.failed' : 'run.stopped', ts: src.ended || ts, state: src.state, report: src.report, reason: src.reason, budget_used: src.budget_used });
   return out;
@@ -178,6 +181,19 @@ const credits = (r, o = {}) => {
       { h: '', lines: ['Nakręcono w JarvisWorkspace'] }
     ];
   }
+  if (o.scen) {   // zadanie z Process Logu (czat, Telegram, harmonogram): krótsze napisy niż dla workflow
+    const task = String(ideaOf(r) || r.name), done = steps.filter(s => s.state === 'done').length, bad = steps.filter(s => s.state === 'failed').length;
+    const secs = Math.max(0, ((r.ended || 0) - (r.started || 0)));
+    return [
+      { h: 'Jarvis OS przedstawia', big: r.name },
+      { h: 'Polecenie', lines: ['„' + task.slice(0, 140) + '”'] },
+      { h: 'Reżyseria i lektor', lines: ['Jarvis'] },
+      { h: 'W rolach głównych', lines: ['Hermes — myśli i działa'].concat(steps.some(s => s.kind === 'tool') ? ['Pulpit Jarvis OS — narzędzia'] : [], ['Ty — polecenie']) },
+      steps.length && { h: 'Sceny', lines: steps.map((s, i) => String(i + 1).padStart(2, '0') + ' · ' + untimed(s.title) + (s.state === 'failed' ? ' — nie wyszło' : s.ms != null && s.state === 'done' ? ' — ' + fmtS(s.ms) : '')) },
+      { h: 'Statystyki', lines: ['Kroki: ' + done + ' z ' + steps.length + (bad ? ' · nieudane: ' + bad : ''), secs ? 'Czas pracy: ' + clock(secs) : ''].filter(Boolean) },
+      { h: '', lines: ['Nakręcono' + (o.live ? ' na żywo' : '') + ' w JarvisWorkspace'] }
+    ].filter(Boolean);
+  }
   const fw = steps.map(s => s.artifact).find(a => a?.kind === 'files_written') || {};
   const secs = steps.reduce((a, s) => a + (s.ms || 0), 0) / 1000, retries = steps.reduce((a, s) => a + Math.max(0, (s.attempts || 1) - 1), 0), tok = r.budget_used?.tokens;
   const when = r.started ? new Date(r.started * 1000).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -200,14 +216,14 @@ const credits = (r, o = {}) => {
 
 /* lektor: Jarvis mówi o swojej pracy w pierwszej osobie */
 const START = { hermes: 'Zlecam Hermesowi: {t}.', check: 'Sprawdzam: {t}.', write_files: 'Zapisuję projekt na dysk.', tool: 'Przygotowuję pulpit: {t}.', ask: 'Potrzebuję Twojej decyzji.',
-  workflow: 'Workflow: {t}.', telegram: 'Telegram: {t}.', cron: 'Z harmonogramu: {t}.', cli: 'Z konsoli: {t}.', task: 'Na pulpicie: {t}.', notes: '{t}.' };
-const THINK = { hermes: ['Hermes analizuje…', 'Hermes układa myśli w strukturę…', 'Hermes waży kompromisy…', 'Pilnuję czasu i budżetu…', 'Jeszcze chwila — dobra robota wymaga czasu.'],
+  workflow: 'Workflow: {t}.', telegram: 'Telegram: {t}.', cron: 'Z harmonogramu: {t}.', cli: 'Z konsoli: {t}.', task: 'Na pulpicie: {t}.', notes: '{t}.', server: 'Hermes sięga po: {t}.', answer: 'Hermes odpowiada.' };
+const THINK = { server: ['Narzędzie pracuje…'], answer: ['Hermes układa odpowiedź…'], hermes: ['Hermes analizuje…', 'Hermes układa myśli w strukturę…', 'Hermes waży kompromisy…', 'Pilnuję czasu i budżetu…', 'Jeszcze chwila — dobra robota wymaga czasu.'],
   check: ['Sprawdzam każdy punkt…', 'Porównuję z wymaganiami…'], write_files: ['Zapisuję pliki na dysk…'], tool: ['Pulpit wykonuje polecenie…'], ask: ['Czekam na Twoją decyzję…'] };
 const startLine = s => (START[s.kind] || 'Scena: {t}.').replace('{t}', untimed(s.title));
 const thinkLine = (s, k = 0) => { const a = THINK[s.kind] || THINK.hermes; return a[k % a.length]; };
 const doneWhat = s => {
   const a = s.artifact || {}, nh = (a.headings || []).length, np = (a.paths || []).length, nf = a.count || 0, name = a.fields?.nazwa || a.fields?.title;
-  return a.kind === 'fields' && name ? (s.kind === 'hermes' ? 'Powstał brief: „' + name + '”.' : s.kind === 'tool' ? 'Na pulpicie: „' + name + '”.' : '')
+  return s.kind === 'answer' ? 'Odpowiedź gotowa.' : a.kind === 'fields' && name ? (s.kind === 'hermes' ? 'Powstał brief: „' + name + '”.' : s.kind === 'tool' ? 'Na pulpicie: „' + name + '”.' : '')
     : a.kind === 'doc' ? 'Dokument: ' + nh + ' ' + J.pl(nh, 'sekcja', 'sekcje', 'sekcji') + ', ' + (a.chars || 0) + ' znaków.'
     : a.kind === 'tree' ? np + ' ' + J.pl(np, 'plik', 'pliki', 'plików') + ' ' + (a.filled ? 'z gotową treścią.' : 'w planie struktury.')
     : a.kind === 'files_written' ? nf + ' ' + J.pl(nf, 'plik zapisany', 'pliki zapisane', 'plików zapisanych') + ' na dysku.' : '';
@@ -349,6 +365,9 @@ let cur = null;
 const SEEK = Symbol('seek');
 const mount = (src, evs, o = {}) => {
   const film = !!evs, live = !film, day = !!o.day, runId = src.id;
+  const scen = !!o.scen, dyn = live && !!o.dyn;   // scen: zadanie z Process Logu (nie workflow); dyn: kroki przybywają w trakcie
+  /* źródło przebiegu na żywo: domyślnie workflow z mostu (karta + zdarzenia „workflows”); inne scenariusze podają własne (o.feed → tu: link) */
+  const link = o.feed || { get: () => WF.runs.get(runId), on: fn => J.on('workflows', p => { if (p?.id === runId && p.e) fn(p.e); }), eta: sh => WF.eta(sh), resync: true };
   const rank = fxRank(), still = rank < 1;
   let rq = rank;   // jakość bieżąca — spada sama przy słabej płynności
   const css = getComputedStyle(document.querySelector('#app') || document.documentElement), col = (v, d) => css.getPropertyValue(v).trim() || d;
@@ -358,8 +377,10 @@ const mount = (src, evs, o = {}) => {
   const mkRun = () => Object.assign(film ? Object.assign(blank(start), { autonomy: start.autonomy })
     : Object.assign(blank({ run_id: src.id, workflow: src.workflow, name: src.name, ts: src.started, steps: src.steps }), { state: src.state, autonomy: src.autonomy, pending: src.pending, budget_used: src.budget_used, steps: (src.steps || []).map(s => ({ errors: [], ...s })) }), meta);
   const run = mkRun();
-  const n = run.steps.length, P = layout(n), PP = new Array(n);
-  const quick = film ? quickMap(evs, day) : {}, quickOf = s => film ? !!quick[s.id] : s.kind === 'tool' || s.kind === 'check';
+  let n = run.steps.length;
+  const P = dyn ? layoutDyn(n) : layout(n), PP = new Array(n);
+  const quick = film ? quickMap(evs, day || (scen ? 'task' : false)) : {}, quickOf = s => film ? !!quick[s.id] : s.kind === 'tool' || s.kind === 'check' || (scen && s.kind === 'server');
+  const lab = i => day ? (run.steps[i].title.match(/^\d{1,2}:\d{2}/)?.[0] || '') : scen ? 'Krok ' + (i + 1) : 'Akt ' + roman(i + 1);   // podpis sceny: godzina / „Krok N” / „Akt N”
   const chapters = film ? chapterList(evs, run.steps, day) : [];
   let alive = true, spoke = false, speaking = false, paused = false;
   const audio = Soundtrack();
@@ -382,14 +403,15 @@ const mount = (src, evs, o = {}) => {
   if (grain()) el.style.setProperty('--grain', 'url(' + grain() + ')');
   $('.cin-rec b').textContent = live ? 'REC · na żywo' : day ? 'Film dnia' : 'Zapis';
   skipB.hidden = live;
-  const NODES = run.steps.map((s, i) => {
+  const makeNode = (s, i) => {
     const nEl = h('div', { class: 'cin-node', 'data-s': s.state || 'pending', 'data-k': s.kind },
       '<span class="cin-core"><svg class="cin-ring" viewBox="0 0 144 144"><circle cx="72" cy="72" r="66"/></svg><span class="cin-ic">' + J.icon(KIC[s.kind] || 'star') + '</span><span class="cin-ok">✓</span></span>');
     const l = h('div', { class: 'cin-lbl' }, '<em></em><b></b><small></small>');
-    l.querySelector('em').textContent = day ? (s.title.match(/^\d{1,2}:\d{2}/)?.[0] || '') : 'Akt ' + roman(i + 1); l.querySelector('b').textContent = untimed(s.title);
+    l.querySelector('em').textContent = lab(i); l.querySelector('b').textContent = untimed(s.title);
     world.appendChild(nEl); world.appendChild(l);
     return { n: nEl, l, small: l.querySelector('small'), st: null, blur: -1 };
-  });
+  };
+  const NODES = run.steps.map(makeNode);
   /* przesłona: film wychodzi z Orba na pulpicie i do niego wraca */
   const coreR = document.querySelector('#core')?.getBoundingClientRect?.();
   const iris = coreR && coreR.width > 20 && coreR.top < innerHeight && coreR.bottom > 0 ? { x: coreR.left + coreR.width / 2, y: coreR.top + coreR.height / 2, r: coreR.width / 2 }
@@ -411,7 +433,7 @@ const mount = (src, evs, o = {}) => {
   let dimK = 0, dimT = 0, orbE = .3, orbBoost = 0, orbA = 1;   // orbA: Orb przygasa, gdy kamera pracuje przy krokach
   const lit = run.steps.map(() => still ? 1 : 0), litAt = run.steps.map(() => Infinity);   // konstelacja zapala się wiązkami z Orba
   const easeIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, easeOut = k => 1 - Math.pow(1 - k, 3), easeIn = k => k * k * k;
-  const over = () => { const span = (n - 1) * GAP + 760, dz = Math.max(F * span / (.84 * W), F * 900 / (.62 * H)); return { x: 0, y: 0, z: MEAN_Z - dz, roll: 0 }; };
+  const over = () => { const span = (n - 1) * GAP + 760, dz = Math.max(F * span / (.84 * W), F * 900 / (.62 * H)); return { x: dyn ? (n - 1) * GAP / 2 : 0, y: 0, z: MEAN_Z - dz, roll: 0 }; };
   const near = (i, dist = 520, side = 0) => { const p = P[i]; return { x: p.x + side * .17 * W * dist / F, y: p.y + 14, z: p.z - dist, roll: (i % 2 ? 1 : -1) * .03 }; };
   /* kamera, przy której Orb świata leży dokładnie tam, gdzie Orb pulpitu (ten sam rozmiar) */
   const orbCam = () => { const dz = ORB_R * F / Math.max(20, iris.r); return { x: ORB.x - (iris.x - W / 2) * dz / F, y: ORB.y - (iris.y - H / 2) * dz / F, z: ORB.z - dz, roll: 0 }; };
@@ -449,6 +471,12 @@ const mount = (src, evs, o = {}) => {
   const ignite = i => { waves.push({ i, r: 60, life: 1, c: ACC }); spark(i, ACC, 24); audio.hit(); };
   /* zapalenie konstelacji: wiązka z Orba do każdego kroku po kolei */
   const reveal = (gap = 140) => run.steps.forEach((s, i) => { if (litAt[i] === Infinity) { litAt[i] = tNow + .3 + i * gap / 1000; beams.push({ i, at: litAt[i] - .3, life: 1 }); } });
+  /* nowy krok w trakcie filmu (tylko dyn): węzeł, pozycja i znacznik zapalenia dochodzą na końcu konstelacji */
+  const addStep = st => {
+    run.steps.push({ ...st, state: 'pending', attempts: 0, ms: null, preview: '', score: null, errors: [] });
+    const i = run.steps.length - 1; n = run.steps.length;
+    P.push(slot(i, n, false)); PP.push(null); lit.push(still ? 1 : 0); litAt.push(Infinity); NODES.push(makeNode(run.steps[i], i));
+  };
 
   /* Orb Jarvisa w świecie — ten sam wygląd co na pulpicie: kula z plazmą, orbity, pionowa wiązka, napis JARVIS */
   const ORBITS = [[1.45, .42, -.35, 1.1, 0], [1.7, .3, .2, .8, 2.1], [1.25, .55, .9, 1.5, 4.2]];
@@ -746,7 +774,7 @@ const mount = (src, evs, o = {}) => {
   const markChapter = () => { if (!film) return; let k = 0; chapters.forEach((c, j) => { if (c.i <= pos) k = j; }); [...chapEl.children].forEach((b, j) => b.classList.toggle('on', j === k)); };
   const hud = () => {
     if (!alive) return;
-    if (live) { const sh = WF.runs.get(runId), left = sh && ACTIVE(sh.state) ? WF.eta(sh) : 0; etaEl.textContent = left ? '≈ ' + clock(left) + ' do końca' : ''; }
+    if (live) { const sh = link.get(), left = sh && ACTIVE(sh.state) && link.eta ? link.eta(sh) : 0; etaEl.textContent = left ? '≈ ' + clock(left) + ' do końca' : ''; }
     else etaEl.textContent = '';
     const ri = run.steps.findIndex(s => s.state === 'running');
     if (live && !busy && !q.length && ri >= 0 && !paused) {
@@ -772,29 +800,30 @@ const mount = (src, evs, o = {}) => {
 
   const intro = async liveIntro => {
     audio.drone(); audio.motif();
+    const K = scen ? .55 : 1;   // zadania z pulpitu są krótsze niż workflow — wstęp nie może trwać dłużej niż one
     Object.assign(cam, orbCam()); shot = null;
-    await wait(D.orb);   // przesłona otwiera się na Orbie
-    if (!still) { audio.whoosh(1.5); fly({ x: ORB.x, y: ORB.y, z: ORB.z - ORB_R * 1.06, roll: .05 }, D.dive, easeIn); }
-    await wait(D.dive);
+    await wait(D.orb * K);   // przesłona otwiera się na Orbie
+    if (!still) { audio.whoosh(1.5); fly({ x: ORB.x, y: ORB.y, z: ORB.z - ORB_R * 1.06, roll: .05 }, D.dive * K, easeIn); }
+    await wait(D.dive * K);
     flash(1);
     /* cięcie: po drugiej stronie Orba — odjazd z głębi kosmosu do konstelacji */
     Object.assign(cam, over()); cam.z -= liveIntro ? 1500 : 2600; cam.roll = .1; shot = null;
-    fly(over(), liveIntro ? 4000 : 6000, easeOut);
+    fly(over(), (liveIntro ? 4000 : 6000) * K, easeOut);
     audio.riser(2.6);
     title('intro', '', 'Jarvis OS przedstawia'); sub('');
-    await wait(D.intro1);
+    await wait(D.intro1 * K);
     audio.braam(); flash(.35); shake(6);
     const idea = ideaOf(run), t = title('main', day ? 'Dzień z Jarvisem' : run.name, '');
     typeText(t.em, day ? (src.day?.label || '') : idea ? '„' + idea + '”' : '', 1800);
     if (day) { sub('Oto mój dzień.'); say('Oto mój dzień: ' + (src.day?.label || 'dzisiaj') + '.'); }
     else { sub(idea ? 'Wszystko zaczyna się od jednego pomysłu.' : 'Zaczynam pracę.'); say(idea ? 'Wszystko zaczyna się od pomysłu: ' + idea + '.' : 'Zaczynam.'); }
-    await wait(liveIntro ? 3000 : D.intro2);
+    await wait((liveIntro ? 3000 : D.intro2) * K);
     titleOut(); reveal(); audio.ping();
     if (!liveIntro) return wait(D.reveal);   // chwila na zapalenie się konstelacji przed Aktem I
     /* na żywo: krótkie „poprzednio” i lot do bieżącej sceny */
     const doneI = run.steps.map((s, i) => s.state === 'done' || s.state === 'skipped' ? i : -1).filter(i => i >= 0);
     if (doneI.length) {
-      sub('Dotąd: ' + doneI.length + ' z ' + n + ' ' + J.pl(n, 'sceny', 'scen', 'scen') + ' gotowe.');
+      sub('Dotąd: ' + doneI.length + (dyn ? '' : ' z ' + n) + ' ' + J.pl(doneI.length, 'scena gotowa', 'sceny gotowe', 'scen gotowych') + '.');
       for (const i of doneI) { fly(near(i, 760), 800); await wait(850); waves.push({ i, r: 50, life: .8, c: OK }); }
     }
     const ri = run.steps.findIndex(s => s.state === 'running');
@@ -803,8 +832,8 @@ const mount = (src, evs, o = {}) => {
   };
   const act = async (i, e) => {
     const s = run.steps[i]; holoOff(); focusI = i; reveal(60);
-    const time = day ? (s.title.match(/^\d{1,2}:\d{2}/)?.[0] || '') : '', name = untimed(s.title), label = day ? time : 'Akt ' + roman(i + 1);
-    actEl.textContent = (day ? time + ' · ' : 'Akt ' + roman(i + 1) + ' / ' + roman(n) + ' · ') + name;
+    const time = day ? (s.title.match(/^\d{1,2}:\d{2}/)?.[0] || '') : '', name = untimed(s.title), label = lab(i);
+    actEl.textContent = (day ? time + ' · ' : scen ? label + ' · ' : 'Akt ' + roman(i + 1) + ' / ' + roman(n) + ' · ') + name;
     if ((e.attempt || 1) > 1) { audio.whoosh(.6); fly(near(i, 560), 1200); sub('Próba ' + e.attempt + ': ' + thinkLine(s, e.attempt)); return wait(D.again); }
     if (quickOf(s)) {   // montaż: cięcie z błyskiem, pasek z podpisem zamiast planszy aktu
       audio.hit(); flash(.18); fly(near(i, 640), 450, easeOut);
@@ -813,7 +842,7 @@ const mount = (src, evs, o = {}) => {
       return wait(D.quick);
     }
     audio.whoosh(); fly(near(i, 980), D.act * .85);
-    title('act', name, label, KPL[s.kind] || ''); say((day ? time + '. ' : 'Akt ' + (ORD[i] || i + 1) + '. ') + name + '.');
+    title('act', name, label, KPL[s.kind] || ''); say((day ? time + '. ' : scen ? '' : 'Akt ' + (ORD[i] || i + 1) + '. ') + name + '.');
     sub(startLine(s));
     await wait(D.act); titleOut();
     ignite(i); fly(near(i, 540), 1500); drift = 14;
@@ -835,8 +864,13 @@ const mount = (src, evs, o = {}) => {
     await wait(D.retry); titleOut();
   };
   const failed = async (i, e) => {
+    if (e.soft) {   // pojedyncze nieudane narzędzie w zadaniu (Hermes zwykle próbuje dalej) — czerwony węzeł i pasek, bez planszy „Awaria”
+      waves.push({ i, r: 45, life: .9, c: ERR }); spark(i, ERR, 16); audio.hit(); fly(near(i, 640), 450, easeOut);
+      lower(lab(i) + ' · nie wyszło', untimed(run.steps[i].title)); sub('Nie wyszło: ' + untimed(run.steps[i].title) + (e.reason ? ' — ' + String(e.reason).slice(0, 120) : '') + '.');
+      return wait(D.quick);
+    }
     holoOff(); el.classList.add('alarm'); audio.alarm(); waves.push({ i, r: 60, life: 1.2, c: ERR }); spark(i, ERR, 40); shake(14);
-    title('err', 'Awaria', day ? untimed(run.steps[i].title) : 'Akt ' + roman(i + 1), String(e.reason || '').slice(0, 110));
+    title('err', 'Awaria', day ? untimed(run.steps[i].title) : lab(i), String(e.reason || '').slice(0, 110));
     sub('Ta scena się nie udała: ' + untimed(run.steps[i].title) + (e.reason ? ' — ' + String(e.reason).slice(0, 140) : '') + '.'); say('Awaria.');
     await wait(D.fail); titleOut(); el.classList.remove('alarm');
   };
@@ -861,7 +895,7 @@ const mount = (src, evs, o = {}) => {
     flares.push({ orb: true, life: 1.4, c: okk ? OK : c });
     if (okk && rq >= 2) [0, 650, 1300].forEach(d => setTimeout(() => { if (alive) run.steps.forEach((s, i) => spark(i, [OK, ACC, ACC2, WARN][(i + d / 650) % 4], rq >= 3 ? 34 : 20)); }, d));
     const bigT = day ? (fails ? 'Dzień zamknięty' : 'To był dobry dzień') : okk ? 'Misja zakończona' : e.type === 'run.stopped' ? 'Misja zatrzymana' : 'Misja przerwana';
-    title('big ' + (okk ? 'ok' : 'err'), bigT, '', day ? dayStats(run.steps) : projectName(run) || run.name);
+    title('big ' + (okk ? 'ok' : 'err'), bigT, '', day ? dayStats(run.steps) : projectName(run) || (scen && ideaOf(run)) || run.name);
     say(day ? bigT + '.' : okk ? 'Misja zakończona.' + (projectName(run) ? ' Projekt ' + projectName(run) + ' jest gotowy.' : '') : 'Musiałem przerwać.');
     sub(prettyPath(firstSentence(run.report || run.reason || '')));
     await wait(D.big); titleOut();
@@ -870,7 +904,7 @@ const mount = (src, evs, o = {}) => {
   };
   const roll = async () => {
     const box = $('.cin-credits'), r = h('div', { class: 'cin-roll' });
-    credits(run, { live, day }).forEach(sec => {
+    credits(run, { live, day, scen }).forEach(sec => {
       const se = h('section', sec.mono ? { class: 'mono' } : {});
       if (sec.h) { const x = h('h4'); x.textContent = sec.h; se.appendChild(x); }
       if (sec.big) { const x = h('div', { class: 'big' }); x.textContent = sec.big; se.appendChild(x); }
@@ -898,8 +932,8 @@ const mount = (src, evs, o = {}) => {
     skipB.hidden = true; actEl.textContent = '';
     const row = h('div', { class: 'cin-endb' });
     const btn = (label, fn, pri) => { const b = h('button', { class: 'cin-b' + (pri ? ' pri' : ''), type: 'button' }); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; };
-    const again = btn('↻ Jeszcze raz', () => day ? C.openDay(src.day?.date) : C.open(runId, { film: true }), true);
-    if (!day) {
+    const again = btn('↻ Jeszcze raz', () => o.again ? o.again() : day ? C.openDay(src.day?.date) : C.open(runId, { film: true }), true);
+    if (!day && !scen) {
       if (run.steps.some(s => s.artifact?.kind === 'files_written')) btn('📄 README projektu', () => readme());
       btn('➕ Nowy projekt', () => { close(); setTimeout(() => { J.chatPanel?.show?.(); const inp = document.querySelector('#chatInput'); if (inp) { inp.value = 'zrób projekt z pomysłu '; inp.focus(); inp.dispatchEvent(new Event('input')); } }, 80); });
     }
@@ -912,7 +946,8 @@ const mount = (src, evs, o = {}) => {
   const beat = async e => {
     if (e.type === '_intro') return intro(true);
     if (e.type === 'run.snapshot' || e.type === 'step.progress') return;
-    const s0 = run.steps.find(x => x.id === e.step_id);
+    let s0 = run.steps.find(x => x.id === e.step_id);
+    if (!s0 && dyn && e.type === 'step.started' && e.step) { addStep(e.step); s0 = run.steps[run.steps.length - 1]; }   // zadanie z pulpitu: nowa scena w locie
     if (/^step\./.test(e.type) && !s0) return;
     /* zdarzenie już widoczne (np. dosłane po synchronizacji) — bez powtórki sceny */
     if (e.type === 'step.started' && s0.state === 'running' && (s0.attempts || 1) === (e.attempt || 1) && startedTs[s0.id]) return;
@@ -968,11 +1003,11 @@ const mount = (src, evs, o = {}) => {
     if (e.tool) toolChip(e.tool, e.label, e.status);
     if (!busy && !q.length && !inFinale && !paused && holoKind !== 'write' && wr.buf) { holoWrite(i, s); fly(near(i, 620, 1), 1600); drift = 6; liveCount(); if (e.tool) toolChip(e.tool, e.label, e.status); }
   };
-  const offEv = live ? J.on('workflows', p => { if (!alive || p?.id !== runId || !p.e) return; if (p.e.type === 'step.progress') return onProgress(p.e); q.push(p.e); pump(); }) : () => { };
+  const offEv = live ? link.on(e => { if (!alive) return; if (e.type === 'step.progress') return onProgress(e); q.push(e); pump(); }) : () => { };
   const offVoice = J.on('voice', on => { speaking = !!on; audio.duck(speaking); });
   const resync = () => {
-    if (!live || busy || q.length || inFinale) return;
-    const sh = WF.runs.get(runId); if (!sh) return;
+    if (!live || busy || q.length || inFinale || !link.resync) return;   // własne źródło (zadanie z pulpitu) działa w tym samym oknie — zdarzenia nie giną
+    const sh = link.get(); if (!sh) return;
     const base = { v: 1, run_id: runId, workflow: run.workflow, name: run.name, total: n, ts: Date.now() / 1000 };
     sh.steps.forEach((x, i) => {
       const mine = run.steps[i]; if (!mine || mine.state === x.state) return;
@@ -1046,6 +1081,17 @@ const C = WF.cinema = {
   get live() { return !!cur?.live; },
   get current() { return cur; },
   noAdapt: false, fps: 0,
+  /* tryb propozycji dla scenariusza (workflow, day, telegram, cron, chat…): 'off' | 'ask' | 'auto' — ustawienia i wyłącznik modułu w js/film-scenarios.js;
+     bez modułu (testy, stary pulpit) obowiązuje dawne ustawienie „Film workflow” */
+  mode(id) { return J.state?.settings?.wfFilm || 'ask'; },
+  /* otwiera film z dowolnego źródła (moduł scenariuszy): src = przebieg-podobny obiekt (kroki), evs = zdarzenia (film z zapisu) albo null (na żywo, wtedy o.feed) */
+  openSource(src, evs, o = {}) {
+    if (typeof document === 'undefined' || !document.body?.appendChild) return false;
+    if (!J.booted) J.bootEnter?.();
+    if (cur) cur.close();
+    cur = mount(src, evs, o);
+    return true;
+  },
   /* otwiera projekcję przebiegu: na żywo, gdy trwa (chyba że o.film), inaczej film z zapisu zdarzeń */
   async open(runId, o = {}) {
     if (typeof document === 'undefined' || !document.body?.appendChild) return false;
@@ -1081,7 +1127,7 @@ const C = WF.cinema = {
   },
   /* propozycje w czacie: przy starcie przebiegu (ustawienie „Film workflow”) i gdy film jest gotowy */
   offer(r, when) {
-    const mode = J.state?.settings?.wfFilm || 'ask';
+    const mode = C.mode('workflow');
     if (mode === 'off' || !r || typeof document === 'undefined') return;
     const card = (text, opts, fn) => { r._filmCard?.remove?.(); r._filmCard = J.chat.quick?.(text, opts, v => { r._filmCard?.remove?.(); r._filmCard = null; fn(v); }) || null; };
     if (when === 'start') {
@@ -1116,7 +1162,7 @@ J.policy?.A3?.add('day_film');
 const eveningCheck = () => {
   try {
     if (typeof document === 'undefined' || document.hidden || cur || !J.state?.settings) return;
-    if ((J.state.settings.wfFilm || 'ask') === 'off') return;
+    if (C.mode('day') === 'off') return;
     const now = new Date(); if (now.getHours() < 20) return;
     const ymd = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
     if (J.state.ui?.dayFilm === ymd) return;

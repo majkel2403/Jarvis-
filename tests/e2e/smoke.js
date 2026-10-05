@@ -276,6 +276,35 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   });
   assert(cin.ok && cin.dialog === 'dialog' && cin.nodes === 1 && cin.chapters === '▶IF' && cin.hidden === 'hidden' && cin.cv && cin.full && !cin.clip && cin.paused && cin.resumed
     && cin.done === 'done' && cin.act === 'Finał' && cin.closed && cin.back === 'visible' && cin.day && cin.dayNodes >= 2 && cin.dayClosed, 'film workflow: ' + JSON.stringify(cin));
+  // moduł scenariuszy filmu: zadanie z Process Logu (4 narzędzia) włącza film sam; kroki i odpowiedź dochodzą w trakcie; „Jeszcze raz” = powtórka z zapisu
+  const scen = await p.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms)), C = J.workflows.cinema;
+    C.close(); await wait(900); C._scen.resetCooldown();
+    J.state.settings.filmOn = true; J.state.settings.filmScen = { chat: 'auto' };
+    const t = J.proc.start('sprawdź pogodę i zrób notatkę'); t.ts -= 3000; C._scen.recs.get(t.id).t0 = t.ts;
+    for (let i = 0; i < 4; i++) { const st = J.proc.step('tool', 'get_weather', [], { running: true }); await wait(120); st.done(); }
+    await wait(2200);
+    const el = document.querySelector('.cin'), out = { live: !!el?.classList.contains('cin-live'), nodes0: el?.querySelectorAll('.cin-node').length, scenId: C.current?.runId };
+    J.proc.step('server', 'terminal — ls', [], { running: true }).done();
+    J.proc.step('reply', 'Odpowiedź Jarvisa', [['Treść', 'Jest 18 stopni.']], { preview: 'Jest 18 stopni.' });
+    for (let i = 0; i < 70 && document.querySelectorAll('.cin-node').length < 6; i++) await wait(500);   // nowe sceny czekają w kolejce, aż skończy się wstęp i poprzednie
+    out.nodes1 = document.querySelectorAll('.cin-node').length;
+    J.proc.end('ok', 'Jest 18 stopni.'); await wait(500);
+    C.close(); await wait(1200); out.closed = !document.querySelector('.cin');
+    const r = await J.uiRun('task_film', {}); await wait(1500);
+    out.replay = r?.ok && !!document.querySelector('.cin.cin-film'); out.replayNodes = document.querySelectorAll('.cin-node').length;
+    C.close(); await wait(1200); out.replayClosed = !document.querySelector('.cin');
+    return out;
+  });
+  assert(scen.live && scen.nodes0 === 4 && /^task:/.test(scen.scenId) && scen.nodes1 === 6 && scen.closed && scen.replay && scen.replayNodes >= 3 && scen.replayClosed, 'film z zadania: ' + JSON.stringify(scen));
+  // ustawienia: blok „Film · moduł scenariuszy” z wierszem dla każdego scenariusza i wyłącznikiem
+  const filmSet = await p.evaluate(async () => {
+    J.wm.open('settings', 'wyglad'); await new Promise(r => setTimeout(r, 600));
+    const sel = [...document.querySelectorAll('select[data-film]')], on = document.querySelector('input[data-k=filmOn]');
+    const chat = sel.find(s => s.dataset.film === 'chat'); chat.value = 'ask'; chat.dispatchEvent(new Event('change'));
+    return { ids: sel.map(s => s.dataset.film).join(','), on: on?.checked, chat: J.state.settings.filmScen.chat, mode: J.workflows.cinema.mode('chat'), day: [...sel.find(s => s.dataset.film === 'day').options].map(o => o.value).join() };
+  });
+  assert(filmSet.ids === 'workflow,telegram,cron,chat,day' && filmSet.on === true && filmSet.chat === 'ask' && filmSet.mode === 'ask' && filmSet.day === 'off,ask', 'ustawienia filmu: ' + JSON.stringify(filmSet));
   // ustawienia: panel Jeva ma nowe kontrolki i zapisuje wartości
   await p.evaluate(() => J.wm.open('settings', 'jev')); await p.waitForTimeout(500);
   const ui = await p.evaluate(() => { const g = id => document.querySelector('#' + id); const need = ['jvPrivacy', 'jvAuto', 'jvA3', 'jvA2', 'jvBudget', 'jvFast', 'jvShadow', 'jvLogText', 'jvExport', 'jvResetAdapt', 'jvStats']; const miss = need.filter(i => !g(i)); if (miss.length) return 'brak: ' + miss.join(','); g('jvPrivacy').value = 'P0'; g('jvPrivacy').dispatchEvent(new Event('change')); return J.state.settings.jevPrivacy + '|' + g('jvStats').textContent.slice(0, 30); });

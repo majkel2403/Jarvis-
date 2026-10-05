@@ -14,6 +14,8 @@ Orb i Process Log.
 
 ## Film (tryb kinowy workflow) i Film dnia
 
+> Film działa nie tylko dla workflow — także dla zadań Hermesa (Telegram, harmonogram) i poleceń z czatu: [film.md](film.md) (moduł scenariuszy, ustawienia).
+
 Przycisk w karcie czatu albo zdanie „pokaż film”, „pokaż film z workflow”, „workflow jak film”
 (polecenie `workflow_film`; samo „tryb kinowy” dalej ustawia poziom efektów). **Film dnia**: „film dnia”, „pokaż film dnia”,
 „podsumuj dzień jako film” (`day_film`) — montaż tego, co Jarvis i Hermes zrobili dziś. Po 20:00, gdy dzień miał co najmniej
@@ -23,8 +25,8 @@ Przycisk w karcie czatu albo zdanie „pokaż film”, „pokaż film z workflow
   który Hermes właśnie pisze (i po jakie narzędzie sięga, np. 📚 skill). Pytania przebiegu mają przyciski na dolnym pasku.
 - **Z zapisu**, gdy przebieg się skończył (▶ Zapis): cały przebieg w ok. 1,5 min (minuta pracy Hermesa ≈ 3 s ekranu);
   w czasie „myślenia” hologram wpisuje wynik kroku.
-- **Ustawienia → Wygląd → Film workflow:** „nie proponuj” / „zaproponuj w czacie” (domyślnie: karta przy starcie przebiegu
-  i „film gotowy” na końcu) / „włącz sam na żywo”.
+- **Ustawienia → Wygląd → Film · moduł scenariuszy:** wiersz „Workflow”: „wyłączone” / „zaproponuj w czacie” (domyślnie: karta przy starcie
+  przebiegu i „film gotowy” na końcu) / „włącz sam na żywo”; plus osobne wiersze dla zadań Hermesa, harmonogramu i czatu ([film.md](film.md)).
 
 Sceny: przesłona otwiera się z Orba na pulpicie, kamera wchodzi w Orba i wylatuje w kosmos; „Jarvis OS przedstawia”, tytuł
 i pomysł; wiązki z Orba zapalają konstelację kroków; plansza aktu (krótkie kroki — polecenia pulpitu, sprawdzenia — jako

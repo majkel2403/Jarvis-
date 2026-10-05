@@ -12,6 +12,11 @@ let cur = null;          // aktywne zadanie {id,title,ts,status,steps[],result}
 let viewing = null;      // zadanie pokazywane w panelu (aktywne albo z historii)
 let tab = 'task', pinned = false, tick = null, seq = 0;
 
+/* Obserwatorzy zadań (moduł Film i każdy inny dodatek): dostają ('start'|'step'|'stepEnd'|'end', dane) — niezależnie od tego,
+   skąd przyszło zadanie (czat, Telegram, harmonogram, workflow). Błąd obserwatora nigdy nie psuje zadania. */
+const observers = new Set();
+const notify = (type, data) => observers.forEach(fn => { try { fn(type, data); } catch (e) { /* dodatek nie zatrzymuje zadania */ } });
+
 const KIND = {
   input:  { g: '›', label: 'Polecenie' },
   model:  { g: '◈', label: 'Model' },
@@ -64,7 +69,7 @@ const step = (kind, title, fields = [], opts = {}) => {
   if (!cur) return { set() { }, done() { }, append() { }, fail() { } };
   const s = { id: ++seq, kind, title, fields, status: opts.running ? 'run' : (opts.status || 'ok'), ts: Date.now(), preview: opts.preview || '' };
   const task = cur; task.steps.push(s);
-  chip();
+  chip(); notify('step', { task, step: s });
   if (viewing === task) { const box = stepsBox(); box.querySelector('.lp-empty')?.remove(); box.appendChild(paintStep(s, task.ts)); stick(box); }
   let raf = 0, rafA = 0;
   // po zakończeniu zadania panel pokazuje wersję „saved” z _live === task
@@ -80,8 +85,8 @@ const step = (kind, title, fields = [], opts = {}) => {
       if (!s.el || !shown()) return;
       if (!rafA) rafA = requestAnimationFrame(() => { rafA = 0; const pre = [...s.el.querySelectorAll('.pf')].find(r => r.dataset.l === label)?.querySelector('pre'); if (pre) { pre.textContent = cap(f[1]); stick(stepsBox()); } else { paintStep(s, task.ts); stick(stepsBox()); } });
     },
-    done(fields2, preview) { s.status = 'ok'; s.dur = Date.now() - s.ts; if (fields2) s.fields = s.fields.concat(fields2); if (preview !== undefined) s.preview = preview; repaint(); },
-    fail(err, fields2) { s.status = 'err'; s.dur = Date.now() - s.ts; s.fields = s.fields.concat(fields2 || [], [['Błąd', String(err), 'err']]); s.preview = String(err).slice(0, 80); repaint(); },
+    done(fields2, preview) { s.status = 'ok'; s.dur = Date.now() - s.ts; if (fields2) s.fields = s.fields.concat(fields2); if (preview !== undefined) s.preview = preview; repaint(); notify('stepEnd', { task, step: s }); },
+    fail(err, fields2) { s.status = 'err'; s.dur = Date.now() - s.ts; s.fields = s.fields.concat(fields2 || [], [['Błąd', String(err), 'err']]); s.preview = String(err).slice(0, 80); repaint(); notify('stepEnd', { task, step: s }); },
     get step() { return s; }
   };
 };
@@ -96,6 +101,7 @@ const start = title => {
   render(); chip();
   if (pinned && !matchMedia('(max-width:900px)').matches) setOpen(true);   // przypięty = otwiera się sam przy każdym zadaniu; inaczej wystarczy chip
   clearInterval(tick); tick = setInterval(meta, 250);
+  notify('start', { task: cur });
   return cur;
 };
 const end = (status, result) => {
@@ -110,6 +116,7 @@ const end = (status, result) => {
   cur = null; viewing = saved; Object.defineProperty(saved, '_live', { value: t, enumerable: false });   // panel dalej pokazuje ten sam log (z żywymi elementami)
   render(); chip();
   J.emit('proc-end', saved);
+  notify('end', { task: t, saved });
 };
 // wpisy J.log() (systemowe) trafiają do aktywnego zadania jako kroki; poza zadaniem nie tworzą szumu
 const log = (title, text = '', level = '') => {
@@ -217,6 +224,8 @@ J.on('plan', p => { if (plan && p) { plan.done = p.done; drawPlan(); } });
 /* ---------- publiczne API ---------- */
 J.proc = {
   start, end, step, log, plan: setPlan, planStep, compare,
+  observe(fn) { observers.add(fn); return () => observers.delete(fn); },
+  get viewing() { return viewing; },
   get current() { return cur; },
   get active() { return !!cur; },
   open: () => setOpen(true),

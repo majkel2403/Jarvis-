@@ -5895,6 +5895,37 @@
   "needsConfirmText": false
  },
  {
+  "id": "task_film",
+  "group": "Workflow",
+  "label": "Film z zadania",
+  "description": "Film z zadania z Process Logu (polecenie z czatu, zadanie z Telegrama albo harmonogramu): powtórka z zapisu jako scena z filmu — kroki, narzędzia, odpowiedź. Domyślnie zadanie oglądane w Process Logu albo ostatnie. Esc zamyka.",
+  "args": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "id zadania z historii Process Logu; domyślnie oglądane lub ostatnie"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A3",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": true,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "pokaz film z zadania",
+   "film z ostatniego zadania",
+   "pokaz film z ostatniego polecenia",
+   "odtworz film z zadania"
+  ],
+  "needsConfirmText": false
+ },
+ {
   "id": "task_report",
   "group": "Agent",
   "label": "Raport: co się nie udało",

@@ -2938,6 +2938,19 @@
   }
  },
  {
+  "name": "task_film",
+  "description": "Film z zadania z Process Logu (polecenie z czatu, zadanie z Telegrama albo harmonogramu): powtórka z zapisu jako scena z filmu — kroki, narzędzia, odpowiedź. Domyślnie zadanie oglądane w Process Logu albo ostatnie. Esc zamyka. Np.: „pokaz film z zadania”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "id zadania z historii Process Logu; domyślnie oglądane lub ostatnie"
+    }
+   }
+  }
+ },
+ {
   "name": "task_report",
   "description": "Zestawienie zadań z czatu, które się nie udały (błąd, nierozpoznane, pół zadania, Hermes niedostępny, narzędzie zawiodło) z ostatnich dni, z przyczynami i drogą wykonania. Np.: „co sie nie udalo”.",
   "parameters": {
