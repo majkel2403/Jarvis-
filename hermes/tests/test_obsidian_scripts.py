@@ -76,6 +76,23 @@ def test_capture_appends_log_at_end_and_never_duplicates(vault):
     assert hot.index("Task: Test zapisu") < hot.index("## 🎯 W toku")   # w sekcji „Ostatnia aktualizacja”
 
 
+def test_every_repo_script_compiles():
+    """Każdy skrypt z hermes/scripts (crony no-agent, haki, sejf, radar) musi się kompilować — błąd składni = cichy padnięty cron."""
+    scripts = sorted(SCRIPTS.glob("*.py"))
+    assert len(scripts) >= 15
+    for s in scripts:
+        compile(s.read_text(encoding="utf-8"), str(s), "exec")   # w pamięci — bez plików .pyc
+
+
+def test_search_skips_trash(vault):
+    for d in (".trash/stare", "_trash/stare"):
+        (vault / d).mkdir(parents=True)
+        (vault / d / "skasowana.md").write_text("Znacznik-KOSZ\n", encoding="utf-8")
+    (vault / "02 - Projects" / "Projekt A.md").write_text("---\nstatus: active\n---\n# A\nZnacznik-KOSZ żywy\n", encoding="utf-8")
+    out = run(vault, "obsidian-context.py", "search", "Znacznik-KOSZ")
+    assert "Projekt A" in out and "skasowana" not in out
+
+
 def test_inbox_cron_processes_forai_notes(vault):
     (vault / "00 - Inbox" / "ForAI" / "zadanie.md").write_text("---\ntype: task\n---\n# Zrób coś\n", encoding="utf-8")
     out = run(vault, "obsidian_inbox_wrapper.py")

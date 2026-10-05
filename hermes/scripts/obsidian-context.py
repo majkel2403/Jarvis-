@@ -560,8 +560,8 @@ def search_notes(pattern: str) -> str:
     results = []
     
     for md in vault_path().rglob("*.md"):
-        # Pomijamy .obsidian
-        if ".obsidian" in md.parts:
+        # Pomijamy ustawienia Obsidiana i kosz (.trash, dawny _trash)
+        if {".obsidian", ".trash", "_trash"} & set(md.parts):
             continue
         
         try:
