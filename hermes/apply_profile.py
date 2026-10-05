@@ -59,6 +59,8 @@ PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "obsidia
 # Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie,
 # obsidian-brain = pliki sterujące sejfu Obsidian (CRITICAL_FACTS, hot, log) w pierwszej turze każdej rozmowy (2026-10-05)
 REPO_PLUGINS = ["jarvis-events", "obsidian-brain"]
+# Skrypty sejfu Obsidian (crony 7:30 / co 2 h / pon 8:00 + narzędzia) kopiowane też do ~/.hermes/scripts (2026-10-05)
+GLOBAL_SCRIPT_PREFIXES = ("obsidian", "sync-memory-to-obsidian", "vault_")
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
@@ -333,6 +335,12 @@ def main() -> int:
         sdir.mkdir(exist_ok=True)
         shutil.copy2(src, sdir / src.name)
         print(f"  skrypt -> scripts\\{src.name}")
+    gdir = Path(a.home) / "scripts"   # skrypty sejfu Obsidian także globalnie — skill „obsidian” i notatki sejfu podają ~/.hermes/scripts/
+    for src in sorted((HERE / "scripts").glob("*.py")):
+        if src.name.startswith(GLOBAL_SCRIPT_PREFIXES):
+            gdir.mkdir(exist_ok=True)
+            shutil.copy2(src, gdir / src.name)
+            print(f"  skrypt (globalny) -> {gdir.name}\\{src.name}")
     skill = pdir / "skills" / "jarvis-os-management" / "SKILL.md"
     if inject_cheatsheet(skill):
         print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")

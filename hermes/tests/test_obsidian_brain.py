@@ -128,6 +128,20 @@ def test_size_capped_below_spill_threshold(plugin, tmp_path):
     assert "skrócone — pełny plik: CRITICAL_FACTS.md" in ctx and "skrócone — pełny plik: hot.md" in ctx
 
 
+def test_forai_inbox_listed_only_when_not_empty(plugin, tmp_path):
+    assert "Skrzynka ForAI" not in plugin.build_context()            # brak folderu = brak sekcji
+    inbox = tmp_path / "00 - Inbox" / "ForAI"
+    inbox.mkdir(parents=True)
+    assert "Skrzynka ForAI" not in plugin.build_context()            # pusty folder = brak sekcji
+    for i in range(12):
+        (inbox / f"zadanie {i:02d}.md").write_text("zrób coś", encoding="utf-8")
+    ctx = plugin.build_context()
+    assert "Skrzynka ForAI: 12 notatek" in ctx
+    assert "- zadanie 00" in ctx and "- zadanie 09" in ctx and "- zadanie 10" not in ctx
+    assert "i 2 więcej" in ctx
+    assert ctx.rstrip().endswith("[koniec kontekstu sejfu]")
+
+
 def test_missing_vault_is_silent(plugin, monkeypatch, tmp_path):
     monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(tmp_path / "brak"))
     assert plugin.hook(is_first_turn=True, platform="telegram") is None

@@ -13,6 +13,12 @@ gdy rozmowa jeszcze go nie ma:
 - karta Jarvis OS przysyła historię w treści zapytania (bez wstawek) — dostaje skrót w każdej turze (~2,5 tys. tokenów);
 - crony, subagenci i procesy w tle są pomijane (Solana Radar co 5 min = koszt bez pożytku).
 Brak sejfu lub błąd = rozmowa bez wstawki (nigdy wyjątek). Strażnik pilnuje: wtyczka włączona, kopia = repo, pliki sejfu istnieją.
+Uzupełnienie (2026-10-05, wieczór): gdy w `00 - Inbox/ForAI` czekają notatki od Michała, wstawka kończy się ich listą (do 10 nazw)
+— Jarvis wie o nich od pierwszej wiadomości, a nie dopiero po cronie skrzynki.
+Uzupełnienie 2: skrypty sejfu (`obsidian-*.py`, wrappery cronów 7:30 / co 2 h / pon 8:00, `vault_health/stats.py`,
+`sync-memory-to-obsidian.py`) oraz `backup_state_db.py` żyją w `hermes/scripts/` (wcześniej tylko na dysku, bez wersji);
+`apply_profile.py` kopiuje je do profilu i `~/.hermes/scripts`, strażnik pilnuje zgodności i włączenia cronów,
+testy: `hermes/tests/test_obsidian_scripts.py`.
 
 **Konsekwencje:** kontekst sejfu jest deterministyczny (kod, nie prośba w prompcie) — test na żywo 2026-10-05: odpowiedzi z sejfu
 bez ani jednego wywołania narzędzia, brak dublowania w rozmowie ciągłej. Koszt: ~2,5 tys. tokenów na rozmowę (na karcie — na turę).

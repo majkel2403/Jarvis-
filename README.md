@@ -127,7 +127,7 @@ bridge/                     most MCP (Python): jarvis_bridge.py, workflow_engine
 workflows/                  definicje workflow (*.yaml) + schemat; silnik: bridge/workflow_engine.py
 integrations/               agenci Jeva: setup.ps1, set-key.ps1, doctor.ps1, agent WWW (web/agent.mjs), clicker, łatki, testy
 hermes/                     profil Hermesa: SOUL.md, HERMES.md, apply_profile.py, install-profile.ps1,
-                            plugins/ (jarvis-events, obsidian-brain — sejf Obsidian na start rozmowy), scripts/ (strażnik, hak blokad, health-check, raport poranny), tests/
+                            plugins/ (jarvis-events, obsidian-brain — sejf Obsidian na start rozmowy), scripts/ (+ skrypty i crony sejfu Obsidian) (strażnik, hak blokad, health-check, raport poranny), tests/
 docs/                       specyfikacja (spec/), przewodniki (guide/), decyzje (adr/), plan Jeva, archiwum planów (archiwum/)
 tests/                      testy jednostkowe (Node), test dymny (Playwright), zbiory zdań
 tools/                      generator katalogów specyfikacji (gen-spec.js) i narzędzia pomocnicze

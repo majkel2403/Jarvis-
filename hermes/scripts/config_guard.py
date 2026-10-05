@@ -171,6 +171,37 @@ VAULT = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or HOME / "Documents" / "herm
 missing = [n for n in ("CRITICAL_FACTS.md", "hot.md", "log.md") if not (VAULT / n).is_file()]
 check(not missing, f"sejf Obsidian: pliki sterujące w {VAULT}", f"sejf Obsidian: brak {', '.join(missing)} w {VAULT} — Jarvis nie dostanie kontekstu na start")
 
+# skrypty z repo (hermes/scripts/*.py: crony no-agent, haki, sejf Obsidian) — kopia w profilu musi być identyczna.
+# Zastępuje regułę Jarvisa z 2026-10-05 „skrypty pipeline Obsidian istnieją” (skrypty sejfu są w repo od 2026-10-05).
+_stale = [f.name for f in sorted((REPO_SOUL.parent / "scripts").glob("*.py"))
+          if not (PROFILE / "scripts" / f.name).exists()
+          or (PROFILE / "scripts" / f.name).read_bytes().replace(b"\r\n", b"\n") != f.read_bytes().replace(b"\r\n", b"\n")]
+check(not _stale, "skrypty w profilu = wersja z repo", f"skrypty brakujące lub różne od repo: {', '.join(_stale)} (uruchom hermes/apply_profile.py; zmiany rób w repo)")
+
+# crony, od których zależą backupy i sejf (reguły Jarvisa z 2026-10-05, uogólnione) — muszą istnieć i być włączone
+try:
+    _jobs = json.loads((PROFILE / "cron" / "jobs.json").read_text(encoding="utf-8"))
+    _jobs = _jobs.get("jobs", []) if isinstance(_jobs, dict) else _jobs
+    for _name in ("Backup state.db", "Obsidian Daily Context", "Obsidian ForAI Inbox Sync"):
+        _job = next((j for j in _jobs if j.get("name") == _name), None)
+        check(bool(_job and _job.get("enabled") and not _job.get("paused_at")), f"cron '{_name}' włączony",
+              f"brak włączonego crona '{_name}' w jobs.json")
+except Exception as e:  # noqa: BLE001
+    problems.append(f"cron/jobs.json: {e}")
+
+# reguła Jarvisa z 2026-10-05: state.db musi mieć świeży backup (cron „Backup state.db” 4:30)
+_state_db, _bdir = PROFILE / "state.db", PROFILE / "backups" / "state-db"
+if _state_db.exists():
+    _recent = sorted(_bdir.glob("state-*.db"), key=lambda p: p.stat().st_mtime, reverse=True) if _bdir.exists() else []
+    check(bool(_recent) and (time.time() - _recent[0].stat().st_mtime) < 2 * 86400 and _recent[0].stat().st_size > 0,
+          "state.db: backup z ostatnich 2 dni", f"brak backupu state.db z ostatnich 2 dni w {_bdir} — cron 'Backup state.db' nie działa albo skrypt padł")
+else:
+    problems.append(f"brak {_state_db} — strażnik nie ma co chronić")
+
+# reguła Jarvisa z 2026-10-05: SOUL.md musi mieć kopię z ostatnich 7 dni (apply_profile.py trzyma 3 ostatnie SOUL.md.bak-*)
+_soul_bak = [p for p in PROFILE.glob("SOUL.md.bak-*") if time.time() - p.stat().st_mtime < 7 * 86400]
+check(bool(_soul_bak), f"SOUL.md: {len(_soul_bak)} kopii z ostatnich 7 dni", f"brak kopii SOUL.md z ostatnich 7 dni w {PROFILE}")
+
 # twarde blokady: hak pre_tool_call z guard_tools.py (zabijanie przeglądarki, restart gatewaya z własnego terminala)
 pre = ((cfg.get("hooks") or {}).get("pre_tool_call") or [])
 check(any("guard_tools.py" in str(x.get("command", "")) for x in pre if isinstance(x, dict)), "hak blokad guard_tools.py", "brak haka guard_tools.py w hooks.pre_tool_call (twarde blokady wyłączone)")

@@ -2,7 +2,7 @@
 
 Wcześniej Hermes miał tylko prośbę w skillu „obsidian” (czytaj na start SOUL/CRITICAL_FACTS/hot/log) — model
 często tego nie robił. Hak `pre_llm_call` w pierwszej turze sesji dokleja do wiadomości użytkownika skrót
-plików sterujących sejfu, więc kontekst jest zawsze, bez wywołań narzędzi. Hermes zapisuje tę wstawkę przy
+plików sterujących sejfu (+ lista notatek czekających w 00 - Inbox/ForAI), więc kontekst jest zawsze, bez wywołań narzędzi. Hermes zapisuje tę wstawkę przy
 wiadomości (sidecar), więc zostaje w kolejnych turach tej samej rozmowy.
 
 Zasady:
@@ -26,6 +26,7 @@ MAX_TOTAL = 9500          # zapas pod próg hooks.output_spill.max_chars (10 000
 BUDGET = {"CRITICAL_FACTS.md": 3800, "hot.md": 3200}
 LOG_LINES = 8
 LOG_LINE_MAX = 200
+FORAI_MAX = 10
 # Sekcje pomijane (fragment tytułu, małe litery): preambuła = opis pliku; „co wiemy o michale” powtarza
 # CRITICAL_FACTS/SOUL; nawigacja to same wikilinki.
 SKIP_SECTIONS = ("dla przyszłego jarvisa", "for future jarvis", "co wiemy o michale", "quick nav")
@@ -117,6 +118,22 @@ def _log_tail(raw: str, n: int = LOG_LINES) -> str:
     return "\n".join(out)
 
 
+def _forai(vault: Path, limit: int = FORAI_MAX) -> str:
+    """Notatki od Michała czekające w 00 - Inbox/ForAI — Jarvis ma je zobaczyć od pierwszej wiadomości."""
+    try:
+        notes = sorted(p for p in (vault / "00 - Inbox" / "ForAI").glob("*.md") if p.is_file())
+    except OSError:
+        return ""
+    if not notes:
+        return ""
+    lines = [f"=== 📥 Skrzynka ForAI: {len(notes)} notatek od Michała czeka (00 - Inbox/ForAI) ==="]
+    lines += [f"- {p.stem}" for p in notes[:limit]]
+    if len(notes) > limit:
+        lines.append(f"- … i {len(notes) - limit} więcej")
+    lines.append("Przeczytaj je, gdy pasują do rozmowy albo Michał o nie zapyta; po obsłużeniu przenieś notatkę z ForAI.")
+    return "\n".join(lines)
+
+
 def build_context(vault: Path | None = None, today: str | None = None) -> str | None:
     vault = vault or vault_path()
     if not (vault / "CRITICAL_FACTS.md").is_file() and not (vault / "hot.md").is_file():
@@ -129,6 +146,9 @@ def build_context(vault: Path | None = None, today: str | None = None) -> str | 
     log = _log_tail(_read(vault, "log.md"))
     if log:
         parts.append(f"=== log.md — ostatnie {LOG_LINES} wpisów (najnowsze u góry) ===\n" + log)
+    inbox = _forai(vault)
+    if inbox:
+        parts.append(inbox)
     text = "\n\n".join(parts) + "\n[koniec kontekstu sejfu]"
     return _cut(text, MAX_TOTAL, "sejf")
 
