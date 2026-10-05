@@ -118,7 +118,8 @@ const dayScenes = ({ runs = [], tasks = [], history = [], notes = [] }, since, u
       ms: r.steps.reduce((a, s) => a + (s.ms || 0), 0) || null, artifact: fw || { kind: 'fields', fields: { title: name || r.name, Kroki: doneN + ' z ' + r.steps.length } } });
   });
   const groups = new Map();   // to samo zadanie wiele razy (np. z harmonogramu) = jedna scena „×N”
-  tasks.filter(t => inDay(t.started || 0)).forEach(t => { const k = (t.platform || '') + '|' + norm(t.title || ''); (groups.get(k) || groups.set(k, []).get(k)).push(t); });
+  /* „[System note: …]” to wewnętrzna wiadomość Hermesa (np. po restarcie gatewaya), nie zadanie użytkownika */
+  tasks.filter(t => inDay(t.started || 0) && !/^\s*\[system note/i.test(t.title || '')).forEach(t => { const k = (t.platform || '') + '|' + norm(t.title || ''); (groups.get(k) || groups.set(k, []).get(k)).push(t); });
   groups.forEach(list => {
     const t = list[list.length - 1], n = list.length, fails = list.filter(x => x.status === 'failed').length;
     seen.add(norm(t.title || ''));

@@ -103,7 +103,8 @@ test('Film dnia: sceny z workflow, dziennika Hermesa, Process Logu i notatek —
   const runs = [{ ...RUN, started: at(19, 5), steps: STEPS }, { ...RUN, id: 'wczoraj', started: since - 3600, steps: STEPS }];
   const tasks = [{ id: 't1', platform: 'telegram', title: 'Sprawdź pogodę', started: at(8, 10), ended: at(8, 11), status: 'done', result: 'Słonecznie', tools: 2 },
     { id: 't2', platform: 'cron', title: 'Raport rynku', started: at(9, 0), ended: at(9, 2), status: 'failed', result: 'timeout', tools: 1 },
-    { id: 't3', platform: 'cron', title: 'Raport rynku', started: at(9, 30), ended: at(9, 31), status: 'done', result: 'ok', tools: 1 }];
+    { id: 't3', platform: 'cron', title: 'Raport rynku', started: at(9, 30), ended: at(9, 31), status: 'done', result: 'ok', tools: 1 },
+    { id: 't4', platform: 'api_server', title: '[System note: The previous turn was interrupted by a gateway shutdown;', started: at(9, 40), status: 'done', result: '' }];   // wewnętrzne — bez sceny
   const history = [{ ts: at(8, 10) * 1000, title: 'Telegram: Sprawdź pogodę', status: 'ok', dur: 60000 }, { ts: at(19, 5) * 1000, title: 'Workflow: Od pomysłu do projektu', status: 'ok', dur: 300000 },
     { ts: at(10, 0) * 1000, title: 'Ustaw minutnik 5 min', status: 'ok', dur: 300 }, { ts: at(10, 5) * 1000, title: 'Pogoda', status: 'ok', dur: 900 }, { ts: at(10, 6) * 1000, title: 'Otwórz notatnik', status: 'ok', dur: 200 },
     { ts: at(12, 0) * 1000, title: 'Przygotuj plan tygodnia', status: 'err', dur: 45000, result: 'brak kalendarza' }];

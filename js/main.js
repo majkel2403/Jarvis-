@@ -85,6 +85,7 @@ const boot = () => new Promise(resolve => {
   const log = $('#bootLog'), bar = $('#bootBar');
   let i = 0; let done = false;
   const step = () => {
+    if (entered) return;   // wejście z mostu albo z Filmu w trakcie animacji — zasłona już znika, nie ma czego dopisywać
     if (i < lines.length) {
       log.appendChild(h('div', {}, '&gt; ' + lines[i])); i++;
       bar.style.width = (i / lines.length * 100) + '%'; $('#bootPct').textContent = Math.round(i / lines.length * 100) + '%';
