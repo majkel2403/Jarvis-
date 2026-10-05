@@ -1058,6 +1058,7 @@ const C = WF.cinema = {
       try { evs = ((await api('/workflows/runs/' + encodeURIComponent(runId) + '?events=1', { timeout: 10000 })).events || []).filter(e => e.type !== 'run.snapshot' && e.type !== 'step.progress'); } catch (e) { evs = null; }
       if (!evs?.some(e => e.type === 'run.started')) evs = synth(src);
     }
+    if (!J.booted) J.bootEnter?.();   // ekran startowy przykryłby film — wejście jak przy desktop_open
     if (cur) cur.close();
     cur = mount(src, live ? null : evs, o);
     return true;
@@ -1072,6 +1073,7 @@ const C = WF.cinema = {
     const steps = dayScenes({ runs: WF.list, tasks, history: J.state.history || [], notes: J.state.notes || [] }, since, until);
     if (!steps.length) return false;
     const src = daySrc(steps, d0);
+    if (!J.booted) J.bootEnter?.();
     if (cur) cur.close();
     cur = mount(src, synth(src), { day: true });
     return true;
@@ -1082,8 +1084,9 @@ const C = WF.cinema = {
     if (mode === 'off' || !r || typeof document === 'undefined') return;
     const card = (text, opts, fn) => { r._filmCard?.remove?.(); r._filmCard = J.chat.quick?.(text, opts, v => { r._filmCard?.remove?.(); r._filmCard = null; fn(v); }) || null; };
     if (when === 'start') {
-      if (mode === 'auto' && !cur && !document.hidden) { C.open(r.id); return; }
-      if (mode === 'ask') card('🎬 Oglądać „' + r.name + '” na żywo jako film?', [{ label: '🎬 Oglądaj na żywo', value: 'go', primary: true }, { label: 'Nie teraz', value: 'no' }], v => { if (v === 'go') C.open(r.id); });
+      if (mode === 'auto' && !cur && !document.hidden && (J.booted || !J.bootEnter)) { C.open(r.id); return; }
+      // „włącz sam”, a pulpit stoi jeszcze na ekranie startowym (film schowałby się pod zasłoną) — tylko propozycja
+      if (mode === 'ask' || mode === 'auto') card('🎬 Oglądać „' + r.name + '” na żywo jako film?', [{ label: '🎬 Oglądaj na żywo', value: 'go', primary: true }, { label: 'Nie teraz', value: 'no' }], v => { if (v === 'go') C.open(r.id); });
       return;
     }
     r._filmCard?.remove?.(); r._filmCard = null;

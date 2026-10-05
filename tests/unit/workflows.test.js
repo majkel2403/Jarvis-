@@ -148,4 +148,9 @@ test('propozycja filmu w czacie: wg ustawienia, bez propozycji po zatrzymaniu', 
   const c = mk(), asked3 = []; c.J.chat.quick = q => { asked3.push(q); return null; };
   c.ev('run.started', { steps: STEPS, autonomy: 'L3' }); c.ev('run.stopped', { state: 'stopped', reason: 'stop' });
   assert.equal(asked3.length, 1, 'po zatrzymaniu nie ma „filmu gotowego”');
+  // „włącz sam”, a pulpit stoi na ekranie startowym: film by się schował pod zasłoną — tylko propozycja w czacie
+  const d = mk({ wfFilm: 'auto' }), asked4 = [], opened = []; d.J.chat.quick = q => { asked4.push(q); return null; };
+  d.J.bootEnter = () => { }; d.J.booted = false; d.J.workflows.cinema.open = id => opened.push(id);
+  d.ev('run.started', { steps: STEPS, autonomy: 'L3' });
+  assert.equal(opened.length, 0); assert.match(asked4[0] || '', /Oglądać „Od pomysłu do projektu” na żywo/);
 });
