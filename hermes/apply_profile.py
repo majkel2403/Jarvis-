@@ -8,7 +8,8 @@ Uruchamiaj Pythonem z venv Hermesa (ma PyYAML):
   %USERPROFILE%\\.hermes\\hermes-agent\\venv\\Scripts\\python.exe hermes\\apply_profile.py --home %USERPROFILE%\\.hermes --name jarvis-desktop
 
 Zmienia WYŁĄCZNIE profil docelowy: config.yaml (z kopią zapasową; docelowe ustawienia z TARGET), .env, SOUL.md, scripts/,
-bloki generowane w skillu jarvis-os-management oraz HERMES.md w katalogu roboczym (JarvisWorkspace, tworzony z własnym .git).
+skille z repo (REPO_SKILLS, także kopia w ~/.hermes/skills), bloki generowane w skillu jarvis-os-management oraz HERMES.md
+w katalogu roboczym (JarvisWorkspace, tworzony z własnym .git).
 Skrypt jest idempotentny: ponowne uruchomienie daje ten sam stan, a strażnik (scripts/config_guard.py) sprawdza go codziennie.
 """
 from __future__ import annotations
@@ -61,6 +62,26 @@ PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "obsidia
 REPO_PLUGINS = ["jarvis-events", "obsidian-brain"]
 # Skrypty sejfu Obsidian (crony 7:30 / co 2 h / pon 8:00 + narzędzia) kopiowane też do ~/.hermes/scripts (2026-10-05)
 GLOBAL_SCRIPT_PREFIXES = ("obsidian", "sync-memory-to-obsidian", "vault_")
+# Skille z repo (hermes/skills/<ścieżka>/SKILL.md) kopiowane do profilu i do ~/.hermes/skills przy każdym uruchomieniu (2026-10-06):
+# skill „obsidian” Jarvis nadpisał sobie `skill_manage` (405 → 88 linii) i nikt tego nie wykrył — teraz źródło = repo, strażnik pilnuje.
+REPO_SKILLS = ["note-taking/obsidian"]
+
+
+def copy_repo_skills(pdir: Path, home: Path, here: Path = HERE) -> list[Path]:
+    """Kopiuje SKILL.md (i pliki obok) każdego skilla z REPO_SKILLS do profilu i katalogu globalnego. Zwraca zapisane ścieżki."""
+    written: list[Path] = []
+    for rel in REPO_SKILLS:
+        src = here / "skills" / Path(rel)
+        if not (src / "SKILL.md").is_file():
+            continue
+        for root in (pdir / "skills", home / "skills"):
+            dst = root / Path(rel)
+            dst.mkdir(parents=True, exist_ok=True)
+            for f in src.iterdir():
+                if f.is_file():
+                    shutil.copy2(f, dst / f.name)
+                    written.append(dst / f.name)
+    return written
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
@@ -341,6 +362,8 @@ def main() -> int:
             gdir.mkdir(exist_ok=True)
             shutil.copy2(src, gdir / src.name)
             print(f"  skrypt (globalny) -> {gdir.name}\\{src.name}")
+    for w in copy_repo_skills(pdir, Path(a.home)):
+        print(f"  skill -> {w}")
     skill = pdir / "skills" / "jarvis-os-management" / "SKILL.md"
     if inject_cheatsheet(skill):
         print(f"  ściąga narzędzi -> {skill.relative_to(pdir)} ({len(CHEAT_TOOLS)} narzędzi z bridge/tools.json)")

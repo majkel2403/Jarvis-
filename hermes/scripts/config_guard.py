@@ -168,8 +168,23 @@ for repo_plug in sorted((REPO_SOUL.parent / "plugins").glob("*/plugin.yaml")):
 
 # obsidian-brain czyta pliki sterujące sejfu — bez nich Jarvis zaczyna rozmowę bez kontekstu (wtyczka milczy)
 VAULT = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or HOME / "Documents" / "hermes")
-missing = [n for n in ("CRITICAL_FACTS.md", "hot.md", "log.md") if not (VAULT / n).is_file()]
+missing = [n for n in ("CRITICAL_FACTS.md", "hot.md", "log.md", "_CLAUDE.md") if not (VAULT / n).is_file()]
 check(not missing, f"sejf Obsidian: pliki sterujące w {VAULT}", f"sejf Obsidian: brak {', '.join(missing)} w {VAULT} — Jarvis nie dostanie kontekstu na start")
+# polityka sejfu (_CLAUDE.md) musi mieć słownik TYP-ów logu — skill „obsidian” i Claude Code odsyłają do niego zamiast powielać listę
+if (VAULT / "_CLAUDE.md").is_file():
+    _pol = (VAULT / "_CLAUDE.md").read_text(encoding="utf-8", errors="replace")
+    check("Słownik TYP-ów" in _pol and "`SESSION`" in _pol, "_CLAUDE.md ma słownik TYP-ów logu", "_CLAUDE.md bez sekcji „Słownik TYP-ów wpisu w log.md” — skill obsidian odsyła do niej (ustalenie 2026-10-06)")
+
+# skille z repo (hermes/skills/<ścieżka>/SKILL.md) — kopia w profilu i w ~/.hermes/skills musi być identyczna
+# (2026-10-06: Jarvis nadpisał sobie skill „obsidian” przez skill_manage; od teraz źródło = repo, zmiany tylko tam)
+for repo_skill in sorted((REPO_SOUL.parent / "skills").rglob("SKILL.md")):
+    rel = repo_skill.parent.relative_to(REPO_SOUL.parent / "skills")
+    want = repo_skill.read_bytes().replace(b"\r\n", b"\n")
+    for root, label in ((PROFILE / "skills", "profil"), (ROOT / "skills", "~/.hermes/skills")):
+        cp = root / rel / "SKILL.md"
+        same = cp.is_file() and cp.read_bytes().replace(b"\r\n", b"\n") == want
+        check(same, f"skill {rel.as_posix()} ({label}) = wersja z repo",
+              f"skill {rel.as_posix()} w {label} różni się od repo albo go brak (uruchom hermes/apply_profile.py; zmiany rób w repo, nie przez skill_manage)")
 
 # skrypty z repo (hermes/scripts/*.py: crony no-agent, haki, sejf Obsidian) — kopia w profilu musi być identyczna.
 # Zastępuje regułę Jarvisa z 2026-10-05 „skrypty pipeline Obsidian istnieją” (skrypty sejfu są w repo od 2026-10-05).
@@ -277,7 +292,7 @@ try:
     day.mkdir(parents=True, exist_ok=True)
     for src in (PROFILE / "config.yaml", PROFILE / "SOUL.md", PROFILE / "memories" / "MEMORY.md",
                 PROFILE / "memories" / "USER.md", PROFILE / "cron" / "jobs.json", PROFILE / ".env",
-                PROFILE / "skills" / "jarvis-operations" / "SKILL.md"):
+                PROFILE / "skills" / "jarvis-operations" / "SKILL.md", PROFILE / "skills" / "note-taking" / "obsidian" / "SKILL.md"):
         if src.exists():
             shutil.copy2(src, day / src.name)
     (day / "skills.txt").write_text("\n".join(f"{k}\t{', '.join(v)}" for k, v in sorted(names.items())), encoding="utf-8")

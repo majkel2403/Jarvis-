@@ -49,7 +49,7 @@ def test_daily_cron_builds_real_context_without_fake_daily(vault):
     assert "Projects Hub" not in ctx                        # huby nie są projektami
     assert not (vault / "01 - Daily" / f"{TODAY}.md").exists()   # koniec fałszywych dzienników z szablonu
     log = (vault / "log.md").read_text(encoding="utf-8")
-    assert log.count("DAILY-CONTEXT") == 1 and log.rstrip().endswith(f"[[AI-Context-{TODAY}]] |")
+    assert log.count("DAILY-CONTEXT") == 1 and log.rstrip().endswith(f"[[AI-Context-{TODAY}]] — ✅ |")   # wiersz ze statusem jak każdy wpis (_CLAUDE.md §6)
     assert log.index("# 📋 log.md") < log.index("DAILY-CONTEXT")   # nie nad tytułem
     raw = (vault / "log.md").read_bytes()
     assert raw.count(b"\r\n") == raw.count(b"\n")           # zachowany styl CRLF pliku

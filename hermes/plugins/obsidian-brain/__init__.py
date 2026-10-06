@@ -33,7 +33,7 @@ SKIP_SECTIONS = ("dla przyszłego jarvisa", "for future jarvis", "co wiemy o mic
 
 MARKER = "[Drugi mózg — sejf Obsidian Michała"
 HEADER = MARKER + """, wczytany automatycznie na start rozmowy]
-Sejf: {vault}  (wspólny z Claude Code; reguły zapisu: `_CLAUDE.md`, skill `obsidian`).
+Sejf: {vault}  (wspólny z Claude Code; przed zapisem przeczytaj `_CLAUDE.md` (polityka) i użyj skilla `obsidian` (mechanika)).
 - Poniższe to migawka plików sterujących — porty, modele, stany usług weryfikuj na żywo, zanim na nich oprzesz decyzję.
 - Więcej kontekstu na żądanie: `SOUL.md` (preferencje), `index.md` (katalog), `01 - Daily/{today}.md`, `02 - Projects/`, `wiki/`.
 - Po istotnej pracy: wiersz na końcu `log.md` (`| RRRR-MM-DD GG:MM | TYP | [Jarvis] opis |`), punkt w `hot.md`, sesja w dzienniku dnia.

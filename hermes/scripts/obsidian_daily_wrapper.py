@@ -148,7 +148,7 @@ Dzienny kontekst złożony automatycznie o {datetime.now():%H:%M} z plików sejf
     out = VAULT / "01 - Daily" / "AI Context" / f"AI-Context-{TODAY}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(ctx, encoding="utf-8")
-    append_log(f"| {datetime.now():%Y-%m-%d %H:%M} | DAILY-CONTEXT | [Jarvis] dzienny kontekst → [[AI-Context-{TODAY}]] |")
+    append_log(f"| {datetime.now():%Y-%m-%d %H:%M} | DAILY-CONTEXT | [Jarvis] dzienny kontekst → [[AI-Context-{TODAY}]] — ✅ |")
     print(f"OK: {out.relative_to(VAULT)}")
     if MEMORY_SYNC.exists():   # kopia pamięci Jarvisa do sejfu — błąd nie psuje dziennego kontekstu
         r = subprocess.run([sys.executable, str(MEMORY_SYNC)], capture_output=True, text=True, encoding="utf-8",
