@@ -304,7 +304,7 @@ def gen_daily_ai_context(**kwargs) -> str:
         .replace("{{date}}", today()) \
         .replace("{{timestamp}}", now()) \
         .replace("{{todays_priorities}}", kwargs.get("todays_priorities", "- ")) \
-        .replace("{{project_1}}", kwargs.get("project_1", "TradeLens AIO")) \
+        .replace("{{project_1}}", kwargs.get("project_1", "Jarvis OS")) \
         .replace("{{status_1}}", kwargs.get("status_1", "- ")) \
         .replace("{{goal_1}}", kwargs.get("goal_1", "- ")) \
         .replace("{{blocker_1}}", kwargs.get("blocker_1", "- ")) \

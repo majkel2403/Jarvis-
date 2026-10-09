@@ -23,6 +23,7 @@ def vault(tmp_path):
     (v / "log.md").write_text("---\ntype: system\n---\n\n# 📋 log.md\n\n| Czas | Typ | Opis |\n|---|---|---|\n| 2026-10-05 10:00 | INIT | start |\n",
                               encoding="utf-8", newline="\r\n")   # sejf ma pliki CRLF — dopisywanie musi zachować styl
     (v / "CRITICAL_FACTS.md").write_text("---\ntype: system\n---\n\n## fakty\n", encoding="utf-8")
+    (v / "SOUL.md").write_text("# PROFIL MICHAŁA\nZnacznik-SOUL-NIE-L0\n", encoding="utf-8")
     (v / "02 - Projects" / "Projekt A.md").write_text("---\nstatus: active\nupdated: 2026-10-05\n---\n# A\n", encoding="utf-8")
     (v / "02 - Projects" / "Projects Hub.md").write_text("---\ntype: index\n---\n# hub\n", encoding="utf-8")
     prof = tmp_path / "profile" / "memories"
@@ -93,6 +94,13 @@ def test_search_skips_trash(vault):
     assert "Projekt A" in out and "skasowana" not in out
 
 
+def test_l0_uses_critical_facts_but_never_duplicates_vault_soul(vault):
+    """Runtime SOUL i USER są już warstwami Hermesa; L0 sejfu nie może ich dublować."""
+    out = run(vault, "obsidian-context.py", "l0")
+    assert "CRITICAL_FACTS.md" in out and "fakty" in out
+    assert "Znacznik-SOUL-NIE-L0" not in out and "## SOUL.md" not in out
+
+
 def test_frontmatter_is_read_from_header_not_body():
     """Regresja 2026-10-05: parser czytał treść notatki zamiast frontmattera (typ „?”, lista aktywnych projektów pusta)."""
     import importlib.util
@@ -114,6 +122,30 @@ def test_vault_health_accepts_escaped_table_alias(vault):
     out = run(vault, "vault_health.py", "--path", str(vault), "--scope", "core", "--json")
     broken = [i["broken_link"] for w in json.loads(out)["warnings"] if w["type"] == "broken_links" for i in w["items"]]
     assert "Nie istnieje" in broken and not any(b.startswith("Projekt A") for b in broken)
+
+
+def test_vault_health_checks_control_plane_root_and_hot_limit(vault):
+    import json
+    # Fixture celowo nie ma wszystkich ośmiu plików control plane.
+    (vault / "hot.md").write_text("x" * 3201, encoding="utf-8")
+    (vault / "artifact.zip").write_bytes(b"test")
+    out = run(vault, "vault_health.py", "--path", str(vault), "--scope", "core", "--json")
+    report = json.loads(out)
+    critical_types = {item["type"] for item in report["critical"]}
+    warning_types = {item["type"] for item in report["warnings"]}
+    assert "missing_control_files" in critical_types
+    assert {"extra_root_files", "hot_too_large"} <= warning_types
+
+
+def test_vault_health_requires_status_for_content_notes(vault):
+    import json
+    (vault / "02 - Projects" / "Bez statusu.md").write_text(
+        "---\ntype: project\n---\n# Projekt bez statusu\n", encoding="utf-8"
+    )
+    out = run(vault, "vault_health.py", "--path", str(vault), "--scope", "core", "--json")
+    report = json.loads(out)
+    warning = next(item for item in report["warnings"] if item["type"] == "missing_status")
+    assert "02 - Projects\\Bez statusu.md" in warning["items"]
 
 
 def test_search_skips_private_archive_and_puts_core_first(vault):
