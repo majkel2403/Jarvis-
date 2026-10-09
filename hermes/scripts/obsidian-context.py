@@ -369,15 +369,9 @@ def full_briefing() -> str:
 # ─── Progressive Context Loading (L0-L3) ──────────────────────────────────────
 
 def load_level_l0() -> str:
-    """L0 — Identity (~170 tokens). SOUL.md + CRITICAL_FACTS.md."""
-    lines = ["# L0 — Identity", ""]
-    
-    soul = read_file(vault_path("SOUL.md"))
-    if soul:
-        lines.append("## SOUL.md")
-        lines.append(extract_body(soul, max_lines=15))
-        lines.append("")
-    
+    """L0 — krytyczne fakty sejfu. Runtime SOUL i USER ładuje sam Hermes."""
+    lines = ["# L0 — Critical vault facts", ""]
+
     facts = read_file(vault_path("CRITICAL_FACTS.md"))
     if facts:
         lines.append("## CRITICAL_FACTS.md")

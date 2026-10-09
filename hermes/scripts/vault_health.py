@@ -21,6 +21,12 @@ TODAY = date.today()
 EXCLUDE_DIRS = {".obsidian", ".trash", "_trash", ".git", "__pycache__"}
 ARCHIVE_DIRS = {"06-AI-Sessions", "05 - Archive"}
 TEMPLATE_DIRS = {"Templates", "templates"}
+CONTROL_FILES = {
+    "_CLAUDE.md", "CRITICAL_FACTS.md", "Home.md", "hot.md",
+    "index.md", "log.md", "Second Brain.md", "SOUL.md",
+}
+HOT_MAX_CHARS = 3200
+STATUS_REQUIRED_TYPES = {"project", "entity", "concept", "decision", "synthesis"}
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 # `[[Nota\|alias]]` w tabelach (ukośnik chroni kolumnę) to poprawny link Obsidiana — ukośnika nie wliczamy do nazwy
 LINK_RE = re.compile(r"\[\[([^\]|#\\]+)(?:\\?[|#][^\]]*)?\]\]")
@@ -165,6 +171,16 @@ def find_duplicates(notes):
     return [{"title": title, "files": files} for title, files in grouped.items() if len(files) > 1]
 
 
+def find_control_plane_issues(vault):
+    """Sprawdza kontrakt korzenia oraz limit kontekstu wstrzykiwanego Jarvisowi."""
+    root_files = {path.name for path in vault.iterdir() if path.is_file()}
+    missing = sorted(CONTROL_FILES - root_files)
+    extra = sorted(root_files - CONTROL_FILES)
+    hot_path = vault / "hot.md"
+    hot_chars = len(hot_path.read_text(encoding="utf-8")) if hot_path.exists() else 0
+    return missing, extra, hot_chars
+
+
 def run_health_check(vault_path, scope="core"):
     vault = Path(vault_path)
     if not vault.exists():
@@ -176,6 +192,12 @@ def run_health_check(vault_path, scope="core"):
     broken = find_broken_links(selected, targets)
     stale = [x for x in find_stale_tasks(selected) if selected[x["note"]]["layer"] == "core"]
     missing_fm = [rel for rel, n in selected.items() if not n["frontmatter"] and n["layer"] != "template"]
+    missing_status = [
+        rel for rel, note in selected.items()
+        if note["layer"] == "core"
+        and note["frontmatter"].get("type") in STATUS_REQUIRED_TYPES
+        and not note["frontmatter"].get("status")
+    ]
     placeholders = []
     for rel, note in selected.items():
         if note["layer"] != "core":
@@ -184,6 +206,7 @@ def run_health_check(vault_path, scope="core"):
         if re.search(r"\{\{[^}]+\}\}|<%.*?%>", content, re.S):
             placeholders.append(rel)
     duplicates = find_duplicates(selected)
+    missing_control, extra_root_files, hot_chars = find_control_plane_issues(vault)
     archive_count = sum(1 for n in notes.values() if n["layer"] == "archive")
     template_count = sum(1 for n in notes.values() if n["layer"] == "template")
 
@@ -193,14 +216,22 @@ def run_health_check(vault_path, scope="core"):
     if broken:
         warnings.append({"type": "broken_links", "count": len(broken), "items": broken[:10], "message": f"{len(broken)} unresolved core links"})
     if orphans:
-        orphan_item = {"type": "orphans", "count": len(orphans), "items": orphans[:10], "message": f"{len(orphans)} archive notes without incoming links"}
+        orphan_item = {"type": "orphans", "count": len(orphans), "items": orphans[:10], "message": f"{len(orphans)} notes without incoming links in selected scope"}
         (info if scope == "archive" else warnings).append(orphan_item)
     if missing_fm:
         warnings.append({"type": "missing_frontmatter", "count": len(missing_fm), "items": missing_fm[:10], "message": f"{len(missing_fm)} core notes missing frontmatter"})
+    if missing_status:
+        warnings.append({"type": "missing_status", "count": len(missing_status), "items": missing_status[:10], "message": f"{len(missing_status)} core content notes missing status"})
     if placeholders:
         warnings.append({"type": "placeholders", "count": len(placeholders), "items": placeholders[:10], "message": f"{len(placeholders)} core notes contain template placeholders"})
     if duplicates:
         warnings.append({"type": "duplicates", "count": len(duplicates), "items": duplicates[:10], "message": f"{len(duplicates)} duplicate title groups"})
+    if scope in {"core", "all"} and missing_control:
+        critical.append({"type": "missing_control_files", "count": len(missing_control), "items": missing_control, "message": f"{len(missing_control)} required control files are missing"})
+    if scope in {"core", "all"} and extra_root_files:
+        warnings.append({"type": "extra_root_files", "count": len(extra_root_files), "items": extra_root_files[:10], "message": f"{len(extra_root_files)} non-canonical files in vault root"})
+    if scope in {"core", "all"} and hot_chars > HOT_MAX_CHARS:
+        warnings.append({"type": "hot_too_large", "count": 1, "items": [{"chars": hot_chars, "limit": HOT_MAX_CHARS}], "message": f"hot.md has {hot_chars} chars; plugin limit is about {HOT_MAX_CHARS}"})
     empty = find_empty_folders(vault)
     if empty:
         info.append({"type": "empty_folders", "count": len(empty), "items": empty[:10], "message": f"{len(empty)} empty folders"})

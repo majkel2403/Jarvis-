@@ -2,7 +2,7 @@
 """Poranny raport Jarvis OS na Telegram (cron Hermesa, --no-agent: bez modelu, bez kosztów).
 
 Źródło w repo: hermes/scripts/jarvis_daily.py — hermes/apply_profile.py kopiuje go do scripts/ profilu jarvis-desktop.
-Sprawdza: usługi (strona :4000, most :8651, Hermes :8643), kartę Jarvisa i bezpiecznik mostu, agentów, nieudane zadania
+Sprawdza: usługi (strona :4000, most :8651, Hermes :8642), kartę Jarvisa i bezpiecznik mostu, agentów, nieudane zadania
 z ostatniej doby (~/.jarvis-os/logs/tasks.jsonl) i długość bieżącej rozmowy na Telegramie (state.db, tylko odczyt).
 Wypisuje krótki raport po polsku (zawsze — to raport, nie alarm). Ręcznie: python jarvis_daily.py
 """
@@ -81,7 +81,7 @@ def telegram_session() -> tuple[int, str] | None:
 
 def main() -> int:
     lines = ["☀️ Jarvis OS — raport poranny " + time.strftime("%d.%m.%Y")]
-    svc = {"strona :4000": port_up(4000), "most :8651": port_up(8651), "Hermes :8643": port_up(8643)}
+    svc = {"strona :4000": port_up(4000), "most :8651": port_up(8651), "Hermes :8642": port_up(8642)}
     down = [k for k, v in svc.items() if not v]
     lines.append("✅ Usługi działają." if not down else "❌ Nie działa: " + ", ".join(down) + " — napraw: powershell -File bridge\\redeploy.ps1 (albo integrations\\doctor.ps1).")
 

@@ -1,7 +1,7 @@
 ---
 name: obsidian
 description: Sejf Obsidian Michała (drugi mózg, wspólny z Claude Code) — jak czytać, szukać i zapisywać notatki; dokładne szablony wpisów i pipeline po sesji. Polityka (co zapisywać, zakazy, słowniki) jest w `_CLAUDE.md` w sejfie.
-version: 1.2.0
+version: 1.3.0
 author: Jarvis OS (repo Desktop\jarvis-\hermes\skills\note-taking\obsidian — kopia w profilu jest nadpisywana przez apply_profile.py)
 license: MIT
 platforms: [windows]
@@ -24,7 +24,7 @@ Wtyczka `obsidian-brain` dokleja do pierwszej wiadomości rozmowy skrót `CRITIC
 | Warstwa | Pliki | Kiedy |
 |---|---|---|
 | L0–L1 (automatycznie) | `CRITICAL_FACTS.md`, `hot.md`, koniec `log.md`, lista ForAI | zawsze |
-| L2 (na żądanie) | `Home.md` (pulpit + „Do decyzji Michała”), `index.md` (katalog), `01 - Daily/<dziś>.md`, `01 - Daily/AI Context/AI-Context-<dziś>.md`, `02 - Projects/<Nazwa>.md`, `SOUL.md` (preferencje) | pytanie o projekt, stan, plan dnia |
+| L2 (na żądanie) | `Home.md` (pulpit + „Do decyzji Michała”), `index.md` (katalog), `01 - Daily/<dziś>.md`, `01 - Daily/AI Context/AI-Context-<dziś>.md`, `02 - Projects/<Nazwa>.md`, sejfowy `SOUL.md` (rozszerzony profil Michała) | pytanie o projekt, stan, plan dnia lub głębszy kontekst o użytkowniku |
 | L3 (tylko gdy pytanie tego wymaga) | `wiki/entities|concepts|decisions|synthesis`, `04 - Resources`, archiwum `06-AI-Sessions/Perplexity/<Kategoria>/` (start: `Perplexity Archive.md` → spis kategorii → `wiki/synthesis/perplexity-*`) | historia, research, decyzje |
 
 Odczyt skryptem (tylko odczyt, z pełną ścieżką): `python C:\Users\majke\.hermes\scripts\obsidian-context.py l2 | project "<nazwa>" | search "<wzorzec>" | forai`.
@@ -42,6 +42,8 @@ wiki/            entities/ · concepts/ · decisions/ADR-NNN-*.md · synthesis/ 
 Templates/       szablony (type: template)      .trash/  miękkie usuwanie (niewidoczne w Obsidianie)
 ```
 
+**Dwa różne pliki `SOUL.md`:** `profiles/jarvis-desktop/SOUL.md` jest runtime tożsamością Jarvisa i Hermes ładuje go automatycznie w całości. `Documents/hermes/SOUL.md` jest historycznie nazwanym, rozszerzonym profilem Michała w sejfie; nie jest automatycznie dokładany przez wtyczkę i nie zastępuje `USER.md`.
+
 Gdzie trafia nowa notatka: projekt → `02 - Projects/`, obszar → `03 - Areas/`, narzędzie/agent/firma → `wiki/entities/`, wzorzec → `wiki/concepts/`, decyzja → `wiki/decisions/` (numer = ostatni + 1), audyt/raport → `wiki/synthesis/`, procedura → `04 - Resources/`, niepewne → `00 - Inbox/`. Po utworzeniu dopisz ją do huba folderu.
 
 ## 3. Narzędzia — jak czytać i pisać
@@ -55,15 +57,23 @@ Gdzie trafia nowa notatka: projekt → `02 - Projects/`, obszar → `03 - Areas/
 
 ## 4. Szablony wpisów (kopiuj dokładnie)
 
-**Wiersz `log.md`** (na końcu tabeli; TYP z listy w `_CLAUDE.md` §6; status ✅ / ⚠️ / ❌):
+**Wiersz `log.md`** (na końcu tabeli; status ✅ / ⚠️ / ❌; TYP wyłącznie ze słownika w `_CLAUDE.md` §6 — jedyne źródło):
 ```
 | RRRR-MM-DD GG:MM | TYP | [Jarvis] Tytuł — co zrobione, efekt, gdzie szczegóły ([[Notatka]]) — ✅ |
 ```
 
-**Punkt w `hot.md`** (sekcja `## 🕐 Ostatnia aktualizacja`, **na górze** sekcji; 1–2 zdania; plik ma zostać krótki — wtyczka ucina go po ~3200 znakach, więc stare punkty zwijaj lub usuwaj):
+**Idempotentny klucz** (sprawdź `search_files`/`grep` na `log.md` PRZED `patch`):
+```
+RRRR-MM-DD GG:MM|TYP|[Autor]
+```
+Jeśli istnieje — nie dopisuj, tylko `update` istniejącego (asercja §6).
+```
+
+**Punkt w `hot.md`** (sekcja `## 🕐 Ostatnia aktualizacja`, **na górze** sekcji; 1–2 zdania): punkt pisz zwięźle (~250 znaków), a przy dopisywaniu od razu usuń 1–2 najstarsze punkty — limit wtyczki to ~3200 **bajtów**, nie znaków (polskie znaki zajmują 2 bajty, więc 3100 znaków = 3277 bajtów), a sprawdzasz go po zapisie przez `len(path.read_bytes())`. Punkt dopisany na końcu pliku zostanie ucięty i nikt go nie przeczyta.
 ```
 **RRRR-MM-DD — [Jarvis] Tytuł:** co się zmieniło i gdzie szukać szczegółów ([[Notatka]]).
 ```
+Gdy odświeżasz blok stanu „potwierdzony na żywo", podbij **oba** znaczniki daty: `date:` we frontmatterze i datę w nagłówku sekcji (`## 🟢 Stan potwierdzony na żywo RRRR-MM-DD`). Sam nowy punkt zostawia nagłówek ze starą datą i plik twierdzi, że stan jest nieświeży — to pierwsza rzecz, którą widać po wczytaniu `hot.md`.
 
 **Wiersz w dzienniku** `01 - Daily/RRRR-MM-DD.md`, tabela w `## 3. 💼 Sesje AI tego dnia` (kolejny numer, przed pustą linią kończącą tabelę; ustalenia → punkt w `## 5. 💡 Notatki i obserwacje`):
 ```
@@ -124,31 +134,46 @@ source: hermes
 ```
 Przy edycji istniejącej notatki dopisz do frontmattera `updated: RRRR-MM-DD`. Wikilinki tylko do notatek, które istnieją (sprawdź `search_files`).
 
-## 5. Pipeline po istotnej sesji (checklista — wykonaj w tej kolejności)
+## 5. Pipeline po sesji — wybierz tryb
 
-Czy sesja jest „istotna” i co wolno zapisać — rozstrzyga `_CLAUDE.md` §6. Jeśli tak:
+Co jest „istotną sesją", co wolno i co zakazane — rozstrzyga `_CLAUDE.md` §6 (polityka; tu tylko tryby wykonania).
 
-1. `read_file` → `_CLAUDE.md` (jeśli jeszcze nie w tej rozmowie).
+**Krótka sesja** (pytanie, rozmowa, drobny odczyt, brak zmiany stanu): tylko `log.md` + `hot.md` (gdy zmienia bieżący stan). Bez nowych notatek, bez pamięci, bez dziennika.
+
+**Pełna sesja** (nowa notatka / decyzja / wdrożenie / naprawa / zmiana w repo / odkrycie) — 7 kroków:
+
+1. `read_file` → `_CLAUDE.md` (jeśli jeszcze nie w tej rozmowie; po jednorazowym odczycie nie wracaj do niego z powodu drobnych wpisów).
 2. Data i godzina **z zegara** (`<environment>`, `get_datetime` albo terminal `Get-Date -Format "yyyy-MM-dd HH:mm"`).
-3. Dziennik: wiersz sesji (sekcja 4) — plik na dziś istnieje? jeśli nie, utwórz skrócony.
-4. `log.md`: wiersz na końcu (sekcja 4).
-5. `hot.md`: punkt na górze „Ostatnia aktualizacja” — tylko gdy sesja zmienia bieżący stan.
-6. Notatka projektu/encji/decyzji — gdy sesja jej dotyczyła (`updated:`); nowa notatka → hub folderu.
-7. Pamięć Hermesa (`memory_remember`) — tylko trwałe fakty; skill — tylko nowa procedura (zmiana w repo, nie w kopii).
+3. Sprawdź idempotentny klucz (`§4`) w `log.md` — jeśli istnieje, nie dopisuj.
+4. Dziennik: wiersz sesji (`§4`) — plik na dziś istnieje? jeśli nie, utwórz skrócony.
+5. `log.md`: wiersz na końcu (`§4`).
+6. `hot.md`: punkt na górze „Ostatnia aktualizacja" — tylko gdy sesja zmienia bieżący stan.
+7. Notatka projektu/encji/decyzji — gdy sesja jej dotyczyła (`updated:`); nowa notatka → hub folderu. Pamięć Hermesa (`memory_remember`) — tylko trwałe fakty; skill — tylko nowa procedura (zmiana w repo, nie w kopii).
+
+**Bez trybu agent będzie pomijał kroki po cichu — wybór trybu jest obowiązkowy na początku.**
 
 ## 6. Asercje przed „gotowe” (sprawdź sam, zanim zgłosisz zapis)
 
 - Wiersz logu ma dokładnie 3 pola: `| RRRR-MM-DD GG:MM | TYP | [Jarvis] opis — status |`, stoi **na końcu** pliku, data z zegara.
-- `TYP` ∈ słownik z `_CLAUDE.md` §6 (nie wymyślaj nowych; gdy brak — `SESSION`).
+- `TYP` ∈ słownik z `_CLAUDE.md` §6. **Jeśli TYP nie istnieje w słowniku — ZATRZYMAJ SIĘ i zgłoś to, nie wymyślaj nowego.** (Fail-loud: łapie dryf, nie cichy fallback.)
 - Autor `[Jarvis]`; zero sekretów (klucze, tokeny, hasła, nawet fragmenty) — także gdy użytkownik prosi o ich zapisanie: odmów i wskaż `.env`.
 - Nic nowego w korzeniu sejfu, żadnych nowych folderów głównych; nazwa dziennika `RRRR-MM-DD.md`, kontekstu `AI-Context-RRRR-MM-DD.md`.
 - Każdy `[[link]]` wskazuje istniejącą notatkę; `hot.md` nie urósł ponad ~800 słów.
 - Zgłaszając wynik, podaj ścieżkę pliku i wklejony wiersz (dowód), nie „zapisałem”.
 
-## 7. Pułapki
+## 7. Pułapki (mechaniczne)
 
-- `~/.hermes/.env` jest chroniony — nie zapisuj tam przez `patch`/`write_file`; sekrety nigdy do sejfu.
-- Cron 7:30 nadpisuje `AI-Context-<dziś>.md`; `index.md` liczby generuje `vault_stats.py` (co 6 h) — nie wpisuj ich ręcznie.
-- Obsidian bywa otwarty u Michała — notatka otwarta w edytorze potrafi wrócić po przeniesieniu; sprawdź po chwili.
-- Limit pamięci Hermesa `MEMORY.md` 4400 znaków — konsoliduj, zanim dopiszesz.
-- Nie rozszerzaj tego skilla kopiując zasady z `_CLAUDE.md` — to on jest źródłem polityki; tu tylko mechanika.
+- **Nigdy nie kopiuj plikow do sejfu przez `cp`/`copy`.** Nadpiszesz istniejaca notatke (zdarzylo sie 2026-10-09: `cp AUTO/GOALS.md` na `02 - Projects/Jarvis Autonomous Intelligence Architecture.md`) — sejf nie jest repo git i nie ma historii wersji, wiec nie ma z czego przywrocic. Do sejfu pisz wylacznie `patch`/`write_file`/`obsidian-capture.py`, a plik docelowy najpierw przeczytaj.
+- **`~/.hermes/.env`** — nie otwieraj `patch`/`write_file`; sekrety nigdy do sejfu.
+- **Cron 7:30** nadpisuje `AI-Context-<dziś>.md`; `index.md` liczby generuje `vault_stats.py` (co 6 h) — nie wpisuj ich ręcznie.
+- **Obsidian bywa otwarty u Michała** — notatka otwarta w edytorze potrafi wrócić po przeniesieniu; sprawdź po chwili.
+- **`hot.md` miesza końce linii:** frontmatter jest w CRLF, treść w LF — nie zakotwicz zapisu na dosłownym `\r\n\r\n` (asercja padnie i stracisz turę), użyj `re.search(r"## 🕐 Ostatnia aktualizacja\r?\n\r?\n", tekst)` albo wykryj dominujący koniec linii i jego powielaj. `log.md` jest CRLF — nowy wiersz dopisuj z `\r\n`.
+- **Czytaj pliki sejfu z `newline=""`.** `Path.read_text()` bez tego parametru tłumaczy CRLF na LF, więc licznik bajtów i kontrola końców linii kłamia, a zapis robi plik o mieszanych końcach. Wzór: `p.open("r", encoding="utf-8", newline="").read()`, potem normalizacja `replace("
+", "
+")` i zapis `p.open("w", encoding="utf-8", newline="").write(t.replace("
+", "
+"))`. Limit `hot.md` sprawdzaj jako `len(p.open("rb").read()) <= 3100`.
+- **Nie przycinaj `hot.md` pętlą po regexie punktów.** Regex z lookaheadem potrafi dopasować jeden wielki blok i skasować kilka starych punktów naraz; zamiast tego zbuduj całą sekcję `## 🕐 Ostatnia aktualizacja` od nowa (4–5 punktów, starsze zwinięte do jednej linii) i podmien ją w miejscu.
+- **Narzędzia konsumujące sejf** (graf, wizualizacja, indeks): buduj je poza sejfem i czytaj sejf tylko w trybie odczytu — przepis w `references/wizualizacja-sejfu.md`. Gotowa sonda headless do weryfikacji zrzutami (dowolna lokalna strona, nie tylko graf): `scripts/probe-headless.cjs` + `scripts/sprawdz-zrzuty.py`.
+
+Zasady, anty-fabrykacja, lista TYP-ów, definicja „istotnej sesji", polityka źródła skryptów — w `_CLAUDE.md` (jedyne źródło). Nie powielaj tu.

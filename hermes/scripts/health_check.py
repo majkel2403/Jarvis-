@@ -2,11 +2,12 @@
 import json, os, socket, sys
 from pathlib import Path
 
-home = Path.home() / ".hermes" / "profiles" / "jarvis-desktop"
+root = Path.home() / ".hermes"
+home = root / "profiles" / "jarvis-desktop"
 problems = []
 
 try:
-    st = json.loads((home / "gateway_state.json").read_text(encoding="utf-8"))
+    st = json.loads((root / "gateway_state.json").read_text(encoding="utf-8"))
     pid = st.get("pid")
     alive = False
     if pid:
@@ -19,13 +20,15 @@ try:
             alive = str(pid) in out
     if st.get("gateway_state") != "running" or not alive:
         problems.append(f"gateway nie dziala (state={st.get('gateway_state')}, pid={pid}, zywy={alive})")
-    for name, p in (st.get("platforms") or {}).items():
-        if p.get("state") != "connected":
-            problems.append(f"platforma {name}: {p.get('state')} {p.get('error_message') or ''}".strip())
+    tg = (st.get("platforms") or {}).get("jarvis-desktop:telegram") or {}
+    if tg.get("state") != "connected":
+        problems.append(f"platforma jarvis-desktop:telegram: {tg.get('state')} {tg.get('error_message') or ''}".strip())
+    if "jarvis-desktop" not in set(st.get("served_profiles") or []):
+        problems.append("host gateway nie serwuje profilu jarvis-desktop")
 except Exception as e:
     problems.append(f"nie moge odczytac gateway_state.json: {e}")
 
-for port, label in ((8643, "api_server"), (8651, "most Jarvis")):
+for port, label in ((8642, "host gateway"), (8651, "most Jarvis")):
     s = socket.socket(); s.settimeout(3)
     try:
         s.connect(("127.0.0.1", port))

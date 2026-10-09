@@ -1,4 +1,4 @@
-"""Strażnik konfiguracji Hermesa (profil jarvis-desktop) — ustalenia z 2026-10-03.
+"""Strażnik konfiguracji Hermesa (profil jarvis-desktop) — ustalenia z 2026-10-03, model z 2026-10-08.
 
 Uruchamiany przez cron Hermesa (no-agent): pusty stdout = wszystko zgodne, inaczej lista odstępstw
 (trafia na Telegram). Za każdym uruchomieniem robi też kopię kluczowych plików do
@@ -6,6 +6,11 @@ Uruchamiany przez cron Hermesa (no-agent): pusty stdout = wszystko zgodne, inacz
 
 Ręcznie:  python config_guard.py --verbose   (wypisuje też to, co jest OK)
 Gdy zmiana jest zamierzona — zaktualizuj regułę tutaj (i opis w WHERE-IS-THE-CONFIG.md).
+2026-10-09: delegowanie kodu przez Hermesa (subagenci `delegate_task` na planie MiniMax) — Claude Code wychodzi z obiegu;
+kontrola pilnuje, że `claude-delegate` nie wraca do skills.auto_load, a `delegation.model` zostaje na MiniMax.
+2026-10-08: model główny MiniMax-M3 → deepseek-flash, vision MiniMax-M3 → deepseek-flash
+(benchmark 5 zadań: remis jakości, DeepSeek 2,3× szybszy i 2,5× tańszy; MiniMax zostaje 1. fallbackiem).
+2026-10-08: doszła kontrola salda DeepSeek (/user/balance) — alert, gdy spadnie poniżej DEEPSEEK_MIN_USD.
 """
 import json
 import os
@@ -25,6 +30,7 @@ REPO_SOUL = HOME / "Desktop" / "jarvis-" / "hermes" / "SOUL.md"
 SNAP_DIR = ROOT / "backups" / "config-snapshots"
 WORKSPACE = HOME / "JarvisWorkspace"   # terminal.cwd profilu: tu leży HERMES.md (własne .git — izolacja od C:\.git)
 KEEP_SNAPSHOTS = 14
+DEEPSEEK_MIN_USD = 1.0          # próg alertu salda DeepSeek (model główny) — poniżej = doładuj konto
 VERBOSE = "--verbose" in sys.argv
 
 problems: list[str] = []
@@ -58,8 +64,8 @@ except Exception as e:  # noqa: BLE001
 
 if cfg:
     model = cfg.get("model") or {}
-    check(model.get("default") == "MiniMax-M3" and model.get("provider") == "minimax",
-          "model MiniMax-M3 / minimax", f"model główny zmieniony: {model.get('default')} / {model.get('provider')}")
+    check(model.get("default") == "deepseek-flash" and model.get("provider") == "deepseek",
+          "model deepseek-flash / deepseek", f"model główny zmieniony: {model.get('default')} / {model.get('provider')}")
 
     fb = json.dumps(cfg.get("fallback_providers") or [], ensure_ascii=False).lower()
     paid = [p for p in ("zai", "openai-api", "xai", "nous", "anthropic") if f'"provider": "{p}"' in fb]
@@ -105,9 +111,10 @@ if cfg:
         for part in path.split("."):
             node = node.get(part) if isinstance(node, dict) else None
         return node
-    TARGET = {"compression.threshold_tokens": 120000, "session_reset.idle_minutes": 120, "memory.nudge_interval": 0,
-              "kanban.dispatch_in_gateway": False, "delegation.max_concurrent_children": 3,
-              "auxiliary.vision.provider": "minimax", "tools.tool_search.enabled": "off"}
+    TARGET = {"compression.threshold_tokens": 120000, "sessions.retention_days": 30, "hooks_auto_accept": True,
+              "memory.nudge_interval": 0, "kanban.dispatch_in_gateway": False, "delegation.max_concurrent_children": 3,
+              "auxiliary.vision.provider": "deepseek", "auxiliary.vision.model": "deepseek-flash",
+              "tools.tool_search.enabled": "off"}
     for path, want in TARGET.items():
         check(at(path) == want, f"{path}={want}", f"{path}={at(path)!r} (docelowo {want!r} — hermes/apply_profile.py TARGET)")
     check(str(at("terminal.cwd")) == str(WORKSPACE), "terminal.cwd = JarvisWorkspace", f"terminal.cwd={at('terminal.cwd')!r} (docelowo {WORKSPACE})")
@@ -122,6 +129,9 @@ if cfg:
 penv = env_keys(PROFILE / ".env")
 check(bool(penv.get("TELEGRAM_BOT_TOKEN")), "token Telegrama w jarvis-desktop", "BRAK TELEGRAM_BOT_TOKEN w profiles/jarvis-desktop/.env")
 check(bool(penv.get("TELEGRAM_ALLOWED_USERS")), "Telegram: lista dozwolonych ID", "BRAK TELEGRAM_ALLOWED_USERS — bot przyjąłby każdego")
+# ustalenie 2026-10-08: główny = deepseek-flash, pierwszy fallback = MiniMax-M2.5 → bez tych kluczy routing spada na darmowe OpenRouter
+check(bool(penv.get("DEEPSEEK_API_KEY")), "klucz DeepSeek w .env", "BRAK DEEPSEEK_API_KEY w .env — model główny padnie (routing zejdzie na fallbacki)")
+check(bool(penv.get("MINIMAX_API_KEY")), "klucz MiniMax w .env", "BRAK MINIMAX_API_KEY w .env — pierwszy fallback padnie")
 for flag in ("TELEGRAM_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS"):
     check(flag not in penv, f"brak {flag}", f"{flag} w .env — ta flaga wygrywa z listą ID: bot z terminalem otwarty dla każdego")
 for other in [ROOT / ".env", *[(p / ".env") for p in (ROOT / "profiles").iterdir() if p.is_dir() and p.name != "jarvis-desktop"]]:
@@ -247,8 +257,14 @@ check(not missing_auto, f"skills.auto_load: {len(auto_load)} przypiętych, wszys
       f"skills.auto_load wskazuje brakujące skille: {missing_auto} (przywróć z ~/.hermes/skills-archive albo usuń z listy)")
 banned = sorted(k for k in names if re.search(r"(^|-)(wsl|codex|opencode|godmode)(-|$)|^(kanban|operator)-|^apple-|^macos-|^imessage$|^findmy$", k))
 check(not banned, "brak skilli sprzecznych z zasadami (WSL, Codex/OpenCode, kanban, operator, macOS)", f"skille sprzeczne z zasadami: {banned}")
+# Ustalenie Michała 2026-10-09: delegujemy przez Hermesa (subagenci na modelu z sekcji `delegation:`), NIE przez Claude Code.
 deleg = sorted(k for k in names if k.endswith("-delegate"))
-check(deleg == ["claude-delegate"], "delegowanie tylko claude-delegate", f"skille delegowania inne niż Claude: {deleg}")
+check("claude-delegate" not in auto_load, "delegacja przez Hermesa: claude-delegate poza auto_load",
+      "claude-delegate jest w skills.auto_load — od 2026-10-09 delegujemy przez Hermesa (delegate_task), nie Claude Code")
+_d_model = str(((cfg.get("delegation") or {}).get("model") or ""))
+_d_prov = str(((cfg.get("delegation") or {}).get("provider") or ""))
+check(_d_model.lower().startswith("minimax"), f"delegacja na planie Hermesa ({_d_prov}/{_d_model or 'brak'})",
+      f"delegation.model={_d_model!r} provider={_d_prov!r} — subagenci Hermesa chodzą na planie MiniMax (0 USD na płatne API)")
 
 # ---------------------------------------------------------------- środowisko
 check(shutil.which("rtk") is not None, "rtk w PATH", "rtk.exe nie jest w PATH — plugin rtk-rewrite sam się wyłączy")
@@ -256,15 +272,26 @@ for marker in ("AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".hermes.md", "HE
     check(not (Path("C:/") / marker).exists(), f"C:\\{marker} brak", f"C:\\{marker} istnieje — przy repo git w C:\\ trafi do kontekstu KAŻDEJ sesji")
 
 try:
-    st = json.loads((PROFILE / "gateway_state.json").read_text(encoding="utf-8"))
-    tg = ((st.get("platforms") or {}).get("telegram") or {}).get("state")
-    check(st.get("gateway_state") == "running" and tg == "connected", "gateway + Telegram działają",
-          f"gateway={st.get('gateway_state')} telegram={tg}")
+    st = json.loads((ROOT / "gateway_state.json").read_text(encoding="utf-8"))
+    tg = ((st.get("platforms") or {}).get("jarvis-desktop:telegram") or {}).get("state")
+    served = set(st.get("served_profiles") or [])
+    check(st.get("gateway_state") == "running" and tg == "connected" and "jarvis-desktop" in served,
+          "host gateway :8642 + Telegram jarvis-desktop działają",
+          f"gateway={st.get('gateway_state')} telegram={tg} served={sorted(served)}")
+    check("jarvis2" not in served, "jarvis2 poza live multiplexem",
+          "jarvis2 nadal jest w served_profiles host gatewaya")
 except Exception as e:  # noqa: BLE001
-    problems.append(f"gateway_state.json: {e}")
+    problems.append(f"root gateway_state.json: {e}")
+
+try:
+    import socket
+    with socket.create_connection(("127.0.0.1", 8642), timeout=3):
+        oks.append("host gateway słucha na 8642")
+except OSError as e:
+    problems.append(f"host gateway :8642 nie odpowiada: {e}")
 
 if os.name == "nt":
-    for task, need_timer in (("JarvisOS-DesktopGateway", True), ("JarvisOS-Bridge", True), ("JarvisOS-Site", True), ("JarvisOS-GatewayRestart", False)):
+    for task, need_timer in (("JarvisOS-Bridge", True), ("JarvisOS-Site", True), ("JarvisOS-GatewayRestart", False)):
         try:
             xml = subprocess.run(["schtasks", "/Query", "/TN", task, "/XML"], capture_output=True, text=True,
                                  errors="replace", timeout=20).stdout or ""
@@ -275,6 +302,10 @@ if os.name == "nt":
         elif need_timer:
             check("<TimeTrigger>" in xml and "PT5M" in xml, f"{task}: watchdog co 5 min",
                   f"{task}: brak wyzwalacza czasowego co 5 min (watchdog)")
+    _old = subprocess.run(["schtasks", "/Query", "/TN", "JarvisOS-DesktopGateway"], capture_output=True, text=True,
+                          errors="replace", timeout=20)
+    check(_old.returncode != 0, "brak starego JarvisOS-DesktopGateway",
+          "JarvisOS-DesktopGateway nadal istnieje — stary standalone watchdog :8643")
 
 try:
     tok = (HOME / ".jarvis-os" / "bridge-token").read_text(encoding="utf-8").strip()
@@ -285,6 +316,37 @@ try:
     check(clients <= 10, f"most: {clients} klient(ów)", f"most zgłasza {clients} klientów — możliwy wyciek połączeń (zombie)")
 except Exception as e:  # noqa: BLE001
     problems.append(f"most :8651 nie odpowiada: {e}")
+
+# ---------------------------------------------------------------- salda dostawców
+# ustalenie 2026-10-08: model główny to deepseek-flash — bez salda padnie i cały ruch zejdzie na fallbacki
+_bal, _cur, _err = None, "USD", "brak próby"
+if not penv.get("DEEPSEEK_API_KEY"):
+    problems.append("saldo DeepSeek: brak DEEPSEEK_API_KEY w .env")
+else:
+    for _ in range(3):
+        try:
+            import urllib.request
+            _req = urllib.request.Request("https://api.deepseek.com/user/balance",
+                                          headers={"Authorization": f"Bearer {penv['DEEPSEEK_API_KEY']}",
+                                                   "Accept": "application/json"})
+            with urllib.request.urlopen(_req, timeout=20) as _r:
+                _infos = (json.loads(_r.read().decode("utf-8")) or {}).get("balance_infos") or []
+            _row = next((i for i in _infos if str(i.get("currency", "")).upper() == "USD"), None) \
+                or (_infos[0] if _infos else None)
+            if _row is None:
+                raise ValueError("odpowiedź bez balance_infos")
+            _bal = float(_row.get("total_balance"))
+            _cur = str(_row.get("currency") or "USD").upper()
+            break
+        except Exception as e:  # noqa: BLE001
+            _err = f"{type(e).__name__}: {e}"
+            time.sleep(3)
+    if _bal is None:
+        problems.append(f"saldo DeepSeek: nie sprawdziłem ({_err}) — sprawdź ręcznie api.deepseek.com/user/balance")
+    elif _bal < DEEPSEEK_MIN_USD:
+        problems.append(f"saldo DeepSeek {_bal:.2f} {_cur} < {DEEPSEEK_MIN_USD:.2f} — model główny padnie, doładuj konto")
+    else:
+        oks.append(f"saldo DeepSeek {_bal:.2f} {_cur} (≥ {DEEPSEEK_MIN_USD:.2f})")
 
 # ---------------------------------------------------------------- kopia zapasowa
 try:

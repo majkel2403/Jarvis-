@@ -1,6 +1,6 @@
 """obsidian-brain — sejf Obsidian Michała w kontekście Jarvisa od pierwszej wiadomości rozmowy.
 
-Wcześniej Hermes miał tylko prośbę w skillu „obsidian” (czytaj na start SOUL/CRITICAL_FACTS/hot/log) — model
+Wcześniej Hermes miał tylko prośbę w skillu „obsidian” (czytaj na start pliki sterujące sejfu) — model
 często tego nie robił. Hak `pre_llm_call` w pierwszej turze sesji dokleja do wiadomości użytkownika skrót
 plików sterujących sejfu (+ lista notatek czekających w 00 - Inbox/ForAI), więc kontekst jest zawsze, bez wywołań narzędzi. Hermes zapisuje tę wstawkę przy
 wiadomości (sidecar), więc zostaje w kolejnych turach tej samej rozmowy.
@@ -28,14 +28,15 @@ LOG_LINES = 8
 LOG_LINE_MAX = 200
 FORAI_MAX = 10
 # Sekcje pomijane (fragment tytułu, małe litery): preambuła = opis pliku; „co wiemy o michale” powtarza
-# CRITICAL_FACTS/SOUL; nawigacja to same wikilinki.
+# CRITICAL_FACTS/USER; nawigacja to same wikilinki.
 SKIP_SECTIONS = ("dla przyszłego jarvisa", "for future jarvis", "co wiemy o michale", "quick nav")
 
 MARKER = "[Drugi mózg — sejf Obsidian Michała"
 HEADER = MARKER + """, wczytany automatycznie na start rozmowy]
 Sejf: {vault}  (wspólny z Claude Code; przed zapisem przeczytaj `_CLAUDE.md` (polityka) i użyj skilla `obsidian` (mechanika)).
 - Poniższe to migawka plików sterujących — porty, modele, stany usług weryfikuj na żywo, zanim na nich oprzesz decyzję.
-- Więcej kontekstu na żądanie: `SOUL.md` (preferencje), `index.md` (katalog), `01 - Daily/{today}.md`, `02 - Projects/`, `wiki/`.
+- Runtime `SOUL.md` Jarvisa jest już ładowany w całości przez Hermesa. `SOUL.md` w tym sejfie to rozszerzony profil Michała — czytaj go tylko wtedy, gdy potrzebujesz głębszego kontekstu o użytkowniku.
+- Więcej kontekstu na żądanie: `index.md` (katalog), `01 - Daily/{today}.md`, `02 - Projects/`, `wiki/`.
 - Po istotnej pracy: wiersz na końcu `log.md` (`| RRRR-MM-DD GG:MM | TYP | [Jarvis] opis |`), punkt w `hot.md`, sesja w dzienniku dnia.
 - Wpisy oznaczone [Claude Code] pochodzą od drugiego agenta (projekty kodu: `wiki/entities/Claude Code.md`)."""
 
