@@ -16,7 +16,7 @@
 param(
   [string]$Name = 'jarvis-desktop',
   [string]$Source = '',
-  [int]$Port = 8643,
+  [int]$Port = 8642,
   [string]$BridgeUrl = 'http://127.0.0.1:8651',
   [string]$HermesHome = '',
   [switch]$DryRun
@@ -40,7 +40,7 @@ $token = (& $python $bridge --show-token).Trim()
 $pdir = Join-Path $home_ "profiles\$Name"
 Write-Host "Hermes home : $home_"
 Write-Host "Profil      : $Name (klon z: $Source)"
-Write-Host "API         : http://127.0.0.1:$Port/v1   Most: $BridgeUrl"
+Write-Host "API         : http://127.0.0.1:$Port/p/$Name/v1   Most: $BridgeUrl"
 
 if (-not (Test-Path $pdir)) {
   if ($DryRun) { Write-Host "[dry-run] hermes profile create $Name --clone-from $Source --no-alias" }
@@ -60,7 +60,7 @@ Write-Host @"
 
 Dalej (zwykle robi to autostart: bridge\install-autostart.ps1):
   1. Most:      bridge\start-bridge.bat            (token pobiera się automatycznie)
-  2. Gateway:   hermes\start-desktop-gateway.bat   (profil $Name, port $Port)
+  2. Gateway:   host Hermesa (default multiplexer, port $Port) â€” Jarvis nie uruchamia osobnego gatewaya
   3. Jarvis OS: łączy się z Hermesem sam przez most (klucz gatewaya zostaje w moście, nie w przeglądarce).
   Sprawdzenie: %USERPROFILE%\.hermes\hermes-agent\venv\Scripts\python.exe %USERPROFILE%\.hermes\profiles\$Name\scripts\config_guard.py --verbose
 "@

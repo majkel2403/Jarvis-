@@ -1,6 +1,6 @@
 """Konfiguruje profil Hermesa dla Jarvis OS: most MCP pulpitu + ograniczony kanał API pulpitu.
 
-Od 2026-10-03 jarvis-desktop to JEDYNY profil (Telegram z pełnym zestawem narzędzi + API pulpitu).
+jarvis-desktop to jedyny profil użytkowy Jarvis OS; techniczny profil default hostuje wspólny gateway multiplex.
 Skrypt NIE wyłącza narzędzi globalnie, NIE usuwa sekretów Telegrama i NIE nadpisuje reasoning_effort —
 ogranicza tylko kanał api_server (platform_toolsets.api_server).
 
@@ -43,13 +43,15 @@ WORKSPACE = Path.home() / "JarvisWorkspace"
 # Docelowa konfiguracja (audyt 2026-10-04, docs/adr/0002). Klucze kropkowane = ścieżka w config.yaml. Strażnik (scripts/config_guard.py) sprawdza to samo.
 TARGET = {
     "compression.threshold_tokens": 120000,      # streszczanie przy ~120 tys. tokenów (bez tego: ~500 tys. przy oknie 1 mln; fallback M2.5 ma 205 tys.)
-    "session_reset.idle_minutes": 120,           # świeża sesja po 2 h ciszy (długie wątki = wolniej i więcej pomyłek)
+    "sessions.retention_days": 30,              # jedna polityka retencji dla hosta i profilu Jarvisa
+    "hooks_auto_accept": True,                  # świadoma polityka profilu jarvis-desktop
+    "timezone": "Europe/Warsaw",
     "memory.nudge_interval": 0,                  # bez zapisów pamięci „w tle” (wpisywały rozkazy zamiast faktów)
     "kanban.dispatch_in_gateway": False,         # kanban nieużywany
     "kanban.auto_decompose": False,
     "delegation.max_concurrent_children": 3,     # limit tokenów MiniMax (429) — 10 równoległych dzieci to za dużo
-    "auxiliary.vision.provider": "minimax",      # „auto” mogło wybrać płatnego dostawcę
-    "auxiliary.vision.model": "MiniMax-M3",
+    "auxiliary.vision.provider": "deepseek",     # 2026-10-08: DeepSeek Flash czyta obraz w 1. wywołaniu; MiniMax-M3 bywał 529
+    "auxiliary.vision.model": "deepseek-flash",
     "tools.tool_search.enabled": "off",          # narzędzia pulpitu widoczne wprost: MiniMax psuje wywołania przez tool_search/tool_call
                                                  # (test na żywo 2026-10-04: „zamykam widgety” bez wywołania, złe argumenty przez tool_call)
     "approvals.unattended_mode": "deny",         # = domyślne wg dokumentacji Hermesa (security.md), zapisane wprost: sesje bez człowieka (api_server — karta Jarvisa,
@@ -85,7 +87,7 @@ def copy_repo_skills(pdir: Path, home: Path, here: Path = HERE) -> list[Path]:
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
 PLUGINS_DISABLED = ["browser/browser_use", "planning-with-files", "skill-retrieval", "superpowers", "ui-review-loop"]
-REMOVE_KEYS = ["moa", "agent.personalities", "plugins.hermes-memory-store"]
+REMOVE_KEYS = ["moa", "agent.personalities", "plugins.hermes-memory-store", "session_reset.mode", "session_reset.at_hour", "session_reset.idle_minutes"]
 # Bez stałej zgody na operacje niszczące — te zawsze ocenia tryb smart albo pyta użytkownika.
 # (Stałą zgodę „script execution via heredoc” użytkownik dał „zawsze” na Telegramie 2026-10-04 07:31 — jego decyzja, nie ruszamy.
 #  „script execution via -e/-c flag” NIE jest na liście: `powershell -c …` wymaga zgody i w sesjach bez człowieka jest odrzucane.)
@@ -274,7 +276,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--home", required=True, help="HERMES_HOME (katalog z profiles/)")
     ap.add_argument("--name", default="jarvis-desktop")
-    ap.add_argument("--port", type=int, default=8643)
+    ap.add_argument("--port", type=int, default=8642)
     ap.add_argument("--bridge-url", default="http://127.0.0.1:8651")
     ap.add_argument("--bridge-token", default=os.environ.get("JARVIS_BRIDGE_TOKEN", ""), help="token mostu (domyślnie ze zmiennej JARVIS_BRIDGE_TOKEN — argumentów procesu nie widać wtedy na liście procesów)")
     ap.add_argument("--dry-run", action="store_true")
@@ -322,7 +324,7 @@ def main() -> int:
     print(f"Profil: {pdir}")
     print(f"  mcp_servers -> jarvis_desktop ({a.bridge_url.rstrip('/')}/mcp)")
     print(f"  platform_toolsets.api_server -> {ENABLED}")
-    print(f"  API: http://127.0.0.1:{a.port}/v1  (model: {a.name})")
+    print(f"  API: http://127.0.0.1:{a.port}/p/{a.name}/v1  (model: {a.name}, host multiplex)")
     print(f"  .env: usunięto zbędne sekrety ({len(scrubbed)}): {', '.join(scrubbed) or '—'}")
     print(f"  konfiguracja docelowa: {', '.join(changes) or 'bez zmian'}")
     if a.dry_run:

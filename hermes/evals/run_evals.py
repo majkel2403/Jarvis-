@@ -1,4 +1,4 @@
-"""Evale zachowania Hermesa: prawdziwe polecenia do żywego gatewaya (api_server :8643), ocena odpowiedzi i narzędzi.
+"""Evale zachowania Hermesa: prawdziwe polecenia do żywego gatewaya (multiplex API :8642/p/jarvis-desktop), ocena odpowiedzi i narzędzi.
 
 Każdy przypadek dostaje osobną sesję (X-Hermes-Session-Id = eval-<id>-<czas>), więc nie miesza się z rozmowami
 użytkownika; liczba i nazwy narzędzi są odczytywane z bazy state.db (tylko odczyt). Przypadki są bez skutków ubocznych.
@@ -28,7 +28,7 @@ for _s in (sys.stdout, sys.stderr):
 
 HERE = Path(__file__).resolve().parent
 PROFILE = Path.home() / ".hermes" / "profiles" / "jarvis-desktop"
-URL = "http://127.0.0.1:8643/v1/chat/completions"
+URL = "http://127.0.0.1:8642/p/jarvis-desktop/v1/chat/completions"
 
 
 def api_key() -> str:

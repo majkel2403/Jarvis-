@@ -1,3 +1,4 @@
 @echo off
-rem Gateway profilu jarvis-desktop (API OpenAI-compatible na porcie 8643). Natywnie w Windows, bez WSL.
-"%USERPROFILE%\.hermes\bin\hermes.exe" -p jarvis-desktop gateway run %*
+rem Legacy helper: Hermes 0.21.5 uses one default-profile host multiplexer on :8642.
+set "HERMES_HOME=%USERPROFILE%\.hermes"
+"%USERPROFILE%\.hermes\bin\hermes.exe" -p default gateway status
