@@ -14,7 +14,7 @@ const mk = (extra = {}) => {
     const j = /\/workflows$/.test(url) ? { workflows: [DEF] } : /\/workflows\/run$/.test(url) ? { id: 'r1', name: DEF.name, autonomy: 'L3', steps: STEPS } : /\/answer$/.test(url) ? { ok: true } : /\/workflows\/runs$/.test(url) ? { runs: [] } : {};
     return { ok: true, status: 200, json: async () => j };
   };
-  const J = load({ dom: true, fetch, state: { settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b', hermesOn: false, sound: false, speech: false, ...extra } } });
+  const J = load({ dom: true, fetch, state: { _v: 5, settings: { bridgeOn: false, bridgeToken: 't', bridgeUrl: 'http://b', hermesOn: false, sound: false, speech: false, ...extra } } });
   const said = []; const add = J.chat.add; J.chat.add = (role, text, silent) => { const hd = add(role, text, silent); const rec = { role, text }; said.push(rec); const set = hd.set; hd.set = t => { rec.text = t; return set(t); }; return hd; };
   const ev = (type, x = {}) => J.workflows.onEvent({ v: 1, type, run_id: 'r1', workflow: DEF.id, name: DEF.name, ts: Date.now() / 1000, state: 'running', total: 2, ...x });
   return { J, calls, said, ev };
@@ -136,21 +136,36 @@ test('pisanie Hermesa na żywo (step.progress): stan kroku bez wpisu na osi czas
 });
 
 test('propozycja filmu w czacie: wg ustawienia, bez propozycji po zatrzymaniu', () => {
-  const { J, ev } = mk({ wfFilm: 'ask' }), asked = [];
+  const { J, ev } = mk({ filmOn: true, wfFilm: 'ask' }), asked = [];
   J.chat.quick = (q, o) => { asked.push(q); return { remove() { } }; };
   ev('run.started', { steps: STEPS, autonomy: 'L3' });
   assert.match(asked[0], /Oglądać „Od pomysłu do projektu” na żywo/);
   ev('run.completed', { state: 'done', report: 'gotowe' });
   assert.match(asked[1], /Film z przebiegu „Od pomysłu do projektu” jest gotowy\./);
-  const b = mk({ wfFilm: 'off' }), asked2 = []; b.J.chat.quick = q => { asked2.push(q); return null; };
+  const b = mk({ filmOn: true, wfFilm: 'off' }), asked2 = []; b.J.chat.quick = q => { asked2.push(q); return null; };
   b.ev('run.started', { steps: STEPS, autonomy: 'L3' }); b.ev('run.stopped', { state: 'stopped', reason: 'stop' });
   assert.equal(asked2.length, 0, '„nie proponuj” — cisza');
-  const c = mk(), asked3 = []; c.J.chat.quick = q => { asked3.push(q); return null; };
+  const c = mk({ filmOn: true }), asked3 = []; c.J.chat.quick = q => { asked3.push(q); return null; };
   c.ev('run.started', { steps: STEPS, autonomy: 'L3' }); c.ev('run.stopped', { state: 'stopped', reason: 'stop' });
   assert.equal(asked3.length, 1, 'po zatrzymaniu nie ma „filmu gotowego”');
   // „włącz sam”, a pulpit stoi na ekranie startowym: film by się schował pod zasłoną — tylko propozycja w czacie
-  const d = mk({ wfFilm: 'auto' }), asked4 = [], opened = []; d.J.chat.quick = q => { asked4.push(q); return null; };
+  const d = mk({ filmOn: true, wfFilm: 'auto' }), asked4 = [], opened = []; d.J.chat.quick = q => { asked4.push(q); return null; };
   d.J.bootEnter = () => { }; d.J.booted = false; d.J.workflows.cinema.open = id => opened.push(id);
   d.ev('run.started', { steps: STEPS, autonomy: 'L3' });
   assert.equal(opened.length, 0); assert.match(asked4[0] || '', /Oglądać „Od pomysłu do projektu” na żywo/);
+});
+
+test('domyślnie wszystko wyłączone: moduł filmów nie proponuje i nie rusza sam (ustawienie Michała)', () => {
+  const { J, ev } = mk(), asked = [];
+  assert.equal(J.DEFAULTS().settings.filmOn, false, 'filmOn domyślnie wyłączony');
+  assert.equal(J.DEFAULTS().settings.filmRecord, false, 'nagrywanie domyślnie wyłączone');
+  assert.equal(J.state.settings.filmOn, false);
+  assert.equal(J.workflows.cinema.mode('chat'), 'off'); assert.equal(J.workflows.cinema.mode('telegram'), 'off'); assert.equal(J.workflows.cinema.mode('cron'), 'off');
+  J.chat.quick = q => { asked.push(q); return null; };
+  ev('run.started', { steps: STEPS, autonomy: 'L3' });
+  ev('run.completed', { state: 'done', report: 'gotowe' });
+  assert.equal(asked.length, 0, 'żadnych propozycji filmu z włączonym domyślnie wyłącznikiem');
+  // ręczne polecenie działa mimo wyłącznika (tylko propozycje/auto są wyłączone)
+  const m = J.registry.match('pokaz film z zadania')[0];
+  assert.equal(m && m.id, 'task_film', 'ręczne „pokaż film” zostaje dostępne');
 });

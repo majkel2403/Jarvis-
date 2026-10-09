@@ -21,7 +21,7 @@ const JOKES = [
 
 /* =================== HERMES: konfiguracja i status =================== */
 J.HERMES_PRESETS = {
-  desktop: { label: 'Hermes Desktop (profil jarvis-desktop + most MCP) — zalecane', url: 'http://localhost:8643/v1', model: 'jarvis-desktop', format: 'hermes' },
+  desktop: { label: 'Hermes Desktop (profil jarvis-desktop + most MCP) — zalecane', url: 'http://localhost:8642/p/jarvis-desktop/v1', model: 'jarvis-desktop', format: 'hermes' },
   agent: { label: 'Hermes Agent (lokalny gateway)', url: 'http://localhost:8642/v1', model: 'hermes-agent', format: 'hermes' },
   portal: { label: 'Nous Portal (chmura)', url: 'https://inference-api.nousresearch.com/v1', model: 'Hermes-4-405B', format: 'hermes' },
   openrouter: { label: 'OpenRouter (chmura: Hermes 4)', url: 'https://openrouter.ai/api/v1', model: 'nousresearch/hermes-4-70b', format: 'openai' },

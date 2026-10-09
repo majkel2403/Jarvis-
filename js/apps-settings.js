@@ -36,8 +36,12 @@ J.apps.settings = {
         <label class="toggle"><div>Minimapa okien<small>mały podgląd pulpitu w rogu; klik = przejście do okna</small></div><span class="switch"><input type="checkbox" data-k="minimap"><i></i></span></label>
         <div class="row" style="font-size:11.5px"><span style="flex:1">Efekty<small class="dim" id="fxNow" style="display:block;font-size:10px"></small></span><select class="input" id="fxLvl" style="width:150px"><option value="off">bez animacji</option><option value="tool">oszczędne</option><option value="standard">standardowe</option><option value="cinema">kinowe</option></select></div>
         <div class="row" style="font-size:11.5px"><span style="flex:1">Głośność dźwięków<small class="dim" id="volV" style="margin-left:6px"></small><small class="dim" style="display:block;font-size:10px">wyciszone w ciszy nocnej i w trybie prezentacji (poza alarmem minutnika)</small></span><input type="range" id="sVol" min="0" max="100" step="5" style="width:170px"></div>
-      <div class="label">Film · moduł scenariuszy</div>
-      <label class="toggle"><div>Film włączony<small>wyłącznik modułu: bez propozycji i samoczynnego włączania (ręczne „pokaż film” zawsze działa)</small></div><span class="switch"><input type="checkbox" data-k="filmOn"><i></i></span></label>
+      <div class="label">Film · nagrywanie i produkcja video</div>
+      <label class="toggle"><div>Filmy (produkcja scenariuszy)<small>propozycje i samoczynne odtwarzanie w Telegramie, cronie i czacie; domyślnie WYŁĄCZONE — ręczne „pokaż film” działa zawsze</small></div><span class="switch"><input type="checkbox" data-k="filmOn"><i></i></span></label>
+      <label class="toggle"><div>Nagrywanie i produkcja video<small>przycisk ⏺ na pasku filmu (albo „nagraj film”) zapisuje film do pliku wideo w pobraniach; domyślnie WYŁĄCZONE</small></div><span class="switch"><input type="checkbox" data-k="filmRecord"><i></i></span></label>
+      <label class="toggle"><div>Dźwięk w nagraniu<small>nagrywa też dźwięk udostępnianej karty (jeśli przeglądarka na to pozwala)</small></div><span class="switch"><input type="checkbox" data-k="filmRecAudio"><i></i></span></label>
+      <div class="row" style="font-size:11.5px"><span style="flex:1">Jakość nagrania<small class="dim" style="display:block;font-size:10px">wysokość obrazu; plik .webm trafia do pobrań przeglądarki</small></span><select class="input" id="filmQ" style="width:150px"><option value="720p">720p</option><option value="1080p">1080p</option><option value="1440p">1440p</option></select></div>
+      <div class="dim" id="filmHint" style="font-size:10.5px;line-height:1.5"></div>
       <div id="filmScen"></div>
       <div class="row" style="font-size:11.5px"><span style="flex:1">Tryb startowy przestrzeni</span><select class="input" id="startMode" style="width:170px"><option value="work">praca (okna)</option><option value="clean">czysty pulpit</option><option value="focus">skupienie</option></select></div>
       <label class="toggle"><div>Tryb bez sieci<small>Żadnych wywołań internetu (Hermes, Jev, pogoda, kursy) — działa parser i dane lokalne</small></div><span class="switch"><input type="checkbox" data-k="offlineMode"><i></i></span></label>
@@ -149,6 +153,28 @@ J.apps.settings = {
     const us = $('#uiScale', body), usV = $('#usV', body); if (us) { us.value = s.uiScale || 100; usV.textContent = us.value + '%'; us.oninput = () => { usV.textContent = us.value + '%'; }; us.onchange = () => J.uiRun('ui_scale', { percent: +us.value }, { offer: false }); }
     const sm = $('#startMode', body); if (sm) { sm.value = s.startMode || 'work'; sm.onchange = () => { s.startMode = sm.value; J.save(); J.emit('settings'); }; }
     const fsb = $('#filmScen', body), FC = J.workflows?.cinema;
+    /* film: jakość nagrania + podpowiedź, gdzie się nagrywa; przełączniki filmOn/filmRecord obsługuje ogólny binder data-k */
+    { const fq = $('#filmQ', body); if (fq) { fq.value = s.filmRecQuality || '1080p'; fq.onchange = () => { s.filmRecQuality = fq.value; J.save(); J.emit('settings'); J.toast?.('Jakość nagrania: ' + fq.value); }; }
+      const hint = $('#filmHint', body), paintHint = () => {
+        if (!hint) return;
+        const can = J.filmRec ? (J.filmRec.supported() ? '' : ' Ta przeglądarka nie umie nagrywać (brak getDisplayMedia/MediaRecorder).') : '';
+        hint.textContent = !s.filmOn && !s.filmRecord
+          ? 'Wszystko wyłączone: żaden film nie włączy się sam ani nie zapisze się do pliku. Ręczne „pokaż film z zadania / dnia / workflow” działa.'
+          : (s.filmRecord ? 'Nagrywanie włączone: ⏺ na pasku filmu albo „nagraj film” zapisuje plik .webm do pobrań.' : 'Nagrywanie wyłączone: przycisk ⏺ jest ukryty, pliki nie powstają.')
+            + (s.filmOn ? ' Filmy mogą proponować się same w włączonych scenariuszach.' : ' Filmy nie proponują się same.') + can;
+      };
+      paintHint(); sub(ctx, 'filmHint', paintHint);
+      $$('input[data-k=filmOn],input[data-k=filmRecord],input[data-k=filmRecAudio]', body).forEach(i => {
+        const prev = i.onchange;
+        i.onchange = () => {
+          if (prev) prev();
+          paintHint();
+          const k = i.dataset.k;
+          if (k === 'filmRecord') J.toast?.(i.checked ? 'Nagrywanie video włączone (⏺ na pasku filmu)' : 'Nagrywanie video wyłączone');
+          if (k === 'filmOn') J.toast?.(i.checked ? 'Moduł filmów włączony' : 'Moduł filmów wyłączony');
+        };
+      });
+    }
     if (fsb && FC?.scenarios) {
       fsb.innerHTML = FC.scenarios().map(d => '<div class="row" style="font-size:11.5px"><span style="flex:1">' + esc(d.label) + '<small class="dim" style="display:block;font-size:10px">' + esc(FC.describe(d)) + '</small></span><select class="input" data-film="' + esc(d.id) + '" style="width:170px">' + d.modes.map(m => '<option value="' + m + '">' + FC.modeLabels[m] + '</option>').join('') + '</select></div>').join('');
       $$('select[data-film]', body).forEach(sel => { sel.value = FC.rawMode(sel.dataset.film); sel.onchange = () => { FC.setMode(sel.dataset.film, sel.value); J.sfx?.click?.(); }; });

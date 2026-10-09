@@ -25,11 +25,11 @@ const register = def => {
   SCEN.set(d.id, d); return d;
 };
 register({ id: 'workflow', label: 'Workflow', hint: 'Przebiegi z silnika workflow (np. „zrób projekt z pomysłu …”).', fallback: 'ask', order: 0 });
-register({ id: 'telegram', label: 'Zadania Hermesa', name: 'Zadanie od Hermesa', fallback: 'auto', order: 10, th: { steps: 3, ms: 8000 },
+register({ id: 'telegram', label: 'Zadania Hermesa', name: 'Zadanie od Hermesa', fallback: 'ask', order: 10, th: { steps: 3, ms: 8000 },
   hint: 'Praca Hermesa zlecona z Telegrama, konsoli i innych kanałów.', match: t => /^(Telegram|Konsola|Hermes):\s/.test(t) });
-register({ id: 'cron', label: 'Zadania z harmonogramu', name: 'Zadanie z harmonogramu', fallback: 'auto', order: 11, th: { steps: 3, ms: 8000 },
+register({ id: 'cron', label: 'Zadania z harmonogramu', name: 'Zadanie z harmonogramu', fallback: 'ask', order: 11, th: { steps: 3, ms: 8000 },
   hint: 'Automatyczne zadania Hermesa o stałych porach (raporty, radar…).', match: t => /^Cron:\s/.test(t) });
-register({ id: 'chat', label: 'Dłuższe polecenia z czatu', name: 'Zadanie z pulpitu', fallback: 'auto', order: 90, th: { steps: 4, ms: 12000 },
+register({ id: 'chat', label: 'Dłuższe polecenia z czatu', name: 'Zadanie z pulpitu', fallback: 'ask', order: 90, th: { steps: 4, ms: 12000 },
   hint: 'Polecenia wpisane albo powiedziane na pulpicie; krótkie zostają bez filmu.', match: () => true });
 register({ id: 'day', label: 'Film dnia', fallback: 'ask', modes: ['off', 'ask'], order: 99, hint: 'Wieczorna propozycja filmu z całego dnia (po 20:00, od 3 scen).' });
 

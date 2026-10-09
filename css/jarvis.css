@@ -1071,6 +1071,14 @@ body.cin-under #app{visibility:hidden}
 .cin-ch:hover,.cin-ch:focus-visible{border-color:rgba(var(--accent-rgb),.8);color:#fff;outline:none}
 .cin-ch.on{background:rgba(var(--accent-rgb),.28);border-color:rgba(var(--accent-rgb),.9);color:#fff;box-shadow:0 0 12px rgba(var(--accent-rgb),.45)}
 .cin-b.off{opacity:.45;text-decoration:line-through}
+/* nagrywanie filmu do pliku (Ustawienia → Wygląd → „Nagrywanie i produkcja video”) */
+.cin-b.recb{font-size:14px;padding:6px 12px;color:#ffd7dd;border-color:rgba(255,43,74,.5)}
+.cin-b.recb:hover,.cin-b.recb:focus-visible{background:rgba(255,43,74,.25);border-color:#ff2b4a}
+.cin-b.recb.rec{background:rgba(255,43,74,.3);border-color:#ff2b4a;color:#fff;animation:cinRecPulse 1.1s ease-in-out infinite}
+.cin-rec-badge{align-self:center;font-size:11px;letter-spacing:.14em;color:#ff8a9c;white-space:nowrap}
+.cin-rec-badge.on{color:#ff2b4a;font-weight:700}
+@keyframes cinRecPulse{50%{box-shadow:0 0 14px rgba(255,43,74,.75)}}
+@media (prefers-reduced-motion:reduce){.cin-b.recb.rec{animation:none}}
 .cin-pause{position:absolute;left:50%;top:calc(var(--bar) + 3vh);transform:translateX(-50%);z-index:9;padding:6px 16px;border-radius:999px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.25);font:600 13px var(--hud);letter-spacing:.35em;text-transform:uppercase;color:#fff;opacity:0;transition:opacity .25s;pointer-events:none}
 .cin.paused .cin-pause{opacity:1}
 .cin.paused .cin-stage *,.cin.paused .cin-title *,.cin.paused .cin-l3 *,.cin.paused .cin-roll,.cin.paused .cin-grain,.cin.paused .cin-leak i{animation-play-state:paused!important}

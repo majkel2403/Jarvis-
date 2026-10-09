@@ -94,7 +94,7 @@ const DEFAULTS = () => ({
     user: 'JD', skipBoot: false,
     proactive: 'quiet', proactiveMax: 4, wakeWord: false, quietFrom: '', quietTo: '', briefingTime: '', summaryTime: '', silentVoice: false,
     openrouterKey: '', jevOn: false, jevKey: '', jevModel: 'typesafe/jev-1.13', jevUrl: '', jevExecute: .85, jevAsk: .5, jevDestructive: .8, jevInterrupt: .6, jevVerify: .4, jevPrivacy: 'P1', jevA3: .8, jevA2: .92, jevBudget: 5, jevAutonomy: 'auto', jevFast: true, jevShadow: false, jevLogText: false, hermesModelLite: '',
-    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', filmOn: true, filmScen: { telegram: 'auto', cron: 'auto', chat: 'auto' }, volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, wfFilm: 'ask', flags: {}
+    uiScale: 100, fxLevel: 'standard', minimap: false, startMode: 'work', filmOn: false, filmScen: { telegram: 'ask', cron: 'ask', chat: 'ask' }, filmRecord: false, filmRecQuality: '1080p', filmRecAudio: false, volume: 60, speechRate: 1, sttLang: 'pl-PL', units: { temp: 'C', wind: 'kmh' }, notif: {}, keys: {}, layoutStartup: 'none', watchlist: ['BTC', 'ETH', 'SOL', 'BNB'], favCities: [], dockOrder: [], hermesPreset: 'balanced', hermesDailyBudget: 0, offlineMode: false, wfFilm: 'ask', flags: {}
   },
   notes: [
     { id: J.uid(), title: 'Projekty Jarvis OS', body: '• Wirtualne środowisko użytkownika\n• Jarvis steruje pulpitem i aplikacjami\n• Tworzenie skrótów z poleceń\n• Widgety jako żywe obiekty\n• Orb = wizualny stan systemu', ts: Date.now() }
@@ -111,10 +111,18 @@ const DEFAULTS = () => ({
   winPos: {},
   stats: { actions: 0 }
 });
-const STATE_VERSION = 3;
+const STATE_VERSION = 5;
 const MIGRATIONS = [
   /* v1→v2 */ s => { delete s.settings.apiKey; delete s.settings.model; },
-  /* v2→v3 */ s => { if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } } }
+  /* v2→v3 */ s => { if (s.settings.look !== 4) { s.settings.look = 4; if (['#21d9ff', '#3d8bff'].includes(s.settings.accent)) { s.settings.accent = '#33d6ff'; s.settings.accent2 = '#a25cff'; } } },
+  /* v3→v4 — filmy i produkcja video domyślnie WYŁĄCZONE (decyzja Michała 2026-10-09):
+     nic nie uruchamia się samo, nie ma propozycji w czacie; ręczne „pokaż film” działa dalej.
+     Włączenie = przełącznik „Filmy” + „Nagrywanie i produkcja video” w Ustawieniach → Wygląd. */
+  s => { s.settings.filmOn = false; s.settings.filmRecord = false; if (!s.settings.filmScen || typeof s.settings.filmScen !== 'object') s.settings.filmScen = { telegram: 'ask', cron: 'ask', chat: 'ask' }; },
+  /* v4→v5 — scenariusze zapisane starą domyślną wartością „auto” (zadania z Telegrama, harmonogramu, czatu
+     same otwierały film) przechodzą na „pytaj”: po włączeniu modułu nic nie rusza się bez zgody Michała.
+     Wybory świadome innych scenariuszy zostają. */
+  s => { const f = s.settings.filmScen; if (f && typeof f === 'object') for (const k of ['telegram', 'cron', 'chat']) if (f[k] === 'auto') f[k] = 'ask'; }
 ];
 J.state = (() => {
   let raw = null;

@@ -395,6 +395,7 @@ const mount = (src, evs, o = {}) => {
     '<div class="cin-bar top"><span class="cin-rec"><i></i><b></b></span><span class="cin-act"></span><span class="cin-tc">00:00:00:00</span></div>' +
     '<div class="cin-bar bot"><span class="cin-left"><span class="cin-eta"></span><span class="cin-chap" role="group" aria-label="Rozdziały"></span></span><p class="cin-sub" aria-live="polite"></p><span class="cin-ctl"><span class="cin-opts"></span>' +
       '<button class="cin-b" type="button" data-a="pause" title="Pauza (spacja)" aria-label="Pauza">⏸</button><button class="cin-b" type="button" data-a="narr"></button><button class="cin-b" type="button" data-a="snd"></button>' +
+      '<button class="cin-b recb" type="button" data-a="rec" hidden title="Nagraj film do pliku (R)" aria-label="Nagraj film">⏺</button>' +
       '<button class="cin-b" type="button" data-a="skip" title="Przewiń do finału">⏭</button><button class="cin-b" type="button" data-a="close" title="Zamknij (Esc)" aria-label="Zamknij film">✕</button></span></div>');
   const $ = s => el.querySelector(s);
   const stage = $('.cin-stage'), cv = $('.cin-cv'), g = cv.getContext('2d'), world = $('.cin-world'), holo = $('.cin-holo'), ttl = $('.cin-title'), subEl = $('.cin-sub'),
@@ -1036,6 +1037,8 @@ const mount = (src, evs, o = {}) => {
   pauseB.onclick = () => togglePause();
   skipB.onclick = () => { if (inFinale) waits.forEach(w => { w.at = vt; }); else ff = true; };
   $('[data-a=close]').onclick = () => close();
+  /* nagrywanie do pliku (Ustawienia → Nagrywanie i produkcja video): przycisk pokazuje się tylko, gdy włączone */
+  { const rb = $('[data-a=rec]'); try { J.filmRec?.attach?.(rb, el.querySelector('.cin-bar.top')); } catch (e) { if (rb) rb.hidden = true; } }
   const onKey = ev => {
     const reader = el.querySelector('.cin-reader');
     if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); if (reader) reader.querySelector('button').click(); else close(); return; }
@@ -1043,6 +1046,7 @@ const mount = (src, evs, o = {}) => {
     if (plain && (ev.key === 'm' || ev.key === 'M')) { ev.preventDefault(); setSnd(!audio.on); }
     else if (plain && (ev.key === 'l' || ev.key === 'L')) { ev.preventDefault(); setNarr(!narrOn); }
     else if (plain && ev.key === ' ' && !(ev.target instanceof HTMLButtonElement)) { ev.preventDefault(); togglePause(); }
+    else if (plain && (ev.key === 'r' || ev.key === 'R') && J.filmRec?.enabled?.()) { ev.preventDefault(); J.filmRec.status().recording ? J.filmRec.stop() : J.filmRec.start(); }
     else if (plain && ev.key === 'ArrowLeft' && !reader) { ev.preventDefault(); chapterStep(-1); }
     else if (plain && ev.key === 'ArrowRight' && !reader) { ev.preventDefault(); chapterStep(1); }
     ev.stopPropagation();   // skróty pulpitu nie działają pod filmem
@@ -1052,6 +1056,7 @@ const mount = (src, evs, o = {}) => {
 
   const close = () => {
     if (!alive) return; alive = false;
+    try { if (J.filmRec?.status?.().recording) J.filmRec.stop('film zamknięty'); J.filmRec?.unbind?.(); } catch (e) { /* brak modułu nagrywania */ }
     waits.splice(0).forEach(w => w.rej(SEEK)); offEv(); offVoice(); clearInterval(iv); clearTimeout(subT);
     window.removeEventListener('keydown', onKey, true); removeEventListener('resize', resize);
     audio.stop(); if (spoke) J.voice?.stop?.();

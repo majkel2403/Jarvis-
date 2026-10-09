@@ -52,7 +52,7 @@ przyjmuje tylko stronę z tego komputera.
 ## Architektura w skrócie
 
 ```
-Telegram / cron ──► Hermes Agent (profil jarvis-desktop, :8643) ──MCP──► most bridge/jarvis_bridge.py (:8651) ◄──SSE/HTTP──► Jarvis OS (karta, :4000)
+Telegram / cron ──► Hermes host gateway (:8642) ──► profil jarvis-desktop ──MCP──► most bridge/jarvis_bridge.py (:8651) ◄──SSE/HTTP──► Jarvis OS (karta, :4000)
                      │ MiniMax-M3 + fallbacki                         │ polecenia pulpitu → karta (Command Registry)
                      │ wtyczka jarvis-events ──► /bridge/agent-event ─┤ zadania Hermesa → Orb i Process Log
                      └─────────── czat z karty przez /bridge/v1 ◄─────┘ klucz gatewaya zostaje w moście

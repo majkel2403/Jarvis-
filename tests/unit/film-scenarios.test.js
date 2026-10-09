@@ -7,8 +7,10 @@ const assert = require('node:assert/strict');
 const { load } = require('../harness.js');
 
 const arr = x => JSON.parse(JSON.stringify(x));   // tablice i obiekty z innego kontekstu vm
+/* _v: 5 = stan już po migracjach (inaczej migracje v3→v4/v4→v5 gaszą moduł filmów i psują badane tryby);
+   mk() domyślnie włącza moduł filmów, bo reszta testów bada jego zachowanie — domyślne „wyłączone na start” sprawdza test niżej */
 const mk = (settings = {}) => {
-  const J = load({ dom: true, state: { settings: { sound: false, speech: false, ...settings } } });
+  const J = load({ dom: true, state: { _v: 5, settings: { filmOn: true, sound: false, speech: false, ...settings } } });
   const C = J.workflows.cinema, S = C._scen, opened = [], cards = [];
   C.openSource = (src, evs, o) => { opened.push({ src: arr(src), evs: evs ? arr(evs) : null, o }); return true; };
   J.chat.quick = (text, opts, cb) => { const c = { text, opts, cb, removed: false, remove() { c.removed = true; } }; cards.push(c); return c; };
@@ -23,17 +25,24 @@ const mk = (settings = {}) => {
 };
 
 test('tryby: domyślne, wyłącznik modułu, ustawienia i zgodność ze starym „Film workflow”', () => {
+  /* domyślne ustawienia Michała (2026-10-09): filmy wyłączone na start, ręczne „pokaż film” działa */
+  const fresh = load({ dom: true, state: { _v: 5, settings: { sound: false, speech: false } } }), FC = fresh.workflows.cinema;
+  assert.equal(fresh.state.settings.filmOn, false, 'filmOn domyślnie wyłączony');
+  assert.equal(fresh.state.settings.filmRecord, false, 'nagrywanie video domyślnie wyłączone');
+  assert.equal(fresh.state.settings.filmRecQuality, '1080p'); assert.equal(fresh.state.settings.filmRecAudio, false);
+  assert.deepEqual(arr(['workflow', 'telegram', 'cron', 'chat', 'day'].map(id => FC.mode(id))), ['off', 'off', 'off', 'off', 'off']);
+  assert.deepEqual(arr((fresh.state.settings.filmScen && Object.keys(fresh.state.settings.filmScen)) || []), ['telegram', 'cron', 'chat'], 'tryby scenariuszy zapisane, ale pod wyłącznikiem');
   const { C, J } = mk();
-  assert.deepEqual(arr(['workflow', 'telegram', 'cron', 'chat', 'day'].map(id => C.mode(id))), ['ask', 'auto', 'auto', 'auto', 'ask']);
+  assert.deepEqual(arr(['workflow', 'telegram', 'cron', 'chat', 'day'].map(id => C.mode(id))), ['ask', 'ask', 'ask', 'ask', 'ask']);
   assert.deepEqual(arr(C.scenarios().map(d => d.id)), ['workflow', 'telegram', 'cron', 'chat', 'day']);
-  assert.equal(C.setMode('chat', 'ask'), true); assert.equal(C.mode('chat'), 'ask'); assert.equal(C.mode('telegram'), 'auto', 'inne scenariusze bez zmian');
+  assert.equal(C.setMode('chat', 'ask'), true); assert.equal(C.mode('chat'), 'ask'); assert.equal(C.mode('telegram'), 'ask', 'inne scenariusze bez zmian');
   assert.equal(C.setMode('workflow', 'auto'), true); assert.equal(J.state.settings.wfFilm, 'auto', 'workflow dalej w starym kluczu');
   assert.equal(C.setMode('day', 'auto'), false, 'film dnia nie ma trybu „sam”'); assert.equal(C.setMode('nie-ma', 'ask'), false); assert.equal(C.setMode('chat', 'zle'), false);
   J.state.settings.filmOn = false;
   assert.deepEqual(arr(['workflow', 'telegram', 'cron', 'chat', 'day'].map(id => C.mode(id))), ['off', 'off', 'off', 'off', 'off'], 'wyłącznik modułu gasi wszystko');
   assert.equal(C.rawMode('chat'), 'ask', 'ustawienia scenariuszy zostają pod wyłącznikiem');
   const old = mk({ wfFilm: 'off' }); assert.equal(old.C.mode('day'), 'off', 'dawne „nie proponuj” wyłączało też film dnia');
-  const bad = mk({ filmScen: { chat: 'dziwne' } }); assert.equal(bad.C.mode('chat'), 'auto', 'zła wartość → domyślna');
+  const bad = mk({ filmScen: { chat: 'dziwne' } }); assert.equal(bad.C.mode('chat'), 'ask', 'zła wartość → domyślna');
 });
 
 test('klasyfikacja zadań: kanał z tytułu, workflow pomijany, reszta to polecenia z czatu', () => {
@@ -57,7 +66,7 @@ test('zwijanie scen: powtórzone narzędzia ×N, nadmiar w jedną scenę, odpowi
 });
 
 test('tryb „sam”: dłuższe zadanie z czatu włącza film na żywo, kroki i koniec dochodzą w trakcie', () => {
-  const { task, opened, cards, J } = mk();
+  const { task, opened, cards, J } = mk({ filmScen: { chat: 'auto' } });
   const k = task('sprawdź pogodę i zrób notatkę', { tools: 4, reply: null });
   assert.equal(opened.length, 1, 'po 4 narzędziach film rusza sam'); assert.equal(cards.length, 0);
   const o = opened[0]; assert.equal(o.evs, null, 'na żywo'); assert.equal(o.o.scen, 'chat'); assert.equal(o.o.dyn, true); assert.equal(o.src.name, 'Zadanie z pulpitu');
@@ -78,11 +87,11 @@ test('tryb „sam”: dłuższe zadanie z czatu włącza film na żywo, kroki i 
 });
 
 test('progi: krótkie i błyskawiczne zadania zostają bez filmu; Telegram od 3 narzędzi; wyłączone = cisza', () => {
-  const a = mk(); a.task('pogoda', { tools: 2, ago: 5 }).end();
+  const a = mk({ filmScen: { chat: 'auto' } }); a.task('pogoda', { tools: 2, ago: 5 }).end();
   assert.equal(a.opened.length, 0, '2 narzędzia w 5 s to nie jest „dłuższe” zadanie'); assert.equal(a.cards.length, 0);
-  const b = mk(); b.task('cztery szybkie narzędzia', { tools: 4, ago: 0.2 }).end();
+  const b = mk({ filmScen: { chat: 'auto' } }); b.task('cztery szybkie narzędzia', { tools: 4, ago: 0.2 }).end();
   assert.equal(b.opened.length, 0, 'łańcuch w ułamku sekundy nie dostaje filmu'); assert.equal(b.cards.length, 0);
-  const c = mk(); c.task('Telegram: sprawdź system', { tools: 3, kind: 'server', ago: 4, reply: 'ok' });
+  const c = mk({ filmScen: { telegram: 'auto' } }); c.task('Telegram: sprawdź system', { tools: 3, kind: 'server', ago: 4, reply: 'ok' });
   assert.equal(c.opened.length, 1); assert.equal(c.opened[0].o.scen, 'telegram'); assert.equal(c.opened[0].src.name, 'Zadanie od Hermesa'); assert.equal(c.opened[0].src.inputs.zadanie, 'sprawdź system');
   const d = mk({ filmScen: { chat: 'off' } }); d.task('dużo roboty', { tools: 6 }).end();
   assert.equal(d.opened.length, 0); assert.equal(d.cards.length, 0, 'tryb wyłączony — żadnej propozycji');
@@ -109,14 +118,15 @@ test('tryb „zaproponuj”: karta w czacie na żywo, po zadaniu karta z filmem 
 });
 
 test('tryb „sam” ustępuje: zgoda do udzielenia, pisanie w czacie, tryb prezentacji i cisza nocna zamieniają film w propozycję', () => {
-  const a = mk(); a.J.ev.emit('approval.requested', { question: 'Usunąć?' }); a.task('jedno', { tools: 4 });
+  const A = { filmScen: { chat: 'auto' } };
+  const a = mk(A); a.J.ev.emit('approval.requested', { question: 'Usunąć?' }); a.task('jedno', { tools: 4 });
   assert.equal(a.opened.length, 0); assert.equal(a.cards.length, 1, 'zgoda czeka — film nie zasłania okna');
-  const b = mk(); b.J.ev.emit('approval.requested', {}); b.J.ev.emit('approval.resolved', {}); b.task('dwa', { tools: 4 }); assert.equal(b.opened.length, 1, 'po odpowiedzi znów wolno');
-  const c = mk(); c.J.document = null; const doc = c.J.__ctx.document; doc.activeElement = { tagName: 'TEXTAREA', value: 'piszę właśnie…' }; c.task('trzy', { tools: 4 });
+  const b = mk(A); b.J.ev.emit('approval.requested', {}); b.J.ev.emit('approval.resolved', {}); b.task('dwa', { tools: 4 }); assert.equal(b.opened.length, 1, 'po odpowiedzi znów wolno');
+  const c = mk(A); c.J.document = null; const doc = c.J.__ctx.document; doc.activeElement = { tagName: 'TEXTAREA', value: 'piszę właśnie…' }; c.task('trzy', { tools: 4 });
   assert.equal(c.opened.length, 0); assert.equal(c.cards.length, 1, 'ktoś pisze — tylko propozycja');
-  const d = mk(); d.J.state.ui.mode = 'present'; d.task('cztery', { tools: 4 }); assert.equal(d.opened.length, 0); assert.equal(d.cards.length, 1, 'prezentacja ekranu');
+  const d = mk(A); d.J.state.ui.mode = 'present'; d.task('cztery', { tools: 4 }); assert.equal(d.opened.length, 0); assert.equal(d.cards.length, 1, 'prezentacja ekranu');
   const now = new Date(), hh = n => String(n).padStart(2, '0'), from = hh(now.getHours()) + ':00', to = hh((now.getHours() + 1) % 24) + ':00';
-  const e = mk({ quietFrom: from, quietTo: to }); e.task('pięć', { tools: 4 }); assert.equal(e.opened.length, 0); assert.equal(e.cards.length, 1, 'cisza nocna');
+  const e = mk({ ...A, quietFrom: from, quietTo: to }); e.task('pięć', { tools: 4 }); assert.equal(e.opened.length, 0); assert.equal(e.cards.length, 1, 'cisza nocna');
   const f = mk(); f.J.workflows.cinema.openSource({ id: 'x' }, null, {}); assert.equal(f.S.canAuto(), true, 'atrapa nie zajmuje filmu');
 });
 
