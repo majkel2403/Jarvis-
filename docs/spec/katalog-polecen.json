@@ -2228,7 +2228,7 @@
   "id": "settings_set",
   "group": "Interfejs",
   "label": "Zmień ustawienie",
-  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice.",
+  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice, filmOn/filmRecord/filmRecAudio (true|false), filmRecQuality (720p|1080p|1440p), wfFilm (off|ask|auto), filmScen (off = wszystkie scenariusze wyłączone; albo \"telegram:off,cron:ask\").",
   "args": {
    "type": "object",
    "properties": {
@@ -2247,7 +2247,13 @@
       "quietTo",
       "briefingTime",
       "summaryTime",
-      "silentVoice"
+      "silentVoice",
+      "filmOn",
+      "filmRecord",
+      "filmRecAudio",
+      "filmRecQuality",
+      "wfFilm",
+      "filmScen"
      ]
     },
     "value": {
@@ -5922,6 +5928,43 @@
    "film z ostatniego zadania",
    "pokaz film z ostatniego polecenia",
    "odtworz film z zadania"
+  ],
+  "needsConfirmText": false
+ },
+ {
+  "id": "film_record",
+  "group": "Workflow",
+  "label": "Nagraj film",
+  "description": "Nagrywa film (widok karty Jarvis OS) do pliku wideo .webm tym, co ma przeglądarka: getDisplayMedia + MediaRecorder. Wymaga włączonego „Nagrywanie i produkcja video” w Ustawieniach → Wygląd; start wymaga kliknięcia użytkownika (naciśnij ⏺ na pasku filmu albo „Udostępnij” w oknie zgody).",
+  "args": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "start",
+      "stop",
+      "status"
+     ],
+     "description": "start = zacznij nagrywać, stop = zakończ i zapisz plik, status = co się dzieje"
+    }
+   }
+  },
+  "required": [],
+  "risk": "safe",
+  "level": "A1",
+  "levelDependsOnArgs": false,
+  "undoable": false,
+  "external": false,
+  "idempotent": false,
+  "writes": [],
+  "hermes": true,
+  "examples": [
+   "nagraj film",
+   "zacznij nagrywac film",
+   "przestan nagrywac",
+   "koniec nagrywania",
+   "czy nagrywasz"
   ],
   "needsConfirmText": false
  },

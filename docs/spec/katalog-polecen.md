@@ -2,7 +2,7 @@
 
 > Plik generuje `node tools/gen-spec.js` z `js/commands.js` i `js/jev-policy.js`. **Nie edytuj ręcznie** — test `tests/unit/spec.test.js` sprawdza, czy jest aktualny.
 
-Poleceń: **149** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
+Poleceń: **150** · odwracalnych: 66 · wymagających zgody (ryzyko ≠ safe): 19 · treść z zewnątrz (sprawdzana pod kątem wstrzyknięć): 4
 
 Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta „Chodzi o…?” · A0 zawsze zgoda. Pogrubione argumenty są wymagane.
 
@@ -10,7 +10,7 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 |---|---|
 | A3 sam, po cichu | 71 |
 | A2 sam + Cofnij | 44 |
-| A1 pyta „Chodzi o…?” | 17 |
+| A1 pyta „Chodzi o…?” | 18 |
 | A0 zawsze zgoda | 17 |
 
 ## Aplikacje i okna
@@ -226,4 +226,5 @@ Poziomy autonomii (plan Jeva): A3 sam, po cichu · A2 sam + Cofnij · A1 pyta �
 | `workflow_film` | Workflow: film — Film (tryb kinowy workflow): przebieg workflow na cały ekran jak scena z filmu (kamera między krokami, plansze aktów, hologram z wynikiem, finał i napisy końcow | run_id: string; film: boolean | safe | A3 | — | „pokaz film z workflow”, „pokaz film”, „odtworz film z pracy” |
 | `day_film` | Film dnia — Film dnia: montaż tego, co Jarvis i Hermes zrobili dziś (workflow, zadania z Telegrama i harmonogramu, zadania na pulpicie, notatki) — na cały ekran, z lektorem | date: string | safe | A3 | — | „film dnia”, „pokaz film dnia”, „podsumuj dzien jako film” |
 | `task_film` | Film z zadania — Film z zadania z Process Logu (polecenie z czatu, zadanie z Telegrama albo harmonogramu): powtórka z zapisu jako scena z filmu — kroki, narzędzia, odpowiedź. Do | id: string | safe | A3 | — | „pokaz film z zadania”, „film z ostatniego zadania”, „pokaz film z ostatniego polecenia” |
+| `film_record` | Nagraj film — Nagrywa film (widok karty Jarvis OS) do pliku wideo .webm tym, co ma przeglądarka: getDisplayMedia + MediaRecorder. Wymaga włączonego „Nagrywanie i produkcja vi | action: start\|stop\|status | safe | A1 | — | „nagraj film”, „zacznij nagrywac film”, „przestan nagrywac” |
 

@@ -16,13 +16,13 @@ Jarvis OS ──────┤                                                 
 (przeglądarka)  │◄── SSE /bridge/events: cmd (polecenia) · agent (zadania) ── bridge/jarvis_bridge.py (127.0.0.1:8651)
    │            └── wynik POST /bridge/result ─────────────────────────────►   │  ▲ MCP /mcp (Bearer)   │ klucz API dokłada most
    │                                                                           │  │                      ▼
-   └─────────────────────── Telegram / cron ──► Hermes gateway (profil jarvis-desktop, :8643)
+   └─────────────────────── Telegram / cron ──► Hermes host gateway (:8642) ──► profil jarvis-desktop
                                                  └─ wtyczka jarvis-events → POST /bridge/agent-event (zadania na Orbie i w Process Logu)
 ```
 
 1. **Most:** `bridge\start-bridge.bat` (zostaw uruchomiony). Token jest w `%USERPROFILE%\.jarvis-os\bridge-token`; strona pobiera go sama (parowanie tylko dla dozwolonego Origin).
 2. **Profil Hermesa:** `powershell -ExecutionPolicy Bypass -File hermes\install-profile.ps1 -DryRun`, potem bez `-DryRun`. Tworzy profil (klon aktywnego, **bez kanałów**) i uruchamia `hermes\apply_profile.py`, który wgrywa docelową konfigurację z repo ([ADR 0002](../adr/0002-docelowa-konfiguracja-hermesa.md)): most MCP, pełny zestaw narzędzi (terminal, pliki, kod, skille, pulpit — wszystkie widoczne wprost, bez `tool_search`, [ADR 0006](../adr/0006-narzedzia-pulpitu-wprost-i-straznik-czynnosci.md)), wtyczki (m.in. `jarvis-events`, `rtk-rewrite`, `security-guidance`), `SOUL.md` (tylko tożsamość), `HERMES.md` (zasady pracy) w katalogu roboczym `%USERPROFILE%\JarvisWorkspace`, hak blokad i limity (kompresja przy 120 tys. tokenów, sesja wygasa po 2 h ciszy). Każdą późniejszą zmianę wprowadzasz w repo i ponownie uruchamiasz `apply_profile.py`; strażnik `scripts\config_guard.py` (cron 7:50) zgłasza odstępstwa.
-3. **Gateway:** `hermes\start-desktop-gateway.bat` (API na `:8643`).
+3. **Gateway:** jeden natywny host gateway Hermesa na `:8642`; profil `jarvis-desktop` jest routowany pod `/p/jarvis-desktop/v1`. Jarvis OS nie uruchamia drugiego gatewaya.
 4. **Jarvis OS:** łączy się z Hermesem sam — karta pyta most (`/bridge/hermes`) i rozmawia przez pośrednika `/bridge/v1`, a **klucz gatewaya zostaje w moście** (nie trafia do przeglądarki ani do `config.local.js`). Tryb MCP włącza się sam, gdy profil zgłosi się do mostu (*Ustawienia → Most pulpitu dla Hermesa*).
 
 Lista narzędzi, którą Hermes widzi od startu, to migawka `bridge/tools.json` (tylko do odczytu, pilnowana testem). Po zmianie `js/commands.js` odśwież ją: `node bridge/export-tools.js`; otwarta karta i tak zgłasza mostowi aktualne opisy (most zapisuje je w `%USERPROFILE%\.jarvis-os\tools.runtime.json`), a Hermes zobaczy zmianę po restarcie gatewaya. Testy mostu (odizolowany most + prawdziwy klient MCP + atrapa gatewaya): `python -m pytest` z venv Hermesa. Autostart mostu, strony i gatewaya: `bridge\install-autostart.ps1`; wdrożenie zmian: `bridge\redeploy.ps1`.

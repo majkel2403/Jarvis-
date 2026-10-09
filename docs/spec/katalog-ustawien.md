@@ -33,8 +33,11 @@ Kolumna „w adresie” = klucz można podać w `index.html#klucz=wartość` (li
 | Inne | `bridgeUrl` | `"http://127.0.0.1:8651"` | string | tak | — |
 | Inne | `dockOrder` | `[]` | object | — | — |
 | Inne | `favCities` | `[]` | object | — | — |
-| Inne | `filmOn` | `true` | boolean | — | — |
-| Inne | `filmScen` | `{"telegram":"auto","cron":"auto","chat":"auto"}` | object | — | — |
+| Inne | `filmOn` | `false` | boolean | — | — |
+| Inne | `filmRecAudio` | `false` | boolean | — | — |
+| Inne | `filmRecord` | `false` | boolean | — | — |
+| Inne | `filmRecQuality` | `"1080p"` | string | — | — |
+| Inne | `filmScen` | `{"telegram":"ask","cron":"ask","chat":"ask"}` | object | — | — |
 | Inne | `flags` | `{}` | object | — | — |
 | Inne | `fxLevel` | `"standard"` | string | — | — |
 | Inne | `keys` | — | object | — | tak |
