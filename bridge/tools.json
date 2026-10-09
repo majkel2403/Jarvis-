@@ -1166,7 +1166,7 @@
  },
  {
   "name": "settings_set",
-  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice. Wymaga potwierdzenia użytkownika na pulpicie. Np.: „ustaw miasto na value”.",
+  "description": "Zmienia jedno ustawienie. Klucze: city, user, particles, sound, speech, skipBoot, proactive (quiet|active), wakeWord, quietFrom/quietTo (HH:MM), briefingTime (HH:MM lub \"\"), summaryTime, silentVoice, filmOn/filmRecord/filmRecAudio (true|false), filmRecQuality (720p|1080p|1440p), wfFilm (off|ask|auto), filmScen (off = wszystkie scenariusze wyłączone; albo \"telegram:off,cron:ask\"). Wymaga potwierdzenia użytkownika na pulpicie. Np.: „ustaw miasto na value”.",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1185,7 +1185,13 @@
       "quietTo",
       "briefingTime",
       "summaryTime",
-      "silentVoice"
+      "silentVoice",
+      "filmOn",
+      "filmRecord",
+      "filmRecAudio",
+      "filmRecQuality",
+      "wfFilm",
+      "filmScen"
      ]
     },
     "value": {
@@ -2946,6 +2952,24 @@
     "id": {
      "type": "string",
      "description": "id zadania z historii Process Logu; domyślnie oglądane lub ostatnie"
+    }
+   }
+  }
+ },
+ {
+  "name": "film_record",
+  "description": "Nagrywa film (widok karty Jarvis OS) do pliku wideo .webm tym, co ma przeglądarka: getDisplayMedia + MediaRecorder. Wymaga włączonego „Nagrywanie i produkcja video” w Ustawieniach → Wygląd; start wymaga kliknięcia użytkownika (naciśnij ⏺ na pasku filmu albo „Udostępnij” w oknie zgody). Np.: „nagraj film”.",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "start",
+      "stop",
+      "status"
+     ],
+     "description": "start = zacznij nagrywać, stop = zakończ i zapisz plik, status = co się dzieje"
     }
    }
   }

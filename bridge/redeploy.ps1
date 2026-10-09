@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Wdrożenie zmian Jarvis OS bez restartu komputera: most MCP (:8651) i Hermes jarvis-desktop (:8643).
+  Wdrożenie zmian Jarvis OS bez restartu komputera: most MCP (:8651) i Hermes host multiplex (:8642).
 
 .DESCRIPTION
   1. Zatrzymuje most i uruchamia go ponownie zadaniem JarvisOS-Bridge (nowy kod Pythona, świeża migawka bridge\tools.json).
@@ -33,10 +33,10 @@ $bridgeOk = Wait-New 8651 $old 'most'
 
 $gwOk = $true
 if (-not $NoGateway) {
-  Write-Host 'Hermes jarvis-desktop (:8643)…'
-  $oldGw = Pid-On 8643
+  Write-Host 'Hermes host multiplex (:8642)…'
+  $oldGw = Pid-On 8642
   schtasks /Run /TN 'JarvisOS-GatewayRestart' | Out-Null
-  $gwOk = Wait-New 8643 $oldGw 'gateway'
+  $gwOk = Wait-New 8642 $oldGw 'gateway'
 }
 
 $tokFile = Join-Path $env:USERPROFILE '.jarvis-os\bridge-token'

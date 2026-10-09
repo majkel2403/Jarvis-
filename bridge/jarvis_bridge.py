@@ -703,6 +703,32 @@ async def system_route(request: Request) -> Response:
     return cors(request, JSONResponse({"ok": True, "data": data, "text": system_info.describe(data, drive)}))
 
 
+# Panel stanu JAIA (AUTO/panel.html) — czytany świeżo z dysku, tylko odczyt, tylko na 127.0.0.1.
+PANEL_HTML = Path(os.environ.get("JARVIS_PANEL_HTML", str(Path.home() / "JarvisWorkspace" / "AUTO" / "panel.html")))
+
+
+@mcp.custom_route("/panel", methods=["GET"])
+async def panel_route(request: Request) -> Response:
+    """Panel stanu JAIA dla karty Jarvis OS: skrót „JAIA” na pulpicie otwiera ten adres.
+
+    Nic nie zmienia (brak tokenu, brak dowolnego HTML od użytkownika) — oddaje gotowy plik
+    wygenerowany przez AUTO/tools/panel_stanu.py. Gdy pliku nie ma, zwraca czytelną podpowiedź.
+    """
+    try:
+        html = await asyncio.to_thread(PANEL_HTML.read_text, encoding="utf-8", errors="replace")
+    except OSError:
+        return Response(
+            "<!doctype html><meta charset=\"utf-8\"><title>Panel stanu JAIA</title>"
+            "<body style=\"font:16px system-ui;background:#0b0f14;color:#e6edf3;padding:32px\">"
+            "<h1>Panel stanu nie jest jeszcze wygenerowany</h1>"
+            f"<p>Nie ma pliku <code>{PANEL_HTML}</code>.</p>"
+            "<p>Wygeneruj go: <code>python AUTO/tools/panel_stanu.py</code> — albo poczekaj na najbliższy przebieg strażnika.</p></body>",
+            status_code=404,
+            media_type="text/html; charset=utf-8",
+        )
+    return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
+
+
 @mcp.custom_route("/bridge/status", methods=["GET", "OPTIONS"])
 async def status(request: Request) -> Response:
     if request.method == "OPTIONS":

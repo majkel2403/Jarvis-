@@ -77,7 +77,7 @@ def hermes_target() -> tuple[str, str, str] | None:
         return None
     if not m:
         return None
-    return os.environ.get("JARVIS_HERMES_URL", "http://127.0.0.1:8643/v1") + "/chat/completions", m.group(1), "jarvis-desktop"
+    return os.environ.get("JARVIS_HERMES_URL", "http://127.0.0.1:8642/p/jarvis-desktop/v1") + "/chat/completions", m.group(1), "jarvis-desktop"
 
 
 async def complete(body: dict, openrouter_key: str, *, log=lambda *a: None, models: list[str] | None = None, timeout: float | None = None) -> tuple[dict, str]:
