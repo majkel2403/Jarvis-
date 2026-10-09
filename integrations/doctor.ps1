@@ -27,7 +27,7 @@ if ($e['CLICKER_WRITER_BASE_URL'] -or $e['ANTHROPIC_API_KEY']) { Ok 'model pomoc
 if ($e['CLICKER_WRITER_BASE_URL'] -match 'openrouter') { No 'writer przez OpenRouter — wbrew zasadzie „OpenRouter tylko dla Jeva”' 'usuń CLICKER_WRITER_* z jev.env' }
 if ($e['CLICKER_WRITER_BASE_URL'] -match '127\.0\.0\.1|localhost') {
   try { $m = Invoke-RestMethod ($e['CLICKER_WRITER_BASE_URL'].TrimEnd('/') + '/models') -Headers @{ Authorization = "Bearer $($e['CLICKER_WRITER_API_KEY'])" } -TimeoutSec 5; Ok "writer (Hermes) odpowiada: modele $((@($m.data.id) -join ', '))" }
-  catch { No 'writer (Hermes) nie odpowiada na /v1/models' 'uruchom hermes\start-desktop-gateway.bat albo ponów set-key.ps1 (klucz mógł się zmienić)' }
+  catch { No 'writer (Hermes) nie odpowiada na /v1/models' 'sprawdź host gateway Hermesa na :8642 albo ponów set-key.ps1 (klucz mógł się zmienić)' }
 }
 
 Head 'Wdrożone repozytoria'
@@ -56,10 +56,10 @@ if ((Test-Path $uv) -and (Test-Path (Join-Path $vendor 'typesafe-computer-use\.v
 
 Head 'Uruchomione usługi'
 $token = if (Test-Path (Join-Path $root 'bridge-token')) { (Get-Content (Join-Path $root 'bridge-token') -Raw).Trim() } else { '' }
-foreach ($p in @(@(8651, 'most Jarvisa (MCP)'), @(8643, 'gateway Hermesa (profil jarvis-desktop)'), @(8788, 'agent WWW (Chromium + Jev)'), @(4000, 'strona Jarvis OS'))) {
+foreach ($p in @(@(8651, 'most Jarvisa (MCP)'), @(8642, 'host gateway Hermesa (multiplex)'), @(8788, 'agent WWW (Chromium + Jev)'), @(4000, 'strona Jarvis OS'))) {
   if (Get-NetTCPConnection -LocalPort $p[0] -State Listen -ErrorAction SilentlyContinue) { Ok "$($p[1]) — port $($p[0])" }
   elseif ($p[0] -eq 8788) { Warn "$($p[1]) — jeszcze nie działa (most uruchomi go przy pierwszym użyciu)" }
-  else { No "$($p[1]) — port $($p[0]) nie nasłuchuje" $(if ($p[0] -eq 8651) { 'bridge\start-bridge.bat' } elseif ($p[0] -eq 8643) { 'hermes\start-desktop-gateway.bat' } else { 'python bridge\serve_site.py 4000 w katalogu Jarvisa' }) }
+  else { No "$($p[1]) — port $($p[0]) nie nasłuchuje" $(if ($p[0] -eq 8651) { 'bridge\start-bridge.bat' } elseif ($p[0] -eq 8642) { 'hermes gateway status' } else { 'python bridge\serve_site.py 4000 w katalogu Jarvisa' }) }
 }
 if ($token) {
   try { $s = Invoke-RestMethod 'http://127.0.0.1:8651/agents/status' -Headers @{ 'X-Bridge-Token' = $token } -TimeoutSec 5; Ok "most → agenci: klucz=$($s.key), WWW=$(if ($s.web.up) { 'działa' } else { 'śpi' }), komputer=$(if ($s.computer.installed) { 'gotowy' } else { 'brak' })" }
@@ -141,7 +141,7 @@ if (Test-Path $tl) {
     Warn "$($fails.Count) z $($recs.Count) zadań się nie udało:"
     $fails | Select-Object -Last 6 | ForEach-Object { $t = [string]$_.text; Write-Host ('      · ''{0}'' — {1} ({2})' -f $t.Substring(0, [Math]::Min(60, $t.Length)), $_.fail, $_.route) -ForegroundColor DarkYellow }
     $offline = @($fails | Where-Object { $_.route -eq 'local-offline' -or $_.hermes -in 'off', 'down' }).Count
-    if ($offline) { Warn "$offline z nich bez Hermesa — sprawdź w karcie Ustawienia → Hermes (powinien być profil jarvis-desktop, :8643)" }
+    if ($offline) { Warn "$offline z nich bez Hermesa — sprawdź w karcie Ustawienia → Hermes (powinien być profil jarvis-desktop przez host :8642)" }
   }
 } else { Warn 'dziennik jeszcze pusty (powstaje po pierwszym zadaniu z odświeżonej karty)' }
 

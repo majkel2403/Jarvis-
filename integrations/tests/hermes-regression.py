@@ -6,7 +6,7 @@ Użycie:
   python integrations/tests/hermes-regression.py
   python integrations/tests/hermes-regression.py --verbose
 
-Wymaga: działający gateway jarvis-desktop na localhost:8643.
+Wymaga: działający host gateway Hermesa na localhost:8642 z profilem jarvis-desktop w multiplexie.
 """
 import argparse, json, os, re, sys, time, uuid, urllib.request, urllib.error
 from pathlib import Path
@@ -16,7 +16,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 # --- konfiguracja ---
-GATEWAY_URL = "http://127.0.0.1:8643/v1/chat/completions"
+GATEWAY_URL = "http://127.0.0.1:8642/p/jarvis-desktop/v1/chat/completions"
 PASS_THRESHOLD = 10  # ≥10/15
 TIMEOUT_S = 45
 MAX_TOKENS = 300
@@ -168,13 +168,13 @@ def run_tests(verbose: bool = False) -> int:
 
     # sprawdź dostępność gateway
     try:
-        urllib.request.urlopen(f"http://127.0.0.1:8643/v1/models",
+        urllib.request.urlopen(f"http://127.0.0.1:8642/p/jarvis-desktop/v1/models",
                                timeout=5)
     except urllib.error.HTTPError as e:
         if e.code not in (401, 403):  # auth error = gateway działa
             pass
     except Exception:
-        print("BŁĄD: gateway jarvis-desktop niedostępny na localhost:8643")
+        print("BŁĄD: host gateway :8642 / profil jarvis-desktop niedostępny")
         sys.exit(1)
 
     passed = 0
