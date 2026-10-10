@@ -8,6 +8,13 @@ Ręcznie:  python config_guard.py --verbose   (wypisuje też to, co jest OK)
 Gdy zmiana jest zamierzona — zaktualizuj regułę tutaj (i opis w WHERE-IS-THE-CONFIG.md).
 2026-10-09: delegowanie kodu przez Hermesa (subagenci `delegate_task` na planie MiniMax) — Claude Code wychodzi z obiegu;
 kontrola pilnuje, że `claude-delegate` nie wraca do skills.auto_load, a `delegation.model` zostaje na MiniMax.
+2026-10-10: zapas i zadania pomocnicze MiniMax-M2.5 → MiniMax-M2.7 (M3 do delegacji, deepseek-flash główny — bez zmian);
+2026-10-10 (wieczór): zadania pomocnicze (compression, title_generation, session_search, web_extract, mcp, approval,
+skills_hub, triage_specifier, profile_describer, goal_judge, curator, kanban_decomposer) przeszły z MiniMax-M2.7 na
+`deepseek-flash` z `reasoning_effort: none` — ścieżka MiniMax w tym silniku składała adres /v1/v1/... i wracała 404
+  (a `none` obniża limit wyjścia DeepSeeka z 65 536 do 8 192 tokenów: zadania piszące długo — compression,
+  web_extract, curator, kanban_decomposer, triage_specifier — mają `reasoning_effort: minimal` i limit 65 536);
+(tytuły nie działały, streszczenia spadały na model główny); vision zostaje deepseek-flash bez zmian.
 2026-10-08: model główny MiniMax-M3 → deepseek-flash, vision MiniMax-M3 → deepseek-flash
 (benchmark 5 zadań: remis jakości, DeepSeek 2,3× szybszy i 2,5× tańszy; MiniMax zostaje 1. fallbackiem).
 2026-10-08: doszła kontrola salda DeepSeek (/user/balance) — alert, gdy spadnie poniżej DEEPSEEK_MIN_USD.
@@ -117,6 +124,22 @@ if cfg:
               "tools.tool_search.enabled": "off"}
     for path, want in TARGET.items():
         check(at(path) == want, f"{path}={want}", f"{path}={at(path)!r} (docelowo {want!r} — hermes/apply_profile.py TARGET)")
+    aux = cfg.get("auxiliary") or {}
+    # DeepSeek z wylaczonym rozumowaniem tnie wyjscie na 8192 tokenach, a z wlaczonym na 65536
+    # (sonda 2026-10-10: none -> finish=length @8192, minimal/low -> zapis do 65k). Zadania, ktore
+    # pisza dlugo (streszczenie ma cel do 10 000 tokenow), musza zostawic rozumowanie wlaczone.
+    AUX_TASKS = {"compression": "minimal", "web_extract": "minimal", "curator": "minimal",
+                 "kanban_decomposer": "minimal", "triage_specifier": "minimal",
+                 "skills_hub": "none", "approval": "none", "mcp": "none",
+                 "title_generation": "none", "profile_describer": "none", "goal_judge": "none",
+                 "session_search": "none"}
+    for _t, _want in AUX_TASKS.items():
+        _e = aux.get(_t) or {}
+        check(str(_e.get("provider")) == "deepseek" and str(_e.get("model") or "").startswith("deepseek-flash")
+              and str(_e.get("reasoning_effort")) == _want,
+              f"auxiliary.{_t} = deepseek-flash / {_want}",
+              f"auxiliary.{_t} = {_e.get('provider')}/{_e.get('model')} reasoning_effort={_e.get('reasoning_effort')!r}"
+              f" (docelowo deepseek-flash + {_want}; MiniMax 404, a 'none' tnie wyjscie na 8192 tokenach)")
     check(str(at("terminal.cwd")) == str(WORKSPACE), "terminal.cwd = JarvisWorkspace", f"terminal.cwd={at('terminal.cwd')!r} (docelowo {WORKSPACE})")
     risky = {"force kill processes (Stop-Process -Force)", "force kill processes (taskkill /F)", "recursive delete"} \
         & set(cfg.get("command_allowlist") or [])
@@ -129,7 +152,7 @@ if cfg:
 penv = env_keys(PROFILE / ".env")
 check(bool(penv.get("TELEGRAM_BOT_TOKEN")), "token Telegrama w jarvis-desktop", "BRAK TELEGRAM_BOT_TOKEN w profiles/jarvis-desktop/.env")
 check(bool(penv.get("TELEGRAM_ALLOWED_USERS")), "Telegram: lista dozwolonych ID", "BRAK TELEGRAM_ALLOWED_USERS — bot przyjąłby każdego")
-# ustalenie 2026-10-08: główny = deepseek-flash, pierwszy fallback = MiniMax-M2.5 → bez tych kluczy routing spada na darmowe OpenRouter
+# ustalenie 2026-10-08: główny = deepseek-flash, pierwszy fallback = MiniMax (2026-10-10: M2.5 → M2.7) → bez tych kluczy routing spada na darmowe OpenRouter
 check(bool(penv.get("DEEPSEEK_API_KEY")), "klucz DeepSeek w .env", "BRAK DEEPSEEK_API_KEY w .env — model główny padnie (routing zejdzie na fallbacki)")
 check(bool(penv.get("MINIMAX_API_KEY")), "klucz MiniMax w .env", "BRAK MINIMAX_API_KEY w .env — pierwszy fallback padnie")
 for flag in ("TELEGRAM_ALLOW_ALL_USERS", "GATEWAY_ALLOW_ALL_USERS"):

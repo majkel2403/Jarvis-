@@ -69,6 +69,7 @@ Czas docelowy: widoczny szkielet (tytuł + „budowanie…”) ≤ 300 ms od dec
 | `countdown` | odliczanie | `until`, `label` | po czasie: „Już!” + opcjonalnie powiadomienie |
 | `divider` | linia | — | |
 | `buttons` | 1–4 przyciski | `label`, `command`, `args`, `style` | kliknięcie = polecenie rejestru ze źródłem `ui` (§3.6) |
+| `flow` | przepływ pracy: etapy zapalane na żywo | `nodes[{id, label}]`, `label`, `note` | etapy `mysl → plan → narzedzia → weryfikacja → odpowiedz` świecą na zdarzeniach prawdziwego zadania (`J.ev`); własne `id` = etap statyczny |
 
 ### 3.4 Dane — źródła
 
@@ -113,7 +114,7 @@ Czas docelowy: widoczny szkielet (tytuł + „budowanie…”) ≤ 300 ms od dec
 
 ### 3.9 Przykłady
 
-Pięć pełnych przykładów (zdanie → opis) w [widget-przyklady.json](widget-przyklady.json); każdy jest sprawdzany testem (zgodność ze schematem, poprawne źródła i argumenty).
+Sześć pełnych przykładów (zdanie → opis) w [widget-przyklady.json](widget-przyklady.json); każdy jest sprawdzany testem (zgodność ze schematem, poprawne źródła i argumenty).
 
 ## 4. Działania na widgetach
 

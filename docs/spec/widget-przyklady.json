@@ -35,5 +35,12 @@
      "blocks": [
        { "kind": "countdown", "until": "2026-10-15T08:00", "label": "do wyjazdu" },
        { "kind": "markdown", "text": "**Spakować:** paszport, ładowarki, krem" }
-     ] } }
+     ] } },
+ { "prompt": "zrób widget z przepływem pracy agenta (etapy)",
+   "spec": { "v": 1, "title": "Przepływ pracy agenta", "icon": "bolt", "size": "M", "tone": "accent",
+     "blocks": [
+       { "kind": "flow", "label": "etapy pracy", "nodes": [
+         { "id": "mysl", "label": "myślę" }, { "id": "plan", "label": "plan" }, { "id": "narzedzia", "label": "narzędzia" },
+         { "id": "weryfikacja", "label": "weryfikacja" }, { "id": "odpowiedz", "label": "odpowiedź" } ] }
+     ] } }
 ]

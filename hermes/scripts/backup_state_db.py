@@ -14,7 +14,7 @@ HOME = Path.home()
 PROFILE = HOME / ".hermes" / "profiles" / "jarvis-desktop"
 STATE_DB = PROFILE / "state.db"
 BACKUP_ROOT = PROFILE / "backups" / "state-db"
-KEEP_DAYS = 14
+KEEP_DAYS = 5  # trzymaj ~5 kopii (codzienne sprzatanie i tak ucina do 5 najnowszych)
 
 problems: list[str] = []
 

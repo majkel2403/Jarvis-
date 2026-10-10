@@ -42,7 +42,7 @@ WORKSPACE = Path.home() / "JarvisWorkspace"
 
 # Docelowa konfiguracja (audyt 2026-10-04, docs/adr/0002). Klucze kropkowane = ścieżka w config.yaml. Strażnik (scripts/config_guard.py) sprawdza to samo.
 TARGET = {
-    "compression.threshold_tokens": 120000,      # streszczanie przy ~120 tys. tokenów (bez tego: ~500 tys. przy oknie 1 mln; fallback M2.5 ma 205 tys.)
+    "compression.threshold_tokens": 120000,      # streszczanie przy ~120 tys. tokenów (bez tego: ~500 tys. przy oknie 1 mln; fallback MiniMax ma mniejsze okno — sprawdź, jeśli rośnie)
     "sessions.retention_days": 30,              # jedna polityka retencji dla hosta i profilu Jarvisa
     "hooks_auto_accept": True,                  # świadoma polityka profilu jarvis-desktop
     "timezone": "Europe/Warsaw",

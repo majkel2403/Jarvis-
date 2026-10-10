@@ -8,7 +8,7 @@
 'use strict';
 (() => {
 /* ---------- schemat (kopia docs/spec/widget.schema.json bez $comment; zgodność sprawdza test) ---------- */
-const SCHEMA = /*SCHEMA:start*/{"type":"object","additionalProperties":false,"required":["v","title","blocks"],"properties":{"v":{"const":1},"title":{"type":"string","minLength":1,"maxLength":60},"icon":{"type":"string","enum":["star","notes","list","bolt","market","weather","calendar","timer","chart","globe","brain","db","doc","flag","shield"]},"size":{"type":"string","enum":["S","M","L","XL"]},"layout":{"type":"string","enum":["stack","grid2","grid3"]},"tone":{"type":"string","enum":["accent","blue","purple","teal","green","warn"]},"sources":{"type":"object","maxProperties":4,"propertyNames":{"pattern":"^[a-z][a-z0-9_]{0,19}$"},"additionalProperties":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"},"args":{"type":"object"},"refresh":{"type":"number","minimum":0,"maximum":86400},"event":{"type":"string","enum":["tasks","notes","market","weather","timer","memory","wm","settings"]}}}},"blocks":{"type":"array","minItems":1,"maxItems":12,"items":{"type":"object","required":["kind"],"oneOf":[{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"text"},"text":{"type":"string","maxLength":2000},"size":{"type":"string","enum":["sm","md","lg"]},"dim":{"type":"boolean"}}},{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"markdown"},"text":{"type":"string","maxLength":4000}}},{"additionalProperties":false,"required":["kind","label","value"],"properties":{"kind":{"const":"kpi"},"label":{"type":"string","maxLength":40},"value":{"type":"string","maxLength":80},"delta":{"type":"string","maxLength":80},"format":{"type":"string","enum":["number","money","percent","time","text"]},"good":{"type":"string","enum":["up","down"]}}},{"additionalProperties":false,"required":["kind","columns","rows"],"properties":{"kind":{"const":"table"},"columns":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["label","field"],"properties":{"label":{"type":"string","maxLength":24},"field":{"type":"string","maxLength":40},"format":{"type":"string","enum":["number","money","percent","time","text","delta"]},"align":{"type":"string","enum":["left","right"]}}}},"rows":{"type":"string","maxLength":80},"limit":{"type":"number","minimum":1,"maximum":50},"sort":{"type":"string","maxLength":40},"desc":{"type":"boolean"}}},{"additionalProperties":false,"required":["kind","items"],"properties":{"kind":{"const":"list"},"items":{"type":"string","maxLength":80},"field":{"type":"string","maxLength":40},"meta":{"type":"string","maxLength":40},"limit":{"type":"number","minimum":1,"maximum":50},"empty":{"type":"string","maxLength":80}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"checklist"},"items":{"type":"string","maxLength":80},"static":{"type":"array","maxItems":50,"items":{"type":"string","maxLength":120}},"field":{"type":"string","maxLength":40},"done":{"type":"string","maxLength":40},"on_check":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"}}},{"additionalProperties":false,"required":["kind","series"],"properties":{"kind":{"const":"chart"},"chart":{"type":"string","enum":["line","area","bar","spark"]},"series":{"type":"string","maxLength":80},"x":{"type":"string","maxLength":40},"y":{"type":"string","maxLength":40},"label":{"type":"string","maxLength":40},"height":{"type":"number","minimum":40,"maximum":240}}},{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"badge"},"text":{"type":"string","maxLength":40},"tone":{"type":"string","enum":["ok","warn","err","info"]}}},{"additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"progress"},"label":{"type":"string","maxLength":40},"value":{"type":"string","maxLength":80},"max":{"type":"number","minimum":1}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"clock"},"format":{"type":"string","enum":["time","date","both"]}}},{"additionalProperties":false,"required":["kind","until"],"properties":{"kind":{"const":"countdown"},"until":{"type":"string","maxLength":80},"label":{"type":"string","maxLength":40}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"divider"}}},{"additionalProperties":false,"required":["kind","buttons"],"properties":{"kind":{"const":"buttons"},"buttons":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"object","additionalProperties":false,"required":["label","command"],"properties":{"label":{"type":"string","maxLength":24},"command":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"},"args":{"type":"object"},"style":{"type":"string","enum":["primary","ghost","danger"]}}}}}}]}}}}/*SCHEMA:end*/;
+const SCHEMA = /*SCHEMA:start*/{"type":"object","additionalProperties":false,"required":["v","title","blocks"],"properties":{"v":{"const":1},"title":{"type":"string","minLength":1,"maxLength":60},"icon":{"type":"string","enum":["star","notes","list","bolt","market","weather","calendar","timer","chart","globe","brain","db","doc","flag","shield"]},"size":{"type":"string","enum":["S","M","L","XL"]},"layout":{"type":"string","enum":["stack","grid2","grid3"]},"tone":{"type":"string","enum":["accent","blue","purple","teal","green","warn"]},"sources":{"type":"object","maxProperties":4,"propertyNames":{"pattern":"^[a-z][a-z0-9_]{0,19}$"},"additionalProperties":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"},"args":{"type":"object"},"refresh":{"type":"number","minimum":0,"maximum":86400},"event":{"type":"string","enum":["tasks","notes","market","weather","timer","memory","wm","settings"]}}}},"blocks":{"type":"array","minItems":1,"maxItems":12,"items":{"type":"object","required":["kind"],"oneOf":[{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"text"},"text":{"type":"string","maxLength":2000},"size":{"type":"string","enum":["sm","md","lg"]},"dim":{"type":"boolean"}}},{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"markdown"},"text":{"type":"string","maxLength":4000}}},{"additionalProperties":false,"required":["kind","label","value"],"properties":{"kind":{"const":"kpi"},"label":{"type":"string","maxLength":40},"value":{"type":"string","maxLength":80},"delta":{"type":"string","maxLength":80},"format":{"type":"string","enum":["number","money","percent","time","text"]},"good":{"type":"string","enum":["up","down"]}}},{"additionalProperties":false,"required":["kind","columns","rows"],"properties":{"kind":{"const":"table"},"columns":{"type":"array","minItems":1,"maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["label","field"],"properties":{"label":{"type":"string","maxLength":24},"field":{"type":"string","maxLength":40},"format":{"type":"string","enum":["number","money","percent","time","text","delta"]},"align":{"type":"string","enum":["left","right"]}}}},"rows":{"type":"string","maxLength":80},"limit":{"type":"number","minimum":1,"maximum":50},"sort":{"type":"string","maxLength":40},"desc":{"type":"boolean"}}},{"additionalProperties":false,"required":["kind","items"],"properties":{"kind":{"const":"list"},"items":{"type":"string","maxLength":80},"field":{"type":"string","maxLength":40},"meta":{"type":"string","maxLength":40},"limit":{"type":"number","minimum":1,"maximum":50},"empty":{"type":"string","maxLength":80}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"checklist"},"items":{"type":"string","maxLength":80},"static":{"type":"array","maxItems":50,"items":{"type":"string","maxLength":120}},"field":{"type":"string","maxLength":40},"done":{"type":"string","maxLength":40},"on_check":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"}}},{"additionalProperties":false,"required":["kind","series"],"properties":{"kind":{"const":"chart"},"chart":{"type":"string","enum":["line","area","bar","spark"]},"series":{"type":"string","maxLength":80},"x":{"type":"string","maxLength":40},"y":{"type":"string","maxLength":40},"label":{"type":"string","maxLength":40},"height":{"type":"number","minimum":40,"maximum":240}}},{"additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"const":"badge"},"text":{"type":"string","maxLength":40},"tone":{"type":"string","enum":["ok","warn","err","info"]}}},{"additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"progress"},"label":{"type":"string","maxLength":40},"value":{"type":"string","maxLength":80},"max":{"type":"number","minimum":1}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"clock"},"format":{"type":"string","enum":["time","date","both"]}}},{"additionalProperties":false,"required":["kind","until"],"properties":{"kind":{"const":"countdown"},"until":{"type":"string","maxLength":80},"label":{"type":"string","maxLength":40}}},{"additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"divider"}}},{"additionalProperties":false,"required":["kind","buttons"],"properties":{"kind":{"const":"buttons"},"buttons":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"object","additionalProperties":false,"required":["label","command"],"properties":{"label":{"type":"string","maxLength":24},"command":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,40}$"},"args":{"type":"object"},"style":{"type":"string","enum":["primary","ghost","danger"]}}}}}},{"additionalProperties":false,"required":["kind","nodes"],"properties":{"kind":{"const":"flow"},"label":{"type":"string","maxLength":40},"note":{"type":"string","maxLength":120},"nodes":{"type":"array","minItems":2,"maxItems":8,"items":{"type":"object","additionalProperties":false,"required":["id","label"],"properties":{"id":{"type":"string","pattern":"^[a-z][a-z0-9_]{0,19}$"},"label":{"type":"string","maxLength":24}}}}}}]}}}}/*SCHEMA:end*/;
 
 /* ---------- walidator (ten sam podzbiór co tools/schema-lite.js) ---------- */
 const typeOf = v => Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v;
@@ -145,6 +145,44 @@ const live = new Map();   // id widgetu → { data, ts, state, render(), refresh
 /* ---------- render bloków ---------- */
 const TONE = { accent: 'var(--accent)', blue: '#4d8dff', purple: '#a06bff', teal: '#26d0c2', green: '#39e59a', warn: '#ffb547' };
 const SIZE = { S: [260, 210], M: [340, 300], L: [460, 380], XL: [600, 460] };
+/* ---------- blok „flow": etapy pracy podswietlane zdarzeniami prawdziwego zadania (J.ev) ---------- */
+const FLOW_IDS = { mysl: 'mysl', thinking: 'mysl', model: 'mysl', plan: 'plan', planning: 'plan', narzedzia: 'narzedzia', tools: 'narzedzia', tool: 'narzedzia', weryfikacja: 'weryfikacja', verify: 'weryfikacja', verification: 'weryfikacja', odpowiedz: 'odpowiedz', answer: 'odpowiedz', response: 'odpowiedz' };
+/* Etapy: mysl -> plan -> narzedzia -> weryfikacja -> odpowiedz. Kazdy etap gasnie wlasnym zdarzeniem konczacym,
+   wiec diagram nie klamie, gdy narzedzie sie skonczy. Bez timerów „na niby". */
+const flowLive = (map, ctx) => {
+  let busy = 0, timer = 0;
+  const on = id => map.forEach((el, k) => { el.classList.toggle('on', k === id); if (k === id) el.classList.remove('done', 'err'); });
+  const done = id => { const el = map.get(id); if (el) { el.classList.remove('on'); if (!el.classList.contains('err')) el.classList.add('done'); } };
+  const err = id => { const el = map.get(id); if (el) { el.classList.remove('on', 'done'); el.classList.add('err'); } };
+  const reset = () => { clearTimeout(timer); busy = 0; map.forEach(el => el.classList.remove('on', 'done', 'err')); };
+  const seed = () => { reset(); const m = J.engine && J.engine.mode; on(m === 'EXECUTING' ? 'narzedzia' : m === 'VERIFYING' ? 'weryfikacja' : m === 'COMPLETED' ? 'odpowiedz' : m === 'THINKING' ? 'mysl' : null); };
+  const handle = e => {
+    switch (e.type) {
+      case 'task.created': reset(); on('mysl'); break;
+      case 'model.started': done('weryfikacja'); on('mysl'); break;
+      case 'model.completed': case 'model.failed': done('mysl'); break;
+      case 'plan.created': case 'plan.step': done('mysl'); on('plan'); break;
+      case 'tool.started': done('plan'); busy++; on('narzedzia'); break;
+      case 'tool.completed': case 'tool.failed': {
+        busy = Math.max(0, busy - 1);
+        const code = e.payload && e.payload.code;
+        if (e.type === 'tool.failed' || (code && code !== 'OK' && code !== 'DENIED')) err('narzedzia');
+        if (!busy) { done('narzedzia'); on('weryfikacja'); }
+        break;
+      }
+      case 'task.verifying': on('weryfikacja'); break;
+      case 'task.verified': done('weryfikacja'); break;
+      case 'task.completed': case 'task.failed':
+        if (e.type === 'task.failed') { err('narzedzia'); err('weryfikacja'); } else { done('narzedzia'); done('weryfikacja'); }
+        on('odpowiedz');
+        timer = setTimeout(() => { reset(); }, 3600);   /* etap gasnie po zadaniu, jak karty HUD */
+        break;
+    }
+  };
+  seed();
+  const off = J.ev.on('*', handle);
+  ctx._offs.push(() => { clearTimeout(timer); off && off(); });
+};
 const renderBlock = (b, data, w, ctx) => {
   const box = el('div', 'ws-b ws-' + b.kind);
   const run = (cmd, args, label) => {
@@ -218,6 +256,20 @@ const renderBlock = (b, data, w, ctx) => {
       const tick = () => { const ms = until - Date.now(); if (isNaN(ms)) { c.textContent = '—'; return; } if (ms <= 0) { c.textContent = 'Już!'; if (!w._cdDone) { w._cdDone = true; J.notice?.({ title: w.title, body: (b.label || 'odliczanie') + ' — już!', kind: 'timer' }); } return; } const s = Math.floor(ms / 1000), dd = Math.floor(s / 86400); c.textContent = (dd ? dd + ' d ' : '') + J.pad(Math.floor(s % 86400 / 3600)) + ':' + J.pad(Math.floor(s % 3600 / 60)) + ':' + J.pad(s % 60); };
       tick(); ctx._ticks.push(tick); box.appendChild(c); break;
     }
+    case 'flow': {
+      if (b.label) box.appendChild(el('div', 'ws-kl', value(data, b.label)));
+      const row = el('div', 'ws-flow'), map = new Map();
+      b.nodes.forEach((n, i) => {
+        if (i) row.appendChild(el('span', 'ws-flow-sep', '→'));
+        const st = el('div', 'ws-flow-node'); st.dataset.id = n.id;
+        st.appendChild(el('i')); st.appendChild(el('span', 'ws-flow-lab', value(data, n.label)));
+        map.set(n.id, st); row.appendChild(st);
+      });
+      box.appendChild(row);
+      if (b.note) box.appendChild(el('div', 'ws-text sm dim', value(data, b.note)));
+      flowLive(map, ctx);   /* zywy etap zadania; odpina sie przy przerysowaniu i zamknieciu widgetu */
+      break;
+    }
     case 'divider': box.appendChild(el('hr', 'ws-hr')); break;
     case 'buttons': { const row = el('div', 'ws-btns'); b.buttons.forEach(x => { const bt = el('button', 'btn sm' + (x.style === 'primary' ? ' primary' : x.style === 'danger' ? ' ghost danger' : x.style === 'ghost' ? ' ghost' : ''), x.label); bt.type = 'button'; bt.onclick = () => run(x.command, x.args, x.label); row.appendChild(bt); }); box.appendChild(row); break; }
   }
@@ -230,8 +282,9 @@ const mount = (body, w, wctx) => {
   const key = 'w:' + w.id, st = { data: null, ts: 0, state: 'building', err: '', flagged: false };
   const root = el('div', 'ws' + (w.spec.layout && w.spec.layout !== 'stack' ? ' ' + w.spec.layout : '')); if (TONE[w.spec.tone]) root.style.setProperty('--ws-tone', TONE[w.spec.tone]);
   const blocks = el('div', 'ws-blocks'), foot = el('div', 'ws-foot'); root.appendChild(blocks); root.appendChild(foot); body.innerHTML = ''; body.appendChild(root);
-  const rctx = { _ticks: [], _draws: [] };
+  const rctx = { _ticks: [], _draws: [], _offs: [] };
   const render = () => {
+    rctx._offs.splice(0).forEach(f => { try { f(); } catch (e) { } });
     rctx._ticks = []; rctx._draws = []; blocks.textContent = '';
     root.dataset.state = st.state;
     if (st.state === 'building' && !st.data && Object.keys(w.spec.sources || {}).length) { for (let i = 0; i < Math.min(3, w.spec.blocks.length); i++) blocks.appendChild(el('div', 'ws-skel')); foot.textContent = 'Buduję…'; return; }
@@ -263,7 +316,7 @@ const mount = (body, w, wctx) => {
   Object.entries(w.spec.sources || {}).forEach(([n, s]) => { if (s.event) offs.push(J.on(s.event, J.debounce(() => { if (!paused()) refresh(true, [n]); }, 400))); });
   offs.push(J.on('wm-resize', id => { if (id === key) rctx._draws.forEach(f => f()); }));
   live.set(w.id, { get data() { return st.data; }, get ts() { return st.ts; }, get state() { return st.state; }, render, refresh });
-  wctx.onClose(() => { J.wspec.ticker.remove(iv); offs.forEach(f => f?.()); live.delete(w.id); });
+  wctx.onClose(() => { J.wspec.ticker.remove(iv); offs.forEach(f => f?.()); rctx._offs.splice(0).forEach(f => { try { f(); } catch (e) { } }); live.delete(w.id); });
 };
 
 /* ---------- przepisy lokalne: zdanie → opis bez modelu (najczęstsze prośby z 05-widgety.md §3.9) ---------- */
@@ -293,7 +346,7 @@ const ticker = (() => { const fns = new Set(); let iv = null; return {
   add(f) { fns.add(f); if (!iv) iv = setInterval(() => fns.forEach(fn => { try { fn(); } catch (e) { console.error(e); } }), 1000); return f; },
   remove(f) { fns.delete(f); if (!fns.size && iv) { clearInterval(iv); iv = null; } },
   get size() { return fns.size; } }; })();
-J.wspec = { SCHEMA, ticker, validate, check, get, fmt, value, mdNodes, mount, fromPrompt, stats, cache, live, SIZE, MAX_SPEC_WIDGETS, MAX_LIVE_SOURCES,
+J.wspec = { SCHEMA, FLOW_IDS, flowLive, ticker, validate, check, get, fmt, value, mdNodes, mount, fromPrompt, stats, cache, live, SIZE, MAX_SPEC_WIDGETS, MAX_LIVE_SOURCES,
   sizeOf: spec => SIZE[spec?.size] || SIZE.M,
   refresh(id) { const ids = id ? [id] : [...live.keys()]; return Promise.all(ids.map(i => live.get(i)?.refresh(true))); },
   /* JSON Merge Patch (RFC 7386) */
