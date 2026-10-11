@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useState,type ReactNode,type CSSProperties} from 'react';
 import type {DirectorSnapshot} from './director';
 import {AUTO_DURATION,BOOT_DURATION,PROCESS_DURATION,COMMAND_DURATION,type SceneId} from './core';
 
@@ -19,13 +19,13 @@ function Icon({type,size=17}:{type:string;size?:number}){
  };
  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[type]??paths.cpu}/></svg>;
 }
-export function Card({title,kicker,icon,children,classname=''}:{title:string;kicker?:string;icon:string;children:React.ReactNode;classname?:string}){
+export function Card({title,kicker,icon,children,classname=''}:{title:string;kicker?:string;icon:string;children:ReactNode;classname?:string}){
  return <section className={'hud-card '+classname}><header className="card-heading"><span className="card-icon"><Icon type={icon}/></span><div><strong>{title}</strong>{kicker&&<small>{kicker}</small>}</div><span className="heading-dots">•••</span></header><div className="card-body">{children}</div></section>;
 }
 const agents=['NEURAL-01','VISION-02','SIGNAL-03','VERIFY-04','VECTOR-05','MEMORY-06'];
 function Radar({snapshot}:{snapshot:DirectorSnapshot}){
  const rotation=snapshot.reducedMotion?0:(snapshot.time/40)%360;
- return <div className="radar-body"><div className="radar-dial" style={{'--scan-angle':rotation+'deg'} as React.CSSProperties}>
+ return <div className="radar-body"><div className="radar-dial" style={{'--scan-angle':rotation+'deg'} as CSSProperties}>
  <span className="radar-line radar-line-x"/><span className="radar-line radar-line-y"/>
  <span className="radar-sweep"/><i className="blip one"/><i className="blip two"/><i className="blip three"/>
  </div><div className="radar-legend"><b>360°</b><small>OMNI SCAN</small><em>ACTIVE</em></div></div>;
@@ -109,7 +109,7 @@ export function BottomHud({snapshot,seek}:{snapshot:DirectorSnapshot;seek:(time:
   </div>
  </div>
  <div className="timeline-group"><div className="timeline-meta"><strong>MOTION TIMELINE / REPLAY</strong><span>{(snapshot.time/1000).toFixed(1)}s / {(duration/1000).toFixed(1)}s</span></div>
-  <input type="range" aria-label="Seek timeline" min="0" max={duration} step="100" value={Math.min(duration,snapshot.time)} onChange={e=>seek(Number(e.target.value))} style={{'--progress':((Math.min(duration,snapshot.time)/duration)*100)+'%'} as React.CSSProperties}/>
+  <input type="range" aria-label="Seek timeline" min="0" max={duration} step="100" value={Math.min(duration,snapshot.time)} onChange={e=>seek(Number(e.target.value))} style={{'--progress':((Math.min(duration,snapshot.time)/duration)*100)+'%'} as CSSProperties}/>
   <div className="timeline-ticks"><span>00:00</span><span>SCAN</span><span>PROCESS</span><span>RENDER</span><span>END</span></div>
  </div></section>;
 }
