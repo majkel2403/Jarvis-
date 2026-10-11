@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import Scene3D from './Scene3D';
 import {BottomHud,Icon,LeftHud,RightHud} from './Hud';
 import {CinematicDirector,type DirectorSnapshot} from './director';
+import {AudioDirector} from './audio';
 import type {Mode,SceneId,Quality} from './core';
 
 const scenes:{id:SceneId;label:string;tag:string}[]=[
@@ -13,12 +14,14 @@ const stages=['SIGNAL','ANALYZING','DELEGATING','EXECUTING','VERIFYING','SUCCESS
 function tickLabel(n:number){const d=new Date(0);d.setUTCMilliseconds(n);return d.toISOString().slice(14,23);}
 export default function App(){
  const director=useRef<CinematicDirector>(new CinematicDirector()).current;
+ const audio=useRef<AudioDirector>(new AudioDirector()).current;
  const [snapshot,setSnapshot]=useState<DirectorSnapshot>(()=>director.snapshot);
  const [audioEnabled,setAudioEnabled]=useState(false);
  const [controlsOpen,setControlsOpen]=useState(false);
  const [showHud,setShowHud]=useState(true);
  const [clockDate,setClockDate]=useState<Date>(()=>new Date());
  const [rate,setRate]=useState<0.5|1|1.5>(1);
+ useEffect(()=>{audio.sync(snapshot);},[audio,snapshot]);
  function refresh(){setSnapshot(director.snapshot);}
  useEffect(()=>{
   const media=window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -131,8 +134,8 @@ export default function App(){
     <header><strong>ENGINE CONFIGURATION</strong><button aria-label="Close settings" onClick={()=>setControlsOpen(false)}>×</button></header>
     <label>RENDER QUALITY<select value={snapshot.quality} onChange={e=>chooseQuality(e.target.value as Quality)}><option>ULTRA</option><option>BALANCED</option><option>LOW</option><option value="SAFE_2D">SAFE 2D</option></select></label>
     <label className="toggle-line"><span>REDUCED MOTION</span><input type="checkbox" checked={snapshot.reducedMotion} onChange={e=>{director.setReducedMotion(e.target.checked);refresh();}}/></label>
-    <label className="toggle-line"><span>ENABLE AUDIO (CUE PREVIEW)</span><input type="checkbox" checked={audioEnabled} onChange={e=>setAudioEnabled(e.target.checked)}/></label>
-    <div className="settings-note">No real AI tools are connected. All telemetry and workflow events are simulated. Audio director integration is planned.</div>
+    <label className="toggle-line"><span>ENABLE AUDIO (CUE PREVIEW)</span><input type="checkbox" checked={audioEnabled} onChange={e=>{if(e.target.checked){void audio.enable().then(ok=>setAudioEnabled(ok));}else{audio.mute();setAudioEnabled(false);}}}/></label>
+    <div className="settings-note">No real AI tools are connected. All telemetry and workflow events are simulated. Audio cues synchronize with incoming simulated events when enabled.</div>
   </aside>}
   <div className="signature">CINEMATIC ENGINE <i> / </i> EXPERIMENTAL INTERFACE LAB</div>
  </div>;
