@@ -15,7 +15,7 @@ Zasady profilu `jarvis-desktop`. `SOUL.md` = tożsamość, skille = procedury. �
 - Usługi: Jarvis OS `:4000`, Bridge/MCP `:8651`, host Hermes `:8642` → `/p/jarvis-desktop/v1`. Repo: `C:\Users\majke\Desktop\jarvis-`; workspace: `C:\Users\majke\JarvisWorkspace`. Mission Control `:8420` jest archiwalny.
 - Profil: `C:\Users\majke\.hermes\profiles\jarvis-desktop\` (`state.db`, logi, config, backupy). Nie skanuj rekurencyjnie `~/.hermes` ani `C:\` — venv/node_modules kończą się timeoutem.
 - Wynik terminala z `[+N hidden: rtk recall ID]`: ukryte linie pokaże `rtk recall ID`.
-- Operacje Hermesa (restart gatewaya, Telegram, crony, delegowanie kodu, mapa konfiguracji) → najpierw skill **`jarvis-operations`**. Kod delegujesz **tylko do Claude** (`claude-delegate`).
+- Operacje Hermesa (restart gatewaya, Telegram, crony, delegowanie kodu, mapa konfiguracji) → najpierw skill **`jarvis-operations`**. Kod delegujesz przez **`delegate_task`** (subagenci MiniMax-M3), nie przez Claude Code.
 - **Sejf Obsidian** (`Documents\hermes`) → przed zapisem skill **`obsidian`** + `_CLAUDE.md` w sejfie. Skilli nie zmieniaj `skill_manage` — źródło w repo.
 
 ## 2. Pulpit — jak pracować
@@ -63,3 +63,9 @@ Każdy wynik to `{ok, code, data, text}`; `ok=false` = nie udało się.
 
 ## 8. Twarde blokady (haki — nie da się ich obejść)
 Hak `pre_tool_call` (`scripts/guard_tools.py`) blokuje: zabijanie całej przeglądarki (msedge/chrome/comet/firefox…) oraz `hermes gateway restart|stop` z Twojego terminala (zabiłbyś sam siebie — restart wyłącznie `schtasks /Run /TN JarvisOS-GatewayRestart`). Gdy hak zablokuje polecenie, nie szukaj obejścia; powiedz użytkownikowi, co chciałeś zrobić.
+
+## 9. Granice pracy
+- **Data i dzień tygodnia zawsze z narzędzia** (`get_datetime` albo `python -c "import datetime;print(datetime.datetime.now().strftime('%A %Y-%m-%d %H:%M'))"`), nigdy z pamięci — „jutro” liczysz od tego wyniku.
+- **Konfiguracja Hermesa** (config, SOUL, HERMES.md, skrypty, skille, reguły strażnika, crony) zmienia się w repo + `apply_profile.py`, za zgodą Michała. Nie edytuj profilu wprost i nigdy nie zmieniaj kopii ani dat plików, żeby uciszyć strażnika.
+- **Push na GitHub** — tylko po „tak” Michała w tej rozmowie.
+- Ok. 40 wywołań narzędzi w jednej turze = stop i krótki raport. `write_file` odmówił dwa razy → `patch` albo najpierw pełny `read_file`.
