@@ -57,7 +57,16 @@ TARGET = {
     "approvals.unattended_mode": "deny",         # = domyślne wg dokumentacji Hermesa (security.md), zapisane wprost: sesje bez człowieka (api_server — karta Jarvisa,
                                                  # evale; webhook) natychmiast odrzucają niebezpieczne polecenia zamiast czekać na zgodę; drogą do stanu
                                                  # komputera jest narzędzie `system_info` w moście, nie `powershell -c` (audyt 2026-10-05)
+    # 2026-10-11: prompt systemowy ~48 tys. tokenów (7 przypiętych skilli, ~152 KB) + próg 120 tys. = streszczanie co 1–3 narzędzia
+    # i limit 60/60 w środku pracy. Przypięte zostają tylko skille tożsamości/operacji; reszta ładuje się na żądanie (skill_view).
+    "skills.auto_load": ["jarvis-operations", "jarvis-os-management", "i-have-adhd"],
+    "tool_output.max_bytes": 20000,              # jeden wynik narzędzia (np. log) nie może zjeść 1/5 progu streszczania
+    "agent.max_turns": 120,
+    "agent.budget_warning_ratio": 0.75,          # przy 90/120 model dostaje ostrzeżenie i domyka pracę zamiast nagłego stopu
 }
+# Telegram (2026-10-11): DoH zwracał jeden adres, więc każda awaria = przełączanie IP ↔ nazwa; dwa stałe adresy zapasowe
+# i dłuższy connect timeout. Wartości nie są sekretami — ustawiane w .env profilu przy każdym uruchomieniu.
+ENV_TARGET = {"TELEGRAM_FALLBACK_IPS": "149.154.166.110,149.154.167.220", "HERMES_TELEGRAM_HTTP_CONNECT_TIMEOUT": "15"}
 PLUGINS_ENABLED = ["disk-cleanup", "hermes-memory-ui", "jarvis-events", "obsidian-brain", "rtk-rewrite", "security-guidance", "web/ddgs"]
 # Wtyczki z repo (hermes/plugins/<nazwa>) kopiowane do profilu przy każdym uruchomieniu; jarvis-events = zadania Hermesa na pulpicie,
 # obsidian-brain = pliki sterujące sejfu Obsidian (CRITICAL_FACTS, hot, log) w pierwszej turze każdej rozmowy (2026-10-05)
@@ -66,11 +75,11 @@ REPO_PLUGINS = ["jarvis-events", "obsidian-brain"]
 GLOBAL_SCRIPT_PREFIXES = ("obsidian", "sync-memory-to-obsidian", "vault_")
 # Skille z repo (hermes/skills/<ścieżka>/SKILL.md) kopiowane do profilu i do ~/.hermes/skills przy każdym uruchomieniu (2026-10-06):
 # skill „obsidian” Jarvis nadpisał sobie `skill_manage` (405 → 88 linii) i nikt tego nie wykrył — teraz źródło = repo, strażnik pilnuje.
-REPO_SKILLS = ["note-taking/obsidian"]
+REPO_SKILLS = ["note-taking/obsidian", "jarvis-operations", "productivity/i-have-adhd"]
 
 
 def copy_repo_skills(pdir: Path, home: Path, here: Path = HERE) -> list[Path]:
-    """Kopiuje SKILL.md (i pliki obok) każdego skilla z REPO_SKILLS do profilu i katalogu globalnego. Zwraca zapisane ścieżki."""
+    """Kopiuje SKILL.md i podkatalogi (references/, scripts/) każdego skilla z REPO_SKILLS do profilu i katalogu globalnego."""
     written: list[Path] = []
     for rel in REPO_SKILLS:
         src = here / "skills" / Path(rel)
@@ -78,11 +87,12 @@ def copy_repo_skills(pdir: Path, home: Path, here: Path = HERE) -> list[Path]:
             continue
         for root in (pdir / "skills", home / "skills"):
             dst = root / Path(rel)
-            dst.mkdir(parents=True, exist_ok=True)
-            for f in src.iterdir():
-                if f.is_file():
-                    shutil.copy2(f, dst / f.name)
-                    written.append(dst / f.name)
+            for f in src.rglob("*"):
+                if f.is_file() and "__pycache__" not in f.parts:
+                    out = dst / f.relative_to(src)
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, out)
+                    written.append(out)
     return written
 # superpowers: co sesję doklejał ~9 KB „1% szans → MUSISZ użyć skilla”; planning-with-files: pusty plan w każdej turze;
 # skill-retrieval: 6 losowo dobranych skilli w każdej turze; ui-review-loop: zależny od kanbanu.
@@ -125,6 +135,12 @@ def apply_target(cfg: dict) -> list[str]:
         if cur != value:
             set_path(cfg, dotted, value)
             changes.append(f"{dotted}={value}")
+    main_model = str((cfg.get("model") or {}).get("default") or "")
+    fbs = cfg.get("fallback_providers") or []
+    kept = [f for f in fbs if not (isinstance(f, dict) and str(f.get("model")) == main_model)]
+    if len(kept) != len(fbs):   # zapas = ten sam model co główny nic nie daje przy awarii dostawcy
+        cfg["fallback_providers"] = kept
+        changes.append(f"fallback_providers bez {main_model}")
     terminal = cfg.setdefault("terminal", {})
     if terminal.get("cwd") != str(WORKSPACE):
         terminal["cwd"] = str(WORKSPACE)
@@ -320,6 +336,8 @@ def main() -> int:
         env = set_env(env, "API_SERVER_KEY", key)
     if a.bridge_token:
         env = set_env(env, "JARVIS_BRIDGE_TOKEN", a.bridge_token)
+    for k, v in ENV_TARGET.items():
+        env = set_env(env, k, v)
 
     print(f"Profil: {pdir}")
     print(f"  mcp_servers -> jarvis_desktop ({a.bridge_url.rstrip('/')}/mcp)")
@@ -383,8 +401,8 @@ def main() -> int:
         print(f"  stara kopia HERMES.md z katalogu domowego -> {bak}")
     ok_hook = approve_guard_hook(pdir, guard_hook_command(pdir))
     print(f"  hak blokad (pre_tool_call: {GUARD_HOOK_MATCHER}) -> " + ("zatwierdzony" if ok_hook else "NIE zatwierdzony: uruchom raz `hermes -p " + a.name + " --accept-hooks hooks list`"))
-    if key:
-        print(f"\nAPI_SERVER_KEY (wpisz w Jarvis OS → Ustawienia → klucz API): {key}")
+    if key:   # sekret nie trafia na ekran ani do logów — tylko do .env
+        print(f"\nAPI_SERVER_KEY: wygenerowano nowy i zapisano w {env_path} (skopiuj stamtąd do Jarvis OS → Ustawienia → klucz API)")
     else:
         print("\nAPI_SERVER_KEY: zachowano istniejący z .env profilu")
     return 0

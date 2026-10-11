@@ -181,7 +181,8 @@ check((WORKSPACE / ".git").exists(), "JarvisWorkspace ma własne .git", f"{WORKS
 check(not (HOME / "HERMES.md").exists(), "brak starej kopii HERMES.md w katalogu domowym", f"{HOME / 'HERMES.md'} — martwa kopia (aktualna jest w {WORKSPACE})")
 if hmd.exists():
     h = hmd.read_text(encoding="utf-8")
-    check(len(h.encode("utf-8")) <= 9000, "HERMES.md ≤ 9 KB", f"HERMES.md urósł do {len(h.encode('utf-8'))} B — szczegóły przenoś do skilli")
+    # 2026-10-11: 9 → 10 KB (zasady daty/konfiguracji/pushu/budżetu; z auto_load zeszło ~40 KB skilli)
+    check(len(h.encode("utf-8")) <= 10000, "HERMES.md ≤ 10 KB", f"HERMES.md urósł do {len(h.encode('utf-8'))} B — szczegóły przenoś do skilli")
     check("jarvis-operations" in h and "jarvis-os-management" in h, "HERMES.md wskazuje skille", "HERMES.md nie odsyła do skilli jarvis-operations / jarvis-os-management")
     if REPO_HMD.exists():
         check(REPO_HMD.read_text(encoding="utf-8").replace("\r\n", "\n") == h.replace("\r\n", "\n"), "HERMES.md = wersja z repo", f"{hmd} różni się od {REPO_HMD} (apply_profile.py nadpisze)")
@@ -246,9 +247,39 @@ if _state_db.exists():
 else:
     problems.append(f"brak {_state_db} — strażnik nie ma co chronić")
 
-# reguła Jarvisa z 2026-10-05: SOUL.md musi mieć kopię z ostatnich 7 dni (apply_profile.py trzyma 3 ostatnie SOUL.md.bak-*)
-_soul_bak = [p for p in PROFILE.glob("SOUL.md.bak-*") if time.time() - p.stat().st_mtime < 7 * 86400]
-check(bool(_soul_bak), f"SOUL.md: {len(_soul_bak)} kopii z ostatnich 7 dni", f"brak kopii SOUL.md z ostatnich 7 dni w {PROFILE}")
+# reguła Jarvisa z 2026-10-05: SOUL.md musi mieć aktualną kopię z ostatnich 7 dni.
+# 2026-10-11: wiek kopii = data w nazwie folderu SNAP_DIR/<RRRR-MM-DD>, a „aktualna” = ta sama treść co SOUL profilu.
+# Daty modyfikacji plików się nie liczą: copy2 przenosił datę SOUL.md (fałszywy alarm po 7 dniach bez edycji SOUL),
+# a ręczne przestawianie dat uciszało regułę. Kopia z inną treścią (stary SOUL) też jej nie spełnia.
+def _snap_soul_recent(snap_dir: Path = SNAP_DIR, soul_path: Path = PROFILE / "SOUL.md", today: float | None = None) -> list[Path]:
+    out: list[Path] = []
+    if not snap_dir.is_dir() or not soul_path.is_file():
+        return out
+    want = soul_path.read_bytes().replace(b"\r\n", b"\n")
+    cutoff = time.strftime("%Y-%m-%d", time.localtime((today or time.time()) - 7 * 86400))
+    for day in snap_dir.iterdir():
+        if not day.is_dir() or not re.match(r"^\d{4}-\d{2}-\d{2}$", day.name) or day.name < cutoff:
+            continue
+        s = day / "SOUL.md"
+        if s.is_file() and s.read_bytes().replace(b"\r\n", b"\n") == want:
+            out.append(s)
+    return out
+_soul_bak = _snap_soul_recent()
+check(bool(_soul_bak), f"SOUL.md: {len(_soul_bak)} aktualnych kopii w config-snapshots z ostatnich 7 dni",
+      f"brak kopii aktualnego SOUL.md z ostatnich 7 dni w {SNAP_DIR} — blok kopii zapasowej strażnika nie zadziałał (patrz 'kopia zapasowa nieudana')")
+
+# 2026-10-11: limit kroków i ostrzeżenie (60/60 urywało pracę w połowie), mniejsze wyniki narzędzi (streszczanie co 1–3 kroki)
+if cfg:
+    for path, want in (("agent.max_turns", 120), ("agent.budget_warning_ratio", 0.75), ("tool_output.max_bytes", 20000),
+                       ("skills.auto_load", ["jarvis-operations", "jarvis-os-management", "i-have-adhd"])):
+        check(at(path) == want, f"{path}={want}", f"{path}={at(path)!r} (docelowo {want!r} — hermes/apply_profile.py TARGET)")
+    _main = str((cfg.get("model") or {}).get("default") or "")
+    _dup = [f for f in (cfg.get("fallback_providers") or []) if isinstance(f, dict) and str(f.get("model")) == _main]
+    check(not _dup, "fallbacki różne od modelu głównego",
+          f"fallback_providers zawiera model główny {_main!r} — przy awarii dostawcy to nie jest zapas (usuń z listy)")
+_penv_t = env_keys(PROFILE / ".env")
+check(bool(_penv_t.get("TELEGRAM_FALLBACK_IPS")), "Telegram: stałe adresy zapasowe",
+      "brak TELEGRAM_FALLBACK_IPS w .env — przy awarii DNS Telegram przełącza się tylko między jednym IP a nazwą (uruchom hermes/apply_profile.py)")
 
 # twarde blokady: hak pre_tool_call z guard_tools.py (zabijanie przeglądarki, restart gatewaya z własnego terminala)
 pre = ((cfg.get("hooks") or {}).get("pre_tool_call") or [])
@@ -375,11 +406,18 @@ else:
 try:
     day = SNAP_DIR / time.strftime("%Y-%m-%d")
     day.mkdir(parents=True, exist_ok=True)
+    # bez .env: sekrety nie powinny leżeć w 14 kopiach (2026-10-11); zostaje tylko lista kluczy i skrót treści
     for src in (PROFILE / "config.yaml", PROFILE / "SOUL.md", PROFILE / "memories" / "MEMORY.md",
-                PROFILE / "memories" / "USER.md", PROFILE / "cron" / "jobs.json", PROFILE / ".env",
+                PROFILE / "memories" / "USER.md", PROFILE / "cron" / "jobs.json",
                 PROFILE / "skills" / "jarvis-operations" / "SKILL.md", PROFILE / "skills" / "note-taking" / "obsidian" / "SKILL.md"):
         if src.exists():
-            shutil.copy2(src, day / src.name)
+            shutil.copy(src, day / src.name)   # copy (nie copy2): data pliku = moment kopii
+    (day / ".env").unlink(missing_ok=True)
+    if (PROFILE / ".env").exists():
+        import hashlib
+        (day / "env-keys.txt").write_text(
+            "sha256 " + hashlib.sha256((PROFILE / ".env").read_bytes()).hexdigest() + "\n" + "\n".join(sorted(penv)) + "\n",
+            encoding="utf-8")
     (day / "skills.txt").write_text("\n".join(f"{k}\t{', '.join(v)}" for k, v in sorted(names.items())), encoding="utf-8")
     for old in sorted(p for p in SNAP_DIR.iterdir() if p.is_dir())[:-KEEP_SNAPSHOTS]:
         shutil.rmtree(old, ignore_errors=True)
