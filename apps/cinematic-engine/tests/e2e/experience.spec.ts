@@ -12,6 +12,7 @@ test('switches between interactive scenes and demo outcomes',async({page})=>{
  await page.getByRole('button',{name:/COMMAND CENTER/}).click();
  await expect(page.locator('[data-scene="COMMAND"]')).toBeVisible();
  await expect(page.locator('[data-mode="INTERACTIVE"]')).toBeVisible();
+ await page.screenshot({path:'test-results/command-center-desktop.png',fullPage:true});
  await page.getByRole('button',{name:/TEST ERROR/}).click();
  await expect(page.locator('[data-scene="PROCESSING"]')).toBeVisible();
  await expect(page.locator('[data-phase="ERROR"]')).toBeVisible({timeout:20000});
@@ -29,6 +30,7 @@ test('provides mobile touch controls without horizontal page scrolling',async({p
  await page.setViewportSize({width:390,height:844});
  await page.goto('/');
  await expect(page.getByRole('button',{name:/RUN DEMO/})).toBeVisible();
+ await page.screenshot({path:'test-results/mobile-390.png',fullPage:true});
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
  expect(overflow).toBeLessThanOrEqual(1);
  await page.getByRole('button',{name:/AI PROCESSING/}).click();
