@@ -52,7 +52,7 @@ export class AudioDirector {
    this.generation=snapshot.sceneGeneration;
    this.seen.clear();this.lastTime=0;
   }
-  if(!this.enabled)return;
+  if(!this.enabled){this.lastTime=snapshot.localTime;return;}
   if(!snapshot.playing){this.lastTime=snapshot.localTime;return;}
   if(snapshot.localTime<this.lastTime){this.lastTime=snapshot.localTime;this.seen.clear();return;}
   for(const e of snapshot.visibleEvents){
