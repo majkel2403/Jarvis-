@@ -130,7 +130,7 @@ export function SafeCore2D({snapshot}:{snapshot:DirectorSnapshot}){
  <span className="safe-label">{snapshot.phase==='ERROR'?'ERROR':'CORE'}</span>
  </div>;
 }
-export default function Scene3D({snapshot}:{snapshot:DirectorSnapshot}){
+export default function Scene3D({snapshot,onContextLost}:{snapshot:DirectorSnapshot;onContextLost?:()=>void}){
  const [lost,setLost]=useState(false);
  if(snapshot.quality==='SAFE_2D'||lost)return <SafeCore2D snapshot={snapshot}/>;
  return <div className="three-host" aria-hidden="true">
@@ -139,7 +139,7 @@ export default function Scene3D({snapshot}:{snapshot:DirectorSnapshot}){
    gl={{alpha:true,antialias:false,powerPreference:'high-performance'}}
    camera={{position:[0,0,10],fov:48,near:.1,far:100}}
    onCreated={({gl})=>{
-    gl.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();setLost(true);},{once:true});
+    gl.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();setLost(true);onContextLost?.();},{once:true});
    }}
    fallback={<SafeCore2D snapshot={snapshot}/>}>
    <Contents snapshot={snapshot}/>
