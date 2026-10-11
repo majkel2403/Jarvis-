@@ -3,6 +3,7 @@ import Scene3D from './Scene3D';
 import {BottomHud,Icon,LeftHud,RightHud} from './Hud';
 import {CinematicDirector,type DirectorSnapshot} from './director';
 import {AudioDirector} from './audio';
+import {QualityGovernor} from './quality';
 import type {Mode,SceneId,Quality} from './core';
 
 const scenes:{id:SceneId;label:string;tag:string}[]=[
@@ -15,6 +16,7 @@ function tickLabel(n:number){const d=new Date(0);d.setUTCMilliseconds(n);return 
 export default function App(){
  const director=useRef<CinematicDirector>(new CinematicDirector()).current;
  const audio=useRef<AudioDirector>(new AudioDirector()).current;
+ const governor=useRef<QualityGovernor>(new QualityGovernor()).current;
  const [snapshot,setSnapshot]=useState<DirectorSnapshot>(()=>director.snapshot);
  const [audioEnabled,setAudioEnabled]=useState(false);
  const [controlsOpen,setControlsOpen]=useState(false);
@@ -32,6 +34,8 @@ export default function App(){
   let frame=0;let prior=performance.now();let update=0;
   function animate(now:number){
    const delta=now-prior;prior=now;
+   const nextQuality=governor.sample(delta);
+   if(nextQuality!==director.snapshot.quality)director.setQuality(nextQuality);
    director.tick(delta);
    if(now-update>32){refresh();update=now;}
    frame=window.requestAnimationFrame(animate);
@@ -41,7 +45,7 @@ export default function App(){
   document.addEventListener('visibilitychange',visible);
   const timeInterval=window.setInterval(()=>setClockDate(new Date()),1000);
   return ()=>{cancelAnimationFrame(frame);clearInterval(timeInterval);document.removeEventListener('visibilitychange',visible);media?.removeEventListener?.('change',change);};
- },[director]);
+ },[director,governor]);
  useEffect(()=>{
   const key=(e:KeyboardEvent)=>{
    const target=e.target as HTMLElement | null;
@@ -57,7 +61,7 @@ export default function App(){
  const coreIntensity=snapshot.phase==='ERROR'?'danger':snapshot.phase==='SUCCESS'?'success':snapshot.phase==='ANALYZING'?'analysis':'normal';
  function changeMode(next:Mode){director.setMode(next);refresh();}
  function selectScene(scene:SceneId){director.setScene(scene);refresh();}
- function chooseQuality(q:Quality){director.setQuality(q);refresh();}
+ function chooseQuality(q:Quality){governor.setManual(q);director.setQuality(q);refresh();}
  function run(outcome:'success'|'error'){director.runTask(outcome);refresh();}
  const currentStage=stages.indexOf(snapshot.phase);
  return <div className={'app '+(snapshot.reducedMotion?'reduced ':'')+'scene-'+snapshot.scene.toLowerCase()} data-scene={snapshot.scene} data-mode={mode} data-phase={snapshot.phase}>
@@ -92,7 +96,7 @@ export default function App(){
     <div className={'core-container core-'+coreIntensity}>
      <div className="core-ambient"/>
      <div className="core-grid"/>
-     <Scene3D snapshot={snapshot}/>
+     <Scene3D snapshot={snapshot} onContextLost={()=>{governor.contextLost();director.setQuality('SAFE_2D');refresh();}}/>
      <div className="reticle" aria-hidden="true">
       <div className="reticle-ring outer"/><div className="reticle-ring middle"/><div className="reticle-ring inner"/>
       <div className="crosshair horizontal"/><div className="crosshair vertical"/>
