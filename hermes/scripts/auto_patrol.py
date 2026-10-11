@@ -256,10 +256,17 @@ def main():
     check_budget(st)
     check_autonomia()
     st["ostatnie_sprawdzenie"] = time.strftime("%Y-%m-%d %H:%M")
-    if alerts:
+    # 2026-10-11: ten sam zestaw alertów szedł na Telegram co 30 min (31 razy w dobę) — wysyłamy przy zmianie,
+    # a niezmieniony powtarzamy najwyżej co 6 h, żeby nie zginął.
+    digest = "\n".join(sorted(alerts))
+    repeat = digest and digest == st.get("ostatni_alert_tresc") and time.time() - float(st.get("ostatni_alert_ts", 0)) < 6 * 3600
+    if alerts and not repeat:
         st["ostatni_alert"] = st["ostatnie_sprawdzenie"]
+        st["ostatni_alert_tresc"], st["ostatni_alert_ts"] = digest, time.time()
+    if not alerts:
+        st.pop("ostatni_alert_tresc", None)
     save_state(st)
-    if alerts:
+    if alerts and not repeat:
         print("ALERT autonomia Jarvisa:\n- " + "\n- ".join(alerts))
     return 0
 

@@ -74,7 +74,10 @@ def test_capture_appends_log_at_end_and_never_duplicates(vault):
     log = (vault / "log.md").read_text(encoding="utf-8")
     assert log.count("| TASK | [Jarvis]") == 1 and log.rstrip().endswith("|")
     hot = (vault / "hot.md").read_text(encoding="utf-8")
-    assert hot.index("Task: Test zapisu") < hot.index("## 🎯 W toku")   # w sekcji „Ostatnia aktualizacja”
+    assert "Task: Test zapisu" not in hot   # 2026-10-11: zadania z pulpitu nie trafiają do hot.md (tylko decyzje, błędy, projekty)
+    run(vault, "obsidian-capture.py", "decision", "Wybór bazy", "chosen_option=SQLite")
+    hot = (vault / "hot.md").read_text(encoding="utf-8")
+    assert hot.index("Decision: Wybór bazy") < hot.index("## 🎯 W toku")   # w sekcji „Ostatnia aktualizacja”
 
 
 def test_every_repo_script_compiles():

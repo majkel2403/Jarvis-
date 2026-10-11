@@ -1,11 +1,10 @@
 """Backup bazy stanu Hermesa (state.db) — wywoływany przez cron no-agent.
 
-Bezpieczna kopia SQLite: VACUUM INTO (zamiast shutil.copy) — nie łamie -wal/-shm,
+Bezpieczna kopia SQLite: VACUUM INTO (zamiast kopii pliku) — nie łamie -wal/-shm,
 nie wymaga zatrzymywania gatewaya, wynik to spójna kawałek bazy.
 
 Pusty stdout = OK. Inaczej wypisuje przyczynę (idzie na Telegram przez strażnika).
 """
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -28,22 +27,31 @@ def main() -> int:
     today = time.strftime("%Y-%m-%d")
     dest = BACKUP_ROOT / f"state-{today}.db"
 
+    # VACUUM INTO odmawia, gdy plik docelowy istnieje (drugi bieg tego samego dnia) — piszemy do .tmp i podmieniamy.
+    # Zapas: API backup() SQLite (też spójne przy WAL); surowa kopia pliku żywej bazy nie jest spójna (2026-10-11).
+    import sqlite3
+    tmp = dest.with_suffix(".db.tmp")
+    tmp.unlink(missing_ok=True)
     try:
-        # sqlite3 .backup / VACUUM INTO — atomowa, spójna kopia mimo -wal/-shm
-        import sqlite3
         src = sqlite3.connect(str(STATE_DB))
         try:
-            src.execute("VACUUM INTO ?", (str(dest),))
+            src.execute("VACUUM INTO ?", (str(tmp),))
         finally:
             src.close()
     except Exception as e:  # noqa: BLE001
-        # Fallback: shutil.copy + .bak (mniej bezpieczne, ale działa)
         try:
-            shutil.copy2(STATE_DB, dest.with_suffix(".db.bak"))
-            problems.append(f"VACUUM INTO nie wyszło ({e}); zapisano .bak zamiast .db")
+            tmp.unlink(missing_ok=True)
+            src, dst = sqlite3.connect(str(STATE_DB)), sqlite3.connect(str(tmp))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+                src.close()
         except Exception as e2:  # noqa: BLE001
-            problems.append(f"backup nieudany: VACUUM={e}; copy={e2}")
+            tmp.unlink(missing_ok=True)
+            problems.append(f"backup nieudany: VACUUM={e}; backup()={e2}")
             return 1
+    tmp.replace(dest)
 
     # Retencja: kasuj kopie starsze niż KEEP_DAYS dni
     cutoff = time.time() - KEEP_DAYS * 86400

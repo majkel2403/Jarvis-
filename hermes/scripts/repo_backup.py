@@ -1,4 +1,4 @@
-"""Kopia repo Jarvis OS (budzet 0, bez modelu).
+r"""Kopia repo Jarvis OS (budzet 0, bez modelu).
 
 Robi to samo, co Documents/jarvis-backup-desktop.ps1: git bundle (cala historia) + drzewo
 robocze bez node_modules, do Documents/JarvisDesktop-Backup-<stamp>. Trzyma 3 najnowsze kopie.

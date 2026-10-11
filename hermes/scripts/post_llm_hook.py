@@ -39,8 +39,8 @@ def _due(state: dict, key: str, seconds: int) -> bool:
     return time.time() - float(state.get(key, 0)) >= seconds
 
 
-def _spawn(kind: str) -> None:
-    cmd = [sys.executable, CAPTURE, kind]
+def _spawn(kind: str, *args: str) -> None:
+    cmd = [sys.executable, CAPTURE, kind, *args]
     kw = {"cwd": VAULT, "stdin": subprocess.DEVNULL,
           "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
     try:
@@ -58,13 +58,19 @@ def main() -> int:
         data = json.loads(sys.stdin.read() or "{}")
     except Exception:
         return 0
+    # sesje cronów (pętle autonomii) mają własny dziennik AUTO — nie zapisujemy ich jako sesji Michała (2026-10-11)
+    if str(data.get("session_id") or "").startswith("cron_"):
+        return 0
+    extra = data.get("extra") or {}
+    asked = " ".join(str(extra.get("user_message") or "").split())[:120]
+    answer = " ".join(str(extra.get("assistant_response") or "").split())[:400]
     status = str(data.get("status") or data.get("result") or "").lower()
     state = _load_state()
     launched = False
 
-    if _due(state, "llm_session", THROTTLE_S["llm_session"]):
+    if asked and _due(state, "llm_session", THROTTLE_S["llm_session"]):
         state["llm_session"] = time.time()
-        _spawn("session")
+        _spawn("session", f"context={asked}", f"accomplishments={answer or '- '}")
         launched = True
     if status in ("completed", "done", "success", "ok") and _due(state, "llm_daily", THROTTLE_S["llm_daily"]):
         state["llm_daily"] = time.time()

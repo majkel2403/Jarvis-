@@ -434,15 +434,20 @@ def update_log_md(operation: str, description: str):
         log_file.write_text(f"# log.md — Operation Log\n\n{entry}\n", encoding="utf-8")
 
 
+# hot.md = bieżący kontekst na start rozmowy; częste zdarzenia (sesje, zadania z pulpitu) zostają w dzienniku i log.md
+HOT_TYPES = ("decision", "error-fix", "project-update", "research")
+
+
 def propagate_note(note_title: str, note_rel_path: str, note_type: str, summary: str = ""):
     """Pełna auto-propagacja po zapisie notatki."""
     link_label = note_type.replace("-", " ").title()
-    
+
     # 1. Update daily note
     update_daily_note_with_link(note_title, note_rel_path, link_label)
-    
+
     # 2. Update hot.md
-    update_hot_md(f"{link_label}: {summary or note_title}")
+    if note_type in HOT_TYPES:
+        update_hot_md(f"{link_label}: {summary or note_title}")
     
     # 3. Update log.md
     update_log_md(note_type.upper(), f"{note_title} → {note_rel_path}")
@@ -552,12 +557,25 @@ def main():
         else:
             extra_args.append(arg)
     
+    # Bez tytułu/treści nic nie zapisujemy: haki wołały skrypt bez argumentów i sejf zapełniał się
+    # wpisami „Untitled Task” / „Project Update: General” / pustymi notatkami sesji (2026-10-11).
+    if cmd in ("task", "update", "decision", "research", "error") and not extra_args:
+        print(f"ℹ️  {cmd}: brak tytułu — pominięto")
+        return
+    if cmd == "session" and not kwargs.get("context", "").strip():
+        print("ℹ️  session: brak treści (context=) — pominięto")
+        return
+
     if cmd == "session":
-        content = gen_session_summary(**kwargs)
-        path = save_note(content, "06 - AI Sessions/Daily Summaries", f"session-{today()}")
-        propagate_note(path.stem, str(path.relative_to(vault_path())), "session", kwargs.get("context", "")[:100])
+        path = vault_path("06 - AI Sessions/Daily Summaries") / f"session-{today()}.md"
+        if path.exists():   # dopisz wpis zamiast nadpisywać notatkę dnia; propagacja tylko przy pierwszym wpisie dnia
+            entry = f"\n\n## {now()} — {kwargs['context'][:120]}\n\n{kwargs.get('accomplishments', '- ')}\n"
+            path.write_text(read_file(path).rstrip("\n") + entry, encoding="utf-8")
+        else:
+            path = save_note(gen_session_summary(**kwargs), "06 - AI Sessions/Daily Summaries", f"session-{today()}")
+            propagate_note(path.stem, str(path.relative_to(vault_path())), "session", kwargs["context"][:100])
         print(f"✅ Session summary: {path.name}")
-        
+
     elif cmd == "task":
         title = extra_args[0] if extra_args else "Untitled Task"
         content = gen_task_report(title, **kwargs)

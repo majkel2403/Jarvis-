@@ -48,9 +48,19 @@ def _save_state(state: dict) -> None:
         pass
 
 
-def _spawn(kind: str) -> None:
+def _title(data: dict) -> str:
+    """Czytelny tytuł zdarzenia z argumentów narzędzia (bez tytułu capture nic nie zapisze)."""
+    args = data.get("tool_input") or {}
+    for key in ("title", "name", "text", "task", "content", "query", "note"):
+        val = args.get(key) if isinstance(args, dict) else None
+        if isinstance(val, str) and val.strip():
+            return " ".join(val.split())[:80]
+    return ""
+
+
+def _spawn(kind: str, *args: str) -> None:
     """Odpala obsidian-capture.py w tle (bez blokowania haka)."""
-    cmd = [sys.executable, CAPTURE, kind]
+    cmd = [sys.executable, CAPTURE, kind, *args]
     kw = {"cwd": VAULT, "stdin": subprocess.DEVNULL,
           "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
     try:
@@ -69,21 +79,22 @@ def main() -> int:
     except Exception:
         return 0
     tool = str(data.get("tool_name") or "")
-    if not tool:
-        return 0
+    if not tool or str(data.get("session_id") or "").startswith("cron_"):
+        return 0   # 2026-10-11: sesje cronów (pętle autonomii) nie piszą do sejfu przez hak
     status = str(data.get("status") or data.get("result") or "").lower()
     failed = status in FAILED_STATUS
+    title = _title(data)
 
+    # 2026-10-11: capture dostaje tytuł; bez tytułu nic nie zapisze (koniec „Untitled Task” / „General”).
+    # Sesje opisuje hak post_llm_call (pytanie + odpowiedź), więc WIDE_TOOLS nie wołają tu „session”.
     if failed:
-        kind = "error"
-    elif any(t in tool for t in TASK_TOOLS):
-        kind = "task"
-    elif any(t in tool for t in NOTE_TOOLS) or any(t in tool for t in WIDGET_TOOLS):
-        kind = "update"
-    elif any(t in tool for t in WIDE_TOOLS):
-        kind = "session"
+        kind, args = "error", [f"{tool}: {title or status}"]
+    elif any(t in tool for t in TASK_TOOLS) and title:
+        kind, args = "task", [title]
+    elif (any(t in tool for t in NOTE_TOOLS) or any(t in tool for t in WIDGET_TOOLS)) and title:
+        kind, args = "update", ["Jarvis OS", f"what_was_done={tool}: {title}"]
     else:
-        return 0  # zwykly odczyt — nic nie zapisujemy i nie spawnujemy procesu
+        return 0  # odczyt, narzędzie bez tytułu albo WIDE_TOOLS — nic nie zapisujemy
 
     throttle = THROTTLE_S.get(kind, 0)
     if throttle:
@@ -95,7 +106,7 @@ def main() -> int:
         state["last_tool"] = tool
         _save_state(state)
 
-    _spawn(kind)
+    _spawn(kind, *args)
     return 0
 
 
