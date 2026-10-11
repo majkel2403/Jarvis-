@@ -42,7 +42,7 @@ wiki/            entities/ · concepts/ · decisions/ADR-NNN-*.md · synthesis/ 
 Templates/       szablony (type: template)      .trash/  miękkie usuwanie (niewidoczne w Obsidianie)
 ```
 
-**Dwa różne pliki `SOUL.md`:** `profiles/jarvis-desktop/SOUL.md` jest runtime tożsamością Jarvisa i Hermes ładuje go automatycznie w całości. `Documents/hermes/SOUL.md` jest historycznie nazwanym, rozszerzonym profilem Michała w sejfie; nie jest automatycznie dokładany przez wtyczkę i nie zastępuje `USER.md`.
+**Dwa pliki `SOUL.md`:** profilowy = tożsamość Jarvisa (ładowana zawsze); sejfowy = rozszerzony profil Michała (tylko na żądanie, nie zastępuje `USER.md`).
 
 Gdzie trafia nowa notatka: projekt → `02 - Projects/`, obszar → `03 - Areas/`, narzędzie/agent/firma → `wiki/entities/`, wzorzec → `wiki/concepts/`, decyzja → `wiki/decisions/` (numer = ostatni + 1), audyt/raport → `wiki/synthesis/`, procedura → `04 - Resources/`, niepewne → `00 - Inbox/`. Po utworzeniu dopisz ją do huba folderu.
 
@@ -163,19 +163,11 @@ Co jest „istotną sesją", co wolno i co zakazane — rozstrzyga `_CLAUDE.md` 
 
 ## 7. Pułapki (mechaniczne)
 
-- **Nigdy nie kopiuj plikow do sejfu przez `cp`/`copy`.** Nadpiszesz istniejaca notatke (zdarzylo sie 2026-10-09: `cp AUTO/GOALS.md` na `02 - Projects/Jarvis Autonomous Intelligence Architecture.md`) — sejf nie jest repo git i nie ma historii wersji, wiec nie ma z czego przywrocic. Do sejfu pisz wylacznie `patch`/`write_file`/`obsidian-capture.py`, a plik docelowy najpierw przeczytaj.
+- **Nigdy `cp`/`copy` do sejfu** — sejf nie ma historii wersji (2026-10-09 tak nadpisano notatkę projektu). Pisz tylko `patch`/`write_file`/`obsidian-capture.py`, po przeczytaniu celu.
 - **`~/.hermes/.env`** — nie otwieraj `patch`/`write_file`; sekrety nigdy do sejfu.
 - **Cron 7:30** nadpisuje `AI-Context-<dziś>.md`; `index.md` liczby generuje `vault_stats.py` (co 6 h) — nie wpisuj ich ręcznie.
-- **Obsidian bywa otwarty u Michała** — notatka otwarta w edytorze potrafi wrócić po przeniesieniu; sprawdź po chwili.
-- **`hot.md` miesza końce linii:** frontmatter jest w CRLF, treść w LF — nie zakotwicz zapisu na dosłownym `\r\n\r\n` (asercja padnie i stracisz turę), użyj `re.search(r"## 🕐 Ostatnia aktualizacja\r?\n\r?\n", tekst)` albo wykryj dominujący koniec linii i jego powielaj. `log.md` jest CRLF — nowy wiersz dopisuj z `\r\n`.
-- **Czytaj pliki sejfu z `newline=""`.** `Path.read_text()` bez tego parametru tłumaczy CRLF na LF, więc licznik bajtów i kontrola końców linii kłamia, a zapis robi plik o mieszanych końcach. Wzór: `p.open("r", encoding="utf-8", newline="").read()`, potem normalizacja `replace("
-", "
-")` i zapis `p.open("w", encoding="utf-8", newline="").write(t.replace("
-", "
-"))`. Limit `hot.md` sprawdzaj jako `len(p.open("rb").read()) <= 3100`.
-- **Nie przycinaj `hot.md` pętlą po regexie punktów.** Regex z lookaheadem potrafi dopasować jeden wielki blok i skasować kilka starych punktów naraz; zamiast tego zbuduj całą sekcję `## 🕐 Ostatnia aktualizacja` od nowa (4–5 punktów, starsze zwinięte do jednej linii) i podmien ją w miejscu. Przebudowa samej sekcji często **nie wystarcza** — limit liczy się od całego pliku, a najwięcej bajtów siedzi w blokach „🟢 Stan potwierdzony” i „🟡 Aktywne ryzyka”; gdy po niej plik nadal przekracza 3100 B, ścinaj te bloki (powtórzenia, linie nieaktualne), a nie kolejne punkty historii. Po każdym przebiegu zmierz `len(path.read_bytes())`.
-- **Podmieniając całą sekcję przez `re.sub`, podaj zamiennik jako funkcję** (`re.sub(wzor, lambda m: nowy, tekst)`), nigdy jako szablon tekstowy. W szablonie backslash jest znakiem ucieczki, więc ścieżki Windows i polskie fragmenty (`Desktop\jarvis-`, `C:\Users\majke`) kończą się `re.error: bad escape \j` i cały zapis pada w połowie. Zwykłe `str.replace(stary, nowy)` backslashami się nie przejmuje — przy pojedynczej podmianie zostań przy nim.
-- **Tabelę dziennika sprawdzaj po edycji, wiersz po wierszu.** Wcześniejsza edycja potrafi zostawić wiersz z komórką uciętą w połowie, a jej ogon jako osobną linię **po kolejnym wierszu** — tabela przestaje się renderować, a treść wygląda jak przypadkowy tekst. Po zmianie upewnij się, że każdy wiersz zaczyna się od `|` i ma tyle samo komórek co nagłówek; osierocony fragment dopisz z powrotem do jego wiersza (przy okazji popraw nieaktualny opis w starym wierszu).
-- **Narzędzia konsumujące sejf** (graf, wizualizacja, indeks): buduj je poza sejfem i czytaj sejf tylko w trybie odczytu — przepis w `references/wizualizacja-sejfu.md`. Gotowa sonda headless do weryfikacji zrzutami (dowolna lokalna strona, nie tylko graf): `scripts/probe-headless.cjs` + `scripts/sprawdz-zrzuty.py`.
+- **Obsidian bywa otwarty** — przeniesiona notatka potrafi wrócić; sprawdź po chwili.
+- **Ręczna edycja `hot.md` / tabeli `log.md`** (końce linii, limit 3100 B, `re.sub`) — `references/edycja-hot-i-log.md`.
+- **Narzędzia czytające sejf** (graf, indeks): poza sejfem, sejf tylko do odczytu — `references/wizualizacja-sejfu.md` (sonda zrzutów: `scripts/probe-headless.cjs` + `scripts/sprawdz-zrzuty.py`).
 
 Zasady, anty-fabrykacja, lista TYP-ów, definicja „istotnej sesji", polityka źródła skryptów — w `_CLAUDE.md` (jedyne źródło). Nie powielaj tu.
