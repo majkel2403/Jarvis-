@@ -117,7 +117,7 @@ export default function App(){
    </section>
    {showHud&&<RightHud snapshot={snapshot} select={id=>{director.selectAgent(id);refresh();}}/>}
   </main>
-  <BottomHud snapshot={snapshot} seek={time=>{director.seek(time);refresh();}}/>
+  <BottomHud snapshot={snapshot} seek={time=>{audio.seek(time);director.seek(time);refresh();}}/>
   <footer className="transport">
    <div className="transport-brand"><div className="mini-reactor"/><div><b>CINEMATIC DIRECTOR</b><span>SCENE ENGINE <i>●</i> READY</span></div></div>
    <div className="transport-controls">
