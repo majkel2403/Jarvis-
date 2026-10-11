@@ -1,0 +1,31 @@
+name: Cinematic Engine CI
+on:
+  push:
+    branches:
+      - experiment/cinematic-engine
+    paths:
+      - apps/cinematic-engine/**
+      - .github/workflows/cinematic-engine-ci.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/cinematic-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/cinematic-engine/package-lock.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Unit tests
+        run: npm run test:run
+      - name: Typecheck and production build
+        run: npm run build
