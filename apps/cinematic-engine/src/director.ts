@@ -52,8 +52,9 @@ export class CinematicDirector{
  }
  setMode(mode:Mode){
   if(mode===this.mode)return;
+  const currentScene=this.snapshot.scene;
   this.mode=mode;this.generation++;
-  if(mode==='INTERACTIVE'){this.scene=this.snapshot.scene;this.manualTime=this.clock.time;this.clock.pause();}
+  if(mode==='INTERACTIVE'){this.scene=currentScene;this.manualTime=this.clock.time;this.clock.seek(0,AUTO_DURATION);this.clock.pause();}
   else{this.clock.seek(0,AUTO_DURATION);this.clock.resume();}
  }
  setScene(scene:SceneId){
