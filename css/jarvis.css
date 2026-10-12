@@ -1129,10 +1129,10 @@ body.cin-under #app{visibility:hidden}
 @media (max-width:760px){.cin-chap{display:none}.cin-l3{left:4vw;bottom:calc(var(--bar) + 40vh)}.cin-left{min-width:0}}
 
 /* ---- komponenty HUD (js/hud-components.js) ---- */
-.hc{display:block;overflow:visible}
+.hcm{display:block;overflow:visible}
 .hc-track{fill:none;stroke:rgba(120,200,255,.16)}
 .hc-arc{fill:none;stroke:var(--hc,#19c2ff);stroke-linecap:round;filter:drop-shadow(0 0 4px var(--hc,#19c2ff))}
-.hc-ring{width:100%;height:auto;max-width:9rem}
+.hcm.hc-ring{width:100%;height:auto;max-width:9rem}
 .hc-ring.hc-teal{--hc:#1fd1c5}.hc-ring.hc-amber{--hc:#ff9f1a}.hc-ring.hc-red{--hc:#ff3b5c}.hc-ring.hc-green{--hc:#22e8a3}
 .hc-val{fill:var(--tx,#d8f1ff);font:600 15px ui-monospace,Consolas,monospace}
 .hc-lbl{fill:var(--mut,#93c6dd);font:500 8px ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}
@@ -1147,3 +1147,41 @@ body.cin-under #app{visibility:hidden}
 .hc-path{stroke:var(--hc,#19c2ff);stroke-width:1.6;filter:drop-shadow(0 0 3px var(--hc,#19c2ff))}
 .hc-ekg .hc-path{stroke:var(--hc,#22e8a3)}
 @media (prefers-reduced-motion:reduce){.hc-arc,.hc-path{filter:none}}
+.hb-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;padding:10px;overflow:auto;height:100%}
+.hb-card{border:1px solid rgba(120,200,255,.18);background:rgba(4,14,26,.55);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.hb-card h4{margin:0;font:500 10px ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--mut,#93c6dd)}
+.hb-body{display:flex;align-items:center;justify-content:center;min-height:5.5rem}
+.hb-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:100%}
+.hb-row .hc-ring{max-width:4.2rem}
+.hc-radar{width:100%;max-width:8rem}
+.hc-sweep{animation:hcSpin 4s linear infinite;transform-origin:0 0}
+.hc-sweep-fill{fill:rgba(31,209,197,.25)}
+.hc-blip{fill:var(--hc,#ff3b5c);filter:drop-shadow(0 0 3px #ff3b5c)}
+@keyframes hcSpin{to{transform:rotate(360deg)}}
+.hc-danger{position:relative;width:100%;height:2.2rem;overflow:hidden;border:1px solid rgba(120,200,255,.25);display:flex;align-items:center;justify-content:center}
+.hc-danger .hc-stripes{position:absolute;inset:0;opacity:0}
+.hc-danger.hc-l2 .hc-stripes,.hc-danger.hc-l3 .hc-stripes{opacity:.5;background:repeating-linear-gradient(-45deg,#ff9f1a 0 8px,transparent 8px 16px)}
+.hc-dtxt{position:relative;font:600 11px ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}
+.hc-l3 .hc-dtxt{color:#ff3b5c}.hc-l2 .hc-dtxt{color:#ff9f1a}
+.hc-params{margin:0;width:100%;font:11px ui-monospace,Consolas,monospace}
+.hc-params div{display:flex;justify-content:space-between;border-bottom:1px solid rgba(120,200,255,.12);padding:2px 0}
+.hc-params dt{color:var(--mut,#93c6dd)}.hc-params dd{margin:0;color:var(--tx,#d8f1ff)}
+.hc-crit{list-style:none;margin:0;padding:0;width:100%;font:11px ui-monospace,Consolas,monospace}
+.hc-crit li{display:flex;justify-content:space-between;padding:2px 0;color:#ff3b5c}
+.hc-tiles{display:grid;grid-template-columns:repeat(var(--cols,8),1fr);gap:3px;width:100%}
+.hc-tiles i{aspect-ratio:1;background:rgba(31,209,197,var(--o,.12));border:1px solid rgba(120,200,255,.15)}
+.hc-nodes{list-style:none;margin:0;padding:0;width:100%;font:11px ui-monospace,Consolas,monospace}
+.hc-nodes li{display:flex;align-items:center;gap:6px;padding:3px 0}
+.hc-nodes i{width:7px;height:7px;border-radius:50%;background:#555}
+.hc-n-up i{background:#22e8a3;box-shadow:0 0 6px #22e8a3}.hc-n-down i{background:#ff3b5c}
+.hc-nodes span{flex:1}.hc-nodes b{font-weight:400;color:var(--mut,#93c6dd)}
+.hc-pent{width:100%;max-width:9rem}
+.hc-poly{fill:rgba(31,209,197,.25);stroke:#1fd1c5;stroke-width:1.2}
+.hc-bars{display:flex;align-items:flex-end;gap:4px;height:5rem;width:100%}
+.hc-bar{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px}
+.hc-bar i{width:100%;background:#1fd1c5;min-height:1px}
+.hc-bar span{font:9px ui-monospace,Consolas,monospace;color:var(--mut,#93c6dd)}
+.hc-deco{width:100%;max-width:8rem;opacity:.7}
+.hc-dotmap circle{fill:#19c2ff;opacity:.5}
+.hc-needle{fill:#ff3b5c}
+@media (prefers-reduced-motion:reduce){.hc-sweep{animation:none}}

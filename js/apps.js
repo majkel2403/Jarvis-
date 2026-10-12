@@ -1141,7 +1141,7 @@ J.apps.library = {
   mount(body, ctx, arg) {
     ctx.goView = v => setTimeout(() => flash($(v === 'shortcut' || v === 'shortcuts' ? '#sf' : '#ag', body)), 60);
     { const va = viewOf(arg); if (va) ctx.goView(va.view); }
-    const ids = ['chat', 'notes', 'market', 'schedule', 'weather', 'monitor', 'terminal', 'calc', 'timer', 'files', 'settings'];
+    const ids = ['chat', 'notes', 'market', 'schedule', 'weather', 'monitor', 'hud', 'terminal', 'calc', 'timer', 'files', 'settings'];
     body.innerHTML = `<div class="appgrid" id="ag"></div>
       <div class="label" style="margin-top:18px">Skróty na pulpicie</div><div class="sc-list" id="scl"></div>
       <div class="label" style="margin-top:12px" id="sfl">Utwórz skrót na pulpicie</div>

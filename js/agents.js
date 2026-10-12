@@ -29,6 +29,8 @@ const api = async (path, { method = 'GET', body, timeout = 30000 } = {}) => {
   if (!r.ok) throw Object.assign(new Error(j.error || 'Błąd agenta (HTTP ' + r.status + ')'), { code: r.status === 401 || r.status === 403 ? 'DENIED' : r.status === 409 ? 'DUPLICATE' : r.status === 504 ? 'TIMEOUT' : r.status === 503 ? 'OFFLINE' : r.status === 400 ? 'INVALID_ARGS' : 'INTERNAL' });
   return j;
 };
+/* odczyt mostu dla innych modułów (np. pulpit HUD) — ten sam kanał i zgody co agenci */
+J.bridgeGet = (path, opts) => api(path, opts);
 const guard = fn => async (...a) => { try { return await fn(...a); } catch (e) { return fail(e.code || 'INTERNAL', e.message || String(e)); } };
 
 /* ---------- polski → angielskie polecenia dla Jeva (deterministycznie, bez modelu) ----------
