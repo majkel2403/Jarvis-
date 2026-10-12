@@ -1127,3 +1127,23 @@ body.cin-under #app{visibility:hidden}
 .cin-endb{flex-wrap:wrap;max-width:80vw;margin-left:auto;margin-right:auto}
 .cin[data-r="0"] .cin-reader{animation:none}
 @media (max-width:760px){.cin-chap{display:none}.cin-l3{left:4vw;bottom:calc(var(--bar) + 40vh)}.cin-left{min-width:0}}
+
+/* ---- komponenty HUD (js/hud-components.js) ---- */
+.hc{display:block;overflow:visible}
+.hc-track{fill:none;stroke:rgba(120,200,255,.16)}
+.hc-arc{fill:none;stroke:var(--hc,#19c2ff);stroke-linecap:round;filter:drop-shadow(0 0 4px var(--hc,#19c2ff))}
+.hc-ring{width:100%;height:auto;max-width:9rem}
+.hc-ring.hc-teal{--hc:#1fd1c5}.hc-ring.hc-amber{--hc:#ff9f1a}.hc-ring.hc-red{--hc:#ff3b5c}.hc-ring.hc-green{--hc:#22e8a3}
+.hc-val{fill:var(--tx,#d8f1ff);font:600 15px ui-monospace,Consolas,monospace}
+.hc-lbl{fill:var(--mut,#93c6dd);font:500 8px ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase}
+.hc-clock{width:100%;max-width:9rem;height:auto}
+.hc-clock .hc-tick{stroke:rgba(120,200,255,.5);stroke-width:1.4}
+.hc-clock .hc-hour,.hc-clock .hc-min{stroke:var(--tx,#d8f1ff);stroke-width:3;stroke-linecap:round}
+.hc-clock .hc-sec{stroke:var(--hc,#ff3b5c);stroke-width:1.2}
+.hc-clock .hc-dot{fill:var(--hc,#ff3b5c)}
+.hc-count{font:500 1.6rem ui-monospace,Consolas,monospace;color:var(--tx,#d8f1ff);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.hc-empty{color:var(--mut,#93c6dd);opacity:.6}
+.hc-line,.hc-ekg{width:100%;height:3.2rem}
+.hc-path{stroke:var(--hc,#19c2ff);stroke-width:1.6;filter:drop-shadow(0 0 3px var(--hc,#19c2ff))}
+.hc-ekg .hc-path{stroke:var(--hc,#22e8a3)}
+@media (prefers-reduced-motion:reduce){.hc-arc,.hc-path{filter:none}}
